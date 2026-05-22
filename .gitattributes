@@ -1,0 +1,5 @@
+* text=auto
+
+# Shell scripts must use LF for Linux CI
+*.sh text eol=lf
+android/gradlew text eol=lf

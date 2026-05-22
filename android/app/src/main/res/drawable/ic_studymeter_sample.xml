@@ -1,0 +1,202 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Background (Deep Space Gradient) -->
+    <path android:pathData="M 0 0 h 108 v 108 h -108 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:centerX="54"
+                android:centerY="54"
+                android:gradientRadius="75"
+                android:type="radial">
+                <item android:offset="0" android:color="#1A1B41" />
+                <item android:offset="1" android:color="#080812" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Outer Dashboard Ring -->
+    <path
+        android:pathData="M 54 16 A 38 38 0 1 1 53.9 16 Z"
+        android:strokeColor="#0BFFFFFF"
+        android:strokeWidth="0.5"/>
+
+    <!-- Simulated Glow: Outer Dashboard Ring -->
+    <path
+        android:pathData="M 54 16 A 38 38 0 1 1 53.9 16 Z"
+        android:strokeWidth="1">
+        <aapt:attr name="android:strokeColor">
+            <gradient android:startX="108" android:startY="0" android:endX="0" android:endY="108" android:type="linear">
+                <item android:offset="0" android:color="#337000FF" />
+                <item android:offset="1" android:color="#3300E5FF" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Left/Right Brackets -->
+    <path
+        android:pathData="M 21 37 L 16 42 L 16 66 L 21 71"
+        android:strokeColor="#8000F0FF"
+        android:strokeWidth="0.8"
+        android:strokeLineCap="square"/>
+    <path
+        android:pathData="M 87 37 L 92 42 L 92 66 L 87 71"
+        android:strokeColor="#80FF003C"
+        android:strokeWidth="0.8"
+        android:strokeLineCap="square"/>
+
+    <!-- Main Progress Arc Base -->
+    <path
+        android:pathData="M 32 82 A 36 36 0 1 1 76 82"
+        android:strokeColor="#101126"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"/>
+
+    <!-- Main Progress Arc Glow Layers (Simulating svg 'filter' glow) -->
+    <path
+        android:pathData="M 32 82 A 36 36 0 1 1 84 33"
+        android:strokeColor="#3300F0FF"
+        android:strokeWidth="8"
+        android:strokeLineCap="round"/>
+    <path
+        android:pathData="M 32 82 A 36 36 0 1 1 84 33"
+        android:strokeColor="#6600F0FF"
+        android:strokeWidth="4"
+        android:strokeLineCap="round"/>
+    <path
+        android:pathData="M 32 82 A 36 36 0 1 1 84 33"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1"
+        android:strokeLineCap="round"/>
+
+    <!-- Glowing Progress Head -->
+    <path
+        android:pathData="M 84 33 A 1.5 1.5 0 1 1 83.9 33 Z"
+        android:fillColor="#FFFFFF"/>
+
+    <!-- Base Grid Line -->
+    <path
+        android:pathData="M 32 72 L 76 72"
+        android:strokeColor="#1AFFFFFF"
+        android:strokeWidth="0.5"/>
+
+    <!-- Histogram Bars (Magenta Gradients) -->
+    <!-- Bar 1 -->
+    <path android:pathData="M 38 60 h 3.5 v 12 h -3.5 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:startX="39" android:startY="72" android:endX="39" android:endY="60" android:type="linear">
+                <item android:offset="0" android:color="#4DFF003C" />
+                <item android:offset="1" android:color="#E69D00FF" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <!-- Bar 2 -->
+    <path android:pathData="M 45 50 h 3.5 v 22 h -3.5 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:startX="46" android:startY="72" android:endX="46" android:endY="50" android:type="linear">
+                <item android:offset="0" android:color="#4DFF003C" />
+                <item android:offset="1" android:color="#E69D00FF" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <!-- Bar 3 -->
+    <path android:pathData="M 52 56 h 3.5 v 16 h -3.5 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:startX="53" android:startY="72" android:endX="53" android:endY="56" android:type="linear">
+                <item android:offset="0" android:color="#4DFF003C" />
+                <item android:offset="1" android:color="#E69D00FF" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <!-- Bar 4 -->
+    <path android:pathData="M 59 42 h 3.5 v 30 h -3.5 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:startX="60" android:startY="72" android:endX="60" android:endY="42" android:type="linear">
+                <item android:offset="0" android:color="#4DFF003C" />
+                <item android:offset="1" android:color="#E69D00FF" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <!-- Bar 5 -->
+    <path android:pathData="M 66 30 h 3.5 v 42 h -3.5 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:startX="67" android:startY="72" android:endX="67" android:endY="30" android:type="linear">
+                <item android:offset="0" android:color="#4DFF003C" />
+                <item android:offset="1" android:color="#E69D00FF" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Trend Line Glow Layers (Electric Purple) -->
+    <!-- Outer heavy glow (Simulating blur) -->
+    <path
+        android:pathData="M 33 64 L 40 56 L 47 46 L 54 52 L 61 40 L 71 27"
+        android:strokeColor="#227000FF"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"/>
+    <!-- Inner medium glow -->
+    <path
+        android:pathData="M 33 64 L 40 56 L 47 46 L 54 52 L 61 40 L 71 27"
+        android:strokeColor="#6600E5FF"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"/>
+    
+    <!-- Trend Line Core (White) -->
+    <path
+        android:pathData="M 33 64 L 40 56 L 47 46 L 54 52 L 61 40 L 71 27"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"/>
+    <!-- Trend Line Cyan Center -->
+    <path
+        android:pathData="M 33 64 L 40 56 L 47 46 L 54 52 L 61 40 L 71 27"
+        android:strokeColor="#00F0FF"
+        android:strokeWidth="0.4"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"/>
+
+    <!-- Arrow Head Glow Layers -->
+    <path
+        android:pathData="M 71 27 L 71 35 M 71 27 L 63 27"
+        android:strokeColor="#227000FF"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"/>
+    <path
+        android:pathData="M 71 27 L 71 35 M 71 27 L 63 27"
+        android:strokeColor="#6600E5FF"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"/>
+    <path
+        android:pathData="M 71 27 L 71 35 M 71 27 L 63 27"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"/>
+    <path
+        android:pathData="M 71 27 L 71 35 M 71 27 L 63 27"
+        android:strokeColor="#00F0FF"
+        android:strokeWidth="0.4"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"/>
+
+    <!-- Plot Points (Data Nodes) -->
+    <path android:pathData="M 33 64 A 1.2 1.2 0 1 1 32.9 64 Z" android:fillColor="#FFFFFF"/>
+    <path android:pathData="M 40 56 A 1.2 1.2 0 1 1 39.9 56 Z" android:fillColor="#FFFFFF"/>
+    <path android:pathData="M 47 46 A 1.2 1.2 0 1 1 46.9 46 Z" android:fillColor="#FFFFFF"/>
+    <path android:pathData="M 54 52 A 1.2 1.2 0 1 1 53.9 52 Z" android:fillColor="#FFFFFF"/>
+    <path android:pathData="M 61 40 A 1.2 1.2 0 1 1 60.9 40 Z" android:fillColor="#FFFFFF"/>
+    
+    <!-- Final Target Node -->
+    <path android:pathData="M 71 27 A 1.8 1.8 0 1 1 70.9 27 Z" android:fillColor="#00F0FF"/>
+    <path android:pathData="M 71 27 A 0.8 0.8 0 1 1 70.9 27 Z" android:fillColor="#FFFFFF"/>
+
+</vector>

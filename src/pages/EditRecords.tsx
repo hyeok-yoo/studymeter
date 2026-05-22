@@ -1,0 +1,722 @@
+import { useState, useEffect } from 'react'
+import { db, deleteStudySession, updateStudySession, formatDuration, getTodayDate, formatTimeHHMM, findOverlappingSession, adjustOverlappingSession, getLatestEndTime } from '../lib/db'
+import { useModal } from '../lib/ModalContext'
+import type { Settings, StudySession, DailyRecord } from '../lib/db'
+import { motion, AnimatePresence } from 'framer-motion'
+import { Icon } from '@iconify/react'
+
+interface EditRecordsProps {
+    settings: Settings
+}
+
+// Helper: Format date in Korean
+function formatDateKorean(dateStr: string): string {
+    const date = new Date(dateStr + 'T00:00:00')
+    const weekdays = ['일', '월', '화', '수', '목', '금', '토']
+    return `${date.getMonth() + 1}월 ${date.getDate()}일 (${weekdays[date.getDay()]})`
+}
+
+// Helper: Change date by days
+function addDays(dateStr: string, days: number): string {
+    const date = new Date(dateStr + 'T00:00:00')
+    date.setDate(date.getDate() + days)
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+}
+
+export default function EditRecords({ settings }: EditRecordsProps) {
+    const { showConfirm } = useModal()
+    const [selectedDate, setSelectedDate] = useState(getTodayDate())
+    const [dailyRecord, setDailyRecord] = useState<DailyRecord | null>(null)
+    const [recentSessions, setRecentSessions] = useState<StudySession[]>([])
+
+    // Form for Adding/Editing Manual Session
+    const [addSubject, setAddSubject] = useState(settings.subjects[0]?.name || '')
+    const [addSubItem, setAddSubItem] = useState<string | undefined>(undefined)
+    const [addType, setAddType] = useState(settings.types[0])
+    const [editingSessionId, setEditingSessionId] = useState<number | null>(null)
+
+    // Dual input mode: 'duration' or 'timeRange'
+    const [inputMode, setInputMode] = useState<'duration' | 'timeRange'>('duration')
+
+    // Duration mode inputs
+    const [inputHours, setInputHours] = useState('')
+    const [inputMinutes, setInputMinutes] = useState('')
+
+    // Time range mode inputs
+    const [inputStartTime, setInputStartTime] = useState('')
+    const [inputEndTime, setInputEndTime] = useState('')
+
+    // Evaluation inputs
+    const [focus, setFocus] = useState(5)
+    const [satisfaction, setSatisfaction] = useState(5)
+    const [showEvalFields, setShowEvalFields] = useState(false)
+    const [correct, setCorrect] = useState('')
+    const [total, setTotal] = useState('')
+    const [memo, setMemo] = useState('')
+
+    // Overlap warning state
+    const [showOverlapWarning, setShowOverlapWarning] = useState(false)
+    const [overlappingSession, setOverlappingSession] = useState<StudySession | null>(null)
+    const [pendingSubmit, setPendingSubmit] = useState<{
+        startTime: number;
+        endTime: number;
+        duration: number;
+    } | null>(null)
+
+    // Get current subject's children
+    const currentSubjectData = settings.subjects.find(s => s.name === addSubject)
+    const hasSubItems = currentSubjectData?.children && currentSubjectData.children.length > 0
+
+    const isToday = selectedDate === getTodayDate()
+
+    useEffect(() => {
+        loadData()
+    }, [selectedDate])
+
+    async function loadData() {
+        const record = await db.dailyRecords.get(selectedDate)
+        setDailyRecord(record || { date: selectedDate, firstVisitCompleted: false })
+
+        const sessions = await db.sessions
+            .where('date')
+            .equals(selectedDate)
+            .toArray()
+        // Sort by startTime descending (latest first)
+        sessions.sort((a, b) => b.startTime - a.startTime)
+        setRecentSessions(sessions)
+    }
+
+    const handleUpdateDaily = async (field: keyof DailyRecord, value: string) => {
+        const existing = await db.dailyRecords.get(selectedDate)
+        if (existing) {
+            await db.dailyRecords.update(selectedDate, { [field]: value })
+        } else {
+            await db.dailyRecords.add({
+                date: selectedDate,
+                firstVisitCompleted: false,
+                [field]: value
+            })
+        }
+        loadData()
+    }
+
+    const handleResetForm = () => {
+        setEditingSessionId(null)
+        setAddSubject(settings.subjects[0]?.name || '')
+        setAddSubItem(undefined)
+        setAddType(settings.types[0])
+        setInputHours('')
+        setInputMinutes('')
+        setInputStartTime('')
+        setInputEndTime('')
+        setFocus(5)
+        setSatisfaction(5)
+        setShowEvalFields(false)
+        setCorrect('')
+        setTotal('')
+        setMemo('')
+    }
+
+    const handleSelectSession = (session: StudySession) => {
+        setEditingSessionId(session.id!)
+        setAddSubject(session.subject)
+        setAddSubItem(session.subItem)
+        setAddType(session.type)
+
+        // Set both modes' values
+        const totalMinutes = Math.floor(session.duration / 60000)
+        setInputHours(Math.floor(totalMinutes / 60).toString() || '')
+        setInputMinutes((totalMinutes % 60).toString() || '')
+
+        setInputStartTime(formatTimeHHMM(session.startTime))
+        setInputEndTime(formatTimeHHMM(session.endTime))
+
+        // Set evaluation values
+        if (session.evaluation) {
+            setFocus(session.evaluation.focus)
+            setSatisfaction(session.evaluation.satisfaction)
+            setCorrect(session.evaluation.problemSolving?.correct.toString() || '')
+            setTotal(session.evaluation.problemSolving?.total.toString() || '')
+            setMemo(session.evaluation.memo || '')
+            setShowEvalFields(true)
+        } else {
+            setFocus(5)
+            setSatisfaction(5)
+            setCorrect('')
+            setTotal('')
+            setMemo('')
+            setShowEvalFields(false)
+        }
+    }
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault()
+
+        let duration: number
+        let startTime: number
+        let endTime: number
+
+        if (inputMode === 'duration') {
+            const h = parseInt(inputHours) || 0
+            const m = parseInt(inputMinutes) || 0
+            const totalMins = (h * 60) + m
+            if (totalMins <= 0) return
+
+            duration = totalMins * 60000
+
+            if (editingSessionId) {
+                const session = recentSessions.find(s => s.id === editingSessionId)
+                startTime = session?.startTime || Date.now() - duration
+                endTime = startTime + duration
+            } else {
+                // 새 세션: 기존 세션들의 가장 늦은 종료 시간 이후에 자동 배치
+                const latestEnd = await getLatestEndTime(selectedDate)
+                if (latestEnd !== null) {
+                    startTime = latestEnd + 1000 // 1초 간격
+                    endTime = startTime + duration
+                } else {
+                    // 세션이 없으면 09:00 기준
+                    const baseDate = new Date(selectedDate + 'T09:00:00')
+                    startTime = baseDate.getTime()
+                    endTime = startTime + duration
+                }
+            }
+        } else {
+            // Time range mode
+            if (!inputStartTime || !inputEndTime) return
+
+            const [startH, startM] = inputStartTime.split(':').map(Number)
+            const [endH, endM] = inputEndTime.split(':').map(Number)
+
+            const startDate = new Date(selectedDate + 'T00:00:00')
+            startDate.setHours(startH, startM, 0, 0)
+            startTime = startDate.getTime()
+
+            const endDate = new Date(selectedDate + 'T00:00:00')
+            endDate.setHours(endH, endM, 0, 0)
+            endTime = endDate.getTime()
+
+            // Handle overnight sessions
+            if (endTime <= startTime) {
+                endTime += 24 * 60 * 60 * 1000 // Add one day
+            }
+
+            duration = endTime - startTime
+            if (duration <= 0) return
+        }
+
+        // Check for overlapping session (전체 범위 겹침 확인)
+        const overlapping = await findOverlappingSession(selectedDate, startTime, editingSessionId ?? undefined, endTime)
+        if (overlapping) {
+            // timeRange 모드상으로 직접 입력된 세션이면 경고만 표시
+            setOverlappingSession(overlapping)
+            setPendingSubmit({ startTime, endTime, duration })
+            setShowOverlapWarning(true)
+            return
+        }
+
+        await saveSession(startTime, endTime, duration)
+    }
+
+    const saveSession = async (startTime: number, endTime: number, duration: number) => {
+        // showEvalFields가 true일 때만 evaluation 저장 (건너뛰기 시 미기록)
+        const evaluation = showEvalFields ? {
+            focus,
+            satisfaction,
+            ...(correct && total ? {
+                problemSolving: {
+                    correct: parseInt(correct) || 0,
+                    total: parseInt(total) || 0
+                }
+            } : {}),
+            ...(memo.trim() ? { memo: memo.trim() } : {})
+        } : undefined
+
+        if (editingSessionId) {
+            await updateStudySession(editingSessionId, {
+                subject: addSubject,
+                subItem: addSubItem,
+                type: addType,
+                startTime,
+                endTime,
+                duration,
+                evaluation
+            })
+        } else {
+            const session: StudySession = {
+                date: selectedDate,
+                subject: addSubject,
+                subItem: addSubItem,
+                type: addType,
+                startTime,
+                endTime,
+                duration,
+                evaluation
+            }
+            await db.sessions.add(session)
+        }
+
+        handleResetForm()
+        loadData()
+    }
+
+    const handleOverlapConfirm = async () => {
+        if (overlappingSession && pendingSubmit) {
+            // Adjust the overlapping session's end time to 1ms before the new session starts
+            await adjustOverlappingSession(overlappingSession.id!, pendingSubmit.startTime - 1)
+            await saveSession(pendingSubmit.startTime, pendingSubmit.endTime, pendingSubmit.duration)
+        }
+        setShowOverlapWarning(false)
+        setOverlappingSession(null)
+        setPendingSubmit(null)
+    }
+
+    const handleOverlapCancel = () => {
+        setShowOverlapWarning(false)
+        setOverlappingSession(null)
+        setPendingSubmit(null)
+    }
+
+    const handleDelete = async (e: React.MouseEvent, id: number) => {
+        e.stopPropagation()
+        const confirmed = await showConfirm('기록 삭제', '정말 이 학습 기록을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.')
+        if (!confirmed) return
+        await deleteStudySession(id)
+        if (editingSessionId === id) handleResetForm()
+        loadData()
+    }
+
+    const handlePrevDay = () => setSelectedDate(addDays(selectedDate, -1))
+    const handleNextDay = () => {
+        const next = addDays(selectedDate, 1)
+        if (next <= getTodayDate()) setSelectedDate(next)
+    }
+    const handleToday = () => setSelectedDate(getTodayDate())
+
+    return (
+        <div className="flex flex-col gap-10">
+            <header>
+                <h1 className="text-3xl font-black gradient-text">학습 기록 편집</h1>
+                <p className="text-[var(--color-text-secondary)]">일정과 공부 세션을 관리하세요.</p>
+            </header>
+
+            {/* Date Navigation */}
+            <div className="flex items-center justify-center gap-4">
+                <button
+                    onClick={handlePrevDay}
+                    className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center font-bold transition-all"
+                >
+                    <Icon icon="mdi:chevron-left" className="text-2xl" />
+                </button>
+                <div className="flex flex-col items-center">
+                    <span className="text-lg font-bold">{formatDateKorean(selectedDate)}</span>
+                    {!isToday && (
+                        <button
+                            onClick={handleToday}
+                            className="text-xs text-indigo-400 hover:underline mt-1"
+                        >
+                            오늘로 이동
+                        </button>
+                    )}
+                </div>
+                <button
+                    onClick={handleNextDay}
+                    disabled={isToday}
+                    className={`w-10 h-10 rounded-full flex items-center justify-center font-bold transition-all ${isToday ? 'bg-white/5 opacity-30 cursor-not-allowed' : 'bg-white/10 hover:bg-white/20'
+                        }`}
+                >
+                    <Icon icon="mdi:chevron-right" className="text-2xl" />
+                </button>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* Left Column: Daily Stats & Manual Entry */}
+                <div className="flex flex-col gap-8">
+                    {/* Daily Schedule Stats */}
+                    <section className="glass-card p-6 flex flex-col gap-6">
+                        <div className="flex items-center gap-2">
+                            <Icon icon="mdi:calendar" className="text-xl text-indigo-400" />
+                            <h2 className="text-lg font-bold">{formatDateKorean(selectedDate)} 일정</h2>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            {[
+                                { label: '기상 시간', field: 'wakeUpTime', icon: 'mdi:weather-sunset-up', color: 'text-orange-400' },
+                                { label: '전날 취침 시간', field: 'bedTime', icon: 'mdi:weather-night', color: 'text-indigo-400' },
+                                ((dailyRecord as any)?.arrivalTime ? { label: '등원 시간', field: 'arrivalTime', icon: 'mdi:school-outline', color: 'text-blue-400' } : null),
+                                ((dailyRecord as any)?.leaveTime ? { label: '하원 시간', field: 'leaveTime', icon: 'mdi:door-open', color: 'text-green-400' } : null)
+                            ].filter(Boolean).map((item: any) => (
+                                <div key={item.field} className="flex flex-col gap-2">
+                                    <label className="text-xs font-bold opacity-60 flex items-center gap-1">
+                                        <Icon icon={item.icon} className={`text-lg ${item.color}`} /> {item.label}
+                                    </label>
+                                    <input
+                                        type="time"
+                                        value={(dailyRecord as any)?.[item.field] || ''}
+                                        onChange={(e) => handleUpdateDaily(item.field as any, e.target.value)}
+                                        className="px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                                    />
+                                </div>
+                            ))}
+                        </div>
+                    </section>
+
+                    {/* Manual Session Entry */}
+                    <section className={`glass-card p-6 flex flex-col gap-6 border-indigo-500/20 transition-all ${editingSessionId ? 'bg-indigo-500/10 ring-2 ring-indigo-500/50 scale-[1.02]' : 'bg-gradient-to-br from-indigo-500/5 to-purple-500/5'}`}>
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <Icon icon={editingSessionId ? "mdi:pencil-outline" : "mdi:pencil-plus-outline"} className="text-xl" />
+                                <h2 className="text-lg font-bold">{editingSessionId ? '기록 수정하기' : '공부 기록 추가'}</h2>
+                            </div>
+                            {editingSessionId && (
+                                <button onClick={handleResetForm} className="text-xs font-bold text-indigo-500 hover:underline">취소</button>
+                            )}
+                        </div>
+
+                        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+                            <div className="grid grid-cols-2 gap-3">
+                                <select
+                                    value={addSubject}
+                                    onChange={(e) => {
+                                        setAddSubject(e.target.value)
+                                        setAddSubItem(undefined)
+                                    }}
+                                    className="px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                                >
+                                    {settings.subjects.map(s => <option key={s.name} value={s.name} className="bg-slate-900">{s.name}</option>)}
+                                </select>
+                                <select
+                                    value={addType}
+                                    onChange={(e) => setAddType(e.target.value)}
+                                    className="px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                                >
+                                    {settings.types.map(t => <option key={t} value={t} className="bg-slate-900">{t}</option>)}
+                                </select>
+                            </div>
+
+                            {/* Sub-item dropdown */}
+                            {hasSubItems && (
+                                <select
+                                    value={addSubItem || ''}
+                                    onChange={(e) => setAddSubItem(e.target.value || undefined)}
+                                    className="px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                                >
+                                    <option value="" className="bg-slate-900">전체 (하위 항목 없음)</option>
+                                    {currentSubjectData?.children?.map(child => (
+                                        <option key={child} value={child} className="bg-slate-900">{child}</option>
+                                    ))}
+                                </select>
+                            )}
+
+                            {/* Input Mode Toggle */}
+                            <div className="flex gap-2 p-1 bg-white/5 rounded-xl">
+                                <button
+                                    type="button"
+                                    onClick={() => setInputMode('duration')}
+                                    className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${inputMode === 'duration'
+                                        ? 'bg-indigo-500 text-white shadow-lg'
+                                        : 'text-[var(--color-text-secondary)] hover:bg-white/5'
+                                        }`}
+                                >
+                                    <div className="flex items-center justify-center gap-1"><Icon icon="mdi:timer-outline" className="text-lg" /> 시간 입력</div>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setInputMode('timeRange')}
+                                    className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${inputMode === 'timeRange'
+                                        ? 'bg-indigo-500 text-white shadow-lg'
+                                        : 'text-[var(--color-text-secondary)] hover:bg-white/5'
+                                        }`}
+                                >
+                                    <div className="flex items-center justify-center gap-1"><Icon icon="mdi:clock-outline" className="text-lg" /> 시작~끝 입력</div>
+                                </button>
+                            </div>
+
+                            {/* Duration Mode */}
+                            {inputMode === 'duration' && (
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="relative">
+                                        <input
+                                            type="number"
+                                            placeholder="0"
+                                            value={inputHours}
+                                            onChange={(e) => setInputHours(e.target.value)}
+                                            className="w-full px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm outline-none focus:ring-2 focus:ring-indigo-500 pr-10"
+                                        />
+                                        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs opacity-40 font-bold">시</span>
+                                    </div>
+                                    <div className="relative">
+                                        <input
+                                            type="number"
+                                            placeholder="0"
+                                            value={inputMinutes}
+                                            onChange={(e) => setInputMinutes(e.target.value)}
+                                            className="w-full px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm outline-none focus:ring-2 focus:ring-indigo-500 pr-10"
+                                        />
+                                        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs opacity-40 font-bold">분</span>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Time Range Mode */}
+                            {inputMode === 'timeRange' && (
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="flex flex-col gap-1">
+                                        <label className="text-xs opacity-40 font-bold">시작 시간</label>
+                                        <input
+                                            type="time"
+                                            value={inputStartTime}
+                                            onChange={(e) => setInputStartTime(e.target.value)}
+                                            className="px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                                        />
+                                    </div>
+                                    <div className="flex flex-col gap-1">
+                                        <label className="text-xs opacity-40 font-bold">종료 시간</label>
+                                        <input
+                                            type="time"
+                                            value={inputEndTime}
+                                            onChange={(e) => setInputEndTime(e.target.value)}
+                                            className="px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                                        />
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Evaluation Section Toggle */}
+                            <div className="pt-2 border-t border-white/5 space-y-4">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowEvalFields(!showEvalFields)}
+                                    className="flex items-center justify-between w-full group"
+                                >
+                                    <div className="flex items-center gap-2">
+                                        <Icon icon="mdi:sparkles" className="text-lg text-amber-400" />
+                                        <span className="text-xs font-bold text-[var(--color-text-secondary)] uppercase tracking-widest group-hover:text-[var(--color-text)] transition-colors">평가 정보 {showEvalFields ? '숨기기' : '추가하기'}</span>
+                                    </div>
+                                    <span className={`text-[10px] font-black text-[var(--color-text-secondary)] transition-transform ${showEvalFields ? 'rotate-180' : ''}`}>▼</span>
+                                </button>
+
+                                <AnimatePresence>
+                                    {showEvalFields && (
+                                        <motion.div
+                                            initial={{ height: 0, opacity: 0 }}
+                                            animate={{ height: 'auto', opacity: 1 }}
+                                            exit={{ height: 0, opacity: 0 }}
+                                            className="overflow-hidden space-y-6"
+                                        >
+                                            {/* Focus & Satisfaction */}
+                                            <div className="grid grid-cols-1 gap-6">
+                                                <div className="space-y-2">
+                                                    <div className="flex justify-between items-center px-1">
+                                                        <span className="text-[10px] font-black text-indigo-400 uppercase tracking-tighter">집중도</span>
+                                                        <span className="text-sm font-black text-[var(--color-text)]">{focus}/10</span>
+                                                    </div>
+                                                    <input
+                                                        type="range" min="1" max="10" step="1"
+                                                        value={focus}
+                                                        onChange={(e) => setFocus(parseInt(e.target.value))}
+                                                        className="w-full accent-indigo-500 h-1.5 bg-white/5 rounded-full appearance-none cursor-pointer"
+                                                    />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <div className="flex justify-between items-center px-1">
+                                                        <span className="text-[10px] font-black text-emerald-400 uppercase tracking-tighter">만족도</span>
+                                                        <span className="text-sm font-black text-[var(--color-text)]">{satisfaction}/10</span>
+                                                    </div>
+                                                    <input
+                                                        type="range" min="1" max="10" step="1"
+                                                        value={satisfaction}
+                                                        onChange={(e) => setSatisfaction(parseInt(e.target.value))}
+                                                        className="w-full accent-emerald-500 h-1.5 bg-white/5 rounded-full appearance-none cursor-pointer"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            {/* Problem Solving */}
+                                            <div className="flex items-center gap-3 bg-[var(--color-surface)] p-2 rounded-2xl border border-[var(--color-border)]">
+                                                <span className="text-xs font-bold text-[var(--color-text-secondary)] pl-2">문제</span>
+                                                <input
+                                                    type="number"
+                                                    value={correct}
+                                                    onChange={(e) => setCorrect(e.target.value)}
+                                                    placeholder="맞힌 수"
+                                                    className="w-full bg-transparent text-center font-bold text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-secondary)]/30 outline-none"
+                                                />
+                                                <span className="text-[var(--color-text-secondary)]/20 font-black">/</span>
+                                                <input
+                                                    type="number"
+                                                    value={total}
+                                                    onChange={(e) => setTotal(e.target.value)}
+                                                    placeholder="전체"
+                                                    className="w-full bg-transparent text-center font-bold text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-secondary)]/30 outline-none"
+                                                />
+                                            </div>
+
+                                            {/* Memo */}
+                                            <div className="space-y-2">
+                                                <label className="text-[10px] font-black text-[var(--color-text-secondary)] uppercase tracking-widest pl-1">메모</label>
+                                                <textarea
+                                                    value={memo}
+                                                    onChange={(e) => setMemo(e.target.value)}
+                                                    placeholder="간단한 소감..."
+                                                    rows={2}
+                                                    className="w-full px-4 py-3 rounded-2xl bg-[var(--color-surface)] border border-[var(--color-border)] text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-secondary)]/30 resize-none outline-none focus:border-[var(--color-primary)] transition-all"
+                                                />
+                                            </div>
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
+                            </div>
+
+
+                            <button type="submit" className={`w-full py-3 rounded-xl text-white font-bold text-sm active:scale-95 transition-all shadow-lg ${editingSessionId ? 'bg-indigo-600 hover:bg-indigo-500' : 'bg-indigo-500 hover:bg-indigo-400'}`}>
+                                {editingSessionId ? '기록 수정 완료' : '기록 추가하기'}
+                            </button>
+                        </form>
+                    </section>
+                </div>
+
+                {/* Right Column: Recent Sessions List */}
+                <div className="flex flex-col gap-6">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <Icon icon="mdi:script-text-outline" className="text-xl text-indigo-400" />
+                            <h2 className="text-lg font-bold">{formatDateKorean(selectedDate)} 세션</h2>
+                        </div>
+                        <span className="text-[10px] font-bold opacity-40 uppercase tracking-widest">{recentSessions.length} sessions</span>
+                    </div>
+
+                    <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2 no-scrollbar">
+                        <p className="text-[10px] text-indigo-500 font-bold opacity-60 text-center tracking-tight flex items-center justify-center gap-1"><Icon icon="mdi:lightbulb-on-outline" className="text-lg" /> 내역을 클릭하면 수정, 왼쪽으로 밀면 삭제할 수 있습니다.</p>
+                        <AnimatePresence mode="popLayout">
+                            {recentSessions.map((session) => (
+                                <div key={session.id} className="relative overflow-hidden rounded-[2rem]">
+                                    {/* Delete Button */}
+                                    <div
+                                        className="absolute inset-y-2 right-2 w-[80px] bg-red-500 flex items-center justify-center rounded-2xl shadow-inner"
+                                        onPointerDown={(e) => e.stopPropagation()}
+                                    >
+                                        <button
+                                            onClick={(e) => handleDelete(e, session.id!)}
+                                            className="text-white font-black flex flex-col items-center gap-1 active:scale-90 transition-transform w-full h-full justify-center"
+                                        >
+                                            <Icon icon="mdi:trash-can-outline" className="text-2xl" />
+                                            <span className="text-[10px] uppercase tracking-tighter">Delete</span>
+                                        </button>
+                                    </div>
+
+                                    {/* Session Card */}
+                                    <motion.div
+                                        drag="x"
+                                        dragConstraints={{ left: -100, right: 0 }}
+                                        dragElastic={0.05}
+                                        dragMomentum={false}
+                                        layout
+                                        initial={{ opacity: 0, scale: 0.95 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        exit={{ opacity: 0, scale: 0.95, x: -100 }}
+                                        onClick={() => handleSelectSession(session)}
+                                        className={`relative glass-card-solid p-4 flex items-center justify-between group cursor-pointer transition-all hover:border-indigo-500/50 ${editingSessionId === session.id ? 'ring-2 ring-indigo-500 border-transparent shadow-xl' : ''}`}
+                                    >
+                                        <div className="flex flex-col gap-1">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-sm font-bold">{session.subject}</span>
+                                                {session.subItem && <span className="text-[10px] text-indigo-400 font-medium">› {session.subItem}</span>}
+                                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/10 opacity-60 font-medium">{session.type}</span>
+                                            </div>
+                                            <div className="flex items-center gap-2 text-xs opacity-60 tabular-nums">
+                                                <span className="font-medium text-indigo-400">{formatTimeHHMM(session.startTime)}</span>
+                                                <span>~</span>
+                                                <span className="font-medium text-indigo-400">{formatTimeHHMM(session.endTime)}</span>
+                                                <span className="opacity-40">|</span>
+                                                <span>{formatDuration(session.duration)}</span>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-1 h-8 bg-white/5 rounded-full group-hover:bg-indigo-500/20 transition-colors"></div>
+                                            <span className="text-xl opacity-20 group-hover:opacity-40 transition-opacity">‹</span>
+                                        </div>
+                                    </motion.div>
+                                </div>
+                            ))}
+                        </AnimatePresence>
+
+                        {recentSessions.length === 0 && (
+                            <div className="text-center py-20 bg-white/5 rounded-[2rem] border border-dashed border-white/10">
+                                <p className="text-sm opacity-30 italic">{formatDateKorean(selectedDate)} 기록된 세션이 없습니다.</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            {/* Overlap Warning Modal */}
+            <AnimatePresence>
+                {showOverlapWarning && overlappingSession && (
+                    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-6">
+                        {/* Backdrop layer */}
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={handleOverlapCancel}
+                            className="absolute inset-0 bg-black/40 backdrop-blur-xl"
+                        />
+
+                        {/* Modal content layer */}
+                        <motion.div
+                            initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                            animate={{ scale: 1, opacity: 1, y: 0 }}
+                            exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                            className="relative w-full max-w-md liquid-modal p-10 flex flex-col gap-6 shadow-2xl"
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <div className="flex items-center gap-3">
+                                <Icon icon="mdi:alert" className="text-3xl text-amber-500" />
+                                <h3 className="text-xl font-bold">세션 시간 중복</h3>
+                            </div>
+
+                            <div className="bg-white/5 rounded-xl p-4 space-y-2">
+                                <p className="text-sm text-[var(--color-text-secondary)]">
+                                    선택한 시간에 이미 다음 세션이 존재합니다:
+                                </p>
+                                <div className="flex items-center gap-2">
+                                    <span className="font-bold">{overlappingSession.subject}</span>
+                                    {overlappingSession.subItem && (
+                                        <span className="text-indigo-400 text-sm">› {overlappingSession.subItem}</span>
+                                    )}
+                                </div>
+                                <div className="text-sm text-[var(--color-text-secondary)]">
+                                    {formatTimeHHMM(overlappingSession.startTime)} ~ {formatTimeHHMM(overlappingSession.endTime)}
+                                </div>
+                            </div>
+
+                            <p className="text-sm text-[var(--color-text-secondary)]">
+                                계속하면 기존 세션의 종료 시간이 새 세션 시작 시간 직전으로 자동 조정됩니다.
+                            </p>
+
+                            <div className="flex gap-3 mt-4">
+                                <button
+                                    onClick={handleOverlapCancel}
+                                    className="flex-1 py-4 rounded-2xl bg-white/5 hover:bg-white/10 text-[var(--color-text-secondary)] font-bold transition-all active:scale-95"
+                                >
+                                    취소
+                                </button>
+                                <button
+                                    onClick={handleOverlapConfirm}
+                                    className="flex-1 py-4 rounded-2xl bg-indigo-500 hover:bg-indigo-400 text-white font-black shadow-xl active:scale-95 transition-all"
+                                >
+                                    조정하고 추가
+                                </button>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
+        </div>
+    )
+}

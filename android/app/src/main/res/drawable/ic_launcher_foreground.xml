@@ -1,0 +1,71 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="1024"
+    android:viewportHeight="1024">
+    
+    <!-- Background Grid Effect (Subtle) -->
+    <path
+        android:pathData="M0,0h1024v1024h-1024z"
+        android:fillColor="#1A1B41"/>
+
+    <!-- Outer Dashboard Ring -->
+    <path
+        android:pathData="M512,512m-380,0a380,380 0,1 1,760 0a380,380 0,1 1,-760 0"
+        android:strokeWidth="6"
+        android:strokeColor="#7000FF"/>
+
+    <!-- Left/Right tech brackets -->
+    <path
+        android:pathData="M200,350 L150,400 L150,624 L200,674"
+        android:strokeWidth="8"
+        android:strokeColor="#00F0FF"
+        android:strokeLineCap="square"/>
+    <path
+        android:pathData="M824,350 L874,400 L874,624 L824,674"
+        android:strokeWidth="8"
+        android:strokeColor="#FF003C"
+        android:strokeLineCap="square"/>
+
+    <!-- Main Progress Arc -->
+    <path
+        android:pathData="M300,780 A340,340 0,1 1,790,310"
+        android:strokeWidth="50"
+        android:strokeColor="#00F0FF"
+        android:strokeLineCap="round"/>
+    <path
+        android:pathData="M300,780 A340,340 0,1 1,790,310"
+        android:strokeWidth="12"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round"/>
+
+    <!-- Histogram Bars -->
+    <path android:pathData="M360,550h36v130h-36z" android:fillColor="#FF003C"/>
+    <path android:pathData="M430,460h36v220h-36z" android:fillColor="#FF003C"/>
+    <path android:pathData="M500,510h36v170h-36z" android:fillColor="#FF003C"/>
+    <path android:pathData="M570,400h36v280h-36z" android:fillColor="#FF003C"/>
+    <path android:pathData="M640,290h36v390h-36z" android:fillColor="#FF003C"/>
+
+    <!-- Trend Line -->
+    <path
+        android:pathData="M310,610 L378,530 L448,440 L518,490 L588,380 L690,250"
+        android:strokeWidth="8"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"/>
+    
+    <!-- Arrow Head -->
+    <path
+        android:pathData="M690,250 L690,330 M690,250 L610,250"
+        android:strokeWidth="8"
+        android:strokeColor="#00F0FF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"/>
+
+    <!-- Plot Points -->
+    <path android:pathData="M378,530m-10,0a10,10 0,1 1,20 0a10,10 0,1 1,-20 0" android:fillColor="#FFFFFF"/>
+    <path android:pathData="M448,440m-10,0a10,10 0,1 1,20 0a10,10 0,1 1,-20 0" android:fillColor="#FFFFFF"/>
+    <path android:pathData="M518,490m-10,0a10,10 0,1 1,20 0a10,10 0,1 1,-20 0" android:fillColor="#FFFFFF"/>
+    <path android:pathData="M588,380m-10,0a10,10 0,1 1,20 0a10,10 0,1 1,-20 0" android:fillColor="#FFFFFF"/>
+    
+</vector>

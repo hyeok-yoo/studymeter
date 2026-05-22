@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">StudyMeter</string>
+    <string name="title_activity_main">StudyMeter</string>
+    <string name="package_name">com.studymeter.app</string>
+    <string name="custom_url_scheme">com.studymeter.app</string>
+</resources>

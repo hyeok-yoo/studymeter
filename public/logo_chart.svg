@@ -1,0 +1,50 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background: Deep fluid gradient -->
+  <defs>
+    <linearGradient id="bg_gradient" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0f172a"/>
+      <stop offset="1" stop-color="#1e1b4b"/>
+    </linearGradient>
+    <linearGradient id="bar1" x1="120" y1="400" x2="120" y2="280" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#38bdf8"/>
+      <stop offset="1" stop-color="#22d3ee"/>
+    </linearGradient>
+    <linearGradient id="bar2" x1="220" y1="400" x2="220" y2="200" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#818cf8"/>
+      <stop offset="1" stop-color="#6366f1"/>
+    </linearGradient>
+    <linearGradient id="bar3" x1="320" y1="400" x2="320" y2="120" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#c084fc"/>
+      <stop offset="1" stop-color="#a855f7"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="15" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Base Shape -->
+  <rect width="512" height="512" rx="120" fill="url(#bg_gradient)"/>
+
+  <!-- Graphical Elements: Rising Bars with Rounded Tops -->
+  <g filter="url(#glow)">
+    <!-- Bar 1 -->
+    <rect x="90" y="280" width="80" height="140" rx="20" fill="url(#bar1)" opacity="0.9"/>
+    <!-- Bar 2 -->
+    <rect x="216" y="200" width="80" height="220" rx="20" fill="url(#bar2)" opacity="0.95"/>
+    <!-- Bar 3 (Highest) -->
+    <rect x="342" y="120" width="80" height="300" rx="20" fill="url(#bar3)"/>
+  </g>
+
+  <!-- Connecting Curve (Trend Line) -->
+  <path d="M90 280 Q 216 200 380 120" stroke="white" stroke-width="12" stroke-linecap="round" stroke-dasharray="20 20" opacity="0.4"/>
+  
+  <!-- Floating Particle/Dot on Top -->
+  <circle cx="382" cy="120" r="16" fill="#fbbf24" filter="url(#glow)"/>
+
+  <!-- Glass Overlay -->
+  <path d="M0 0 H 512 V 256 Q 256 300 0 256 V 0 Z" fill="white" fill-opacity="0.05"/>
+</svg>
