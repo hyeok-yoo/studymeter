@@ -2,14 +2,6 @@
 
 > 공부 시간을 정확하게 측정하고, 집중도를 실시간으로 모니터링하는 Android 학습 관리 앱
 
-<p align="center">
-  <img src="mainpage.jpg" alt="메인 화면" width="220"/>
-  &nbsp;&nbsp;
-  <img src="firstpage.jpg" alt="공부 화면" width="220"/>
-  &nbsp;&nbsp;
-  <img src="popup.jpg" alt="모달" width="220"/>
-</p>
-
 ---
 
 ## 주요 기능

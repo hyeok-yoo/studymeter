@@ -45,8 +45,11 @@ jobs:
       - name: Set Android SDK path
         run: echo "sdk.dir=$ANDROID_HOME" > android/local.properties
 
-      - name: Patch Capacitor proguard reference for AGP 9+
-        run: find node_modules/@capacitor/android -name "*.gradle" | xargs sed -i "s/getDefaultProguardFile('proguard-android\.txt')/getDefaultProguardFile('proguard-android-optimize.txt')/g"
+      - name: Patch all Capacitor proguard references for AGP 9+
+        run: |
+          grep -rl "proguard-android\.txt" node_modules/@capacitor node_modules/@capacitor-community 2>/dev/null \
+            | grep "\.gradle$" \
+            | xargs -r sed -i "s/getDefaultProguardFile('proguard-android\.txt')/getDefaultProguardFile('proguard-android-optimize.txt')/g"
 
       - name: Make gradlew executable
         run: chmod +x android/gradlew
