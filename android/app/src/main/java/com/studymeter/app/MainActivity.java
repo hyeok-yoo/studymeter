@@ -4,7 +4,9 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.os.Bundle;
 import android.util.Log;
+import com.focus.v2android.FocusPlugin;
 import com.getcapacitor.BridgeActivity;
+import org.opencv.android.OpenCVLoader;
 
 public class MainActivity extends BridgeActivity {
     private static final String TAG = "StudyMeter";
@@ -14,6 +16,8 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         // Capacitor 4+: registerPlugin must come before super.onCreate()
         registerPlugin(NowBarPlugin.class);
+        registerPlugin(FocusPlugin.class);
+        OpenCVLoader.initDebug();
         Log.d(TAG, "NowBarPlugin registered");
 
         super.onCreate(savedInstanceState);

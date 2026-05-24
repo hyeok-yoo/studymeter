@@ -4,14 +4,15 @@ interface TabletCameraProps {
     sendVideoFrame: (dataUrl: string) => void;
     connected: boolean;
     fps?: number;
+    autoStart?: boolean;
 }
 
-export function TabletCamera({ sendVideoFrame, connected, fps = 10 }: TabletCameraProps) {
+export function TabletCamera({ sendVideoFrame, connected, fps = 10, autoStart = false }: TabletCameraProps) {
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const intervalRef = useRef<number | null>(null);
     const streamRef = useRef<MediaStream | null>(null);
-    const [enabled, setEnabled] = useState(false);
+    const [enabled, setEnabled] = useState(autoStart);
     const [cameraReady, setCameraReady] = useState(false);
     const [error, setError] = useState<string | null>(null);
 

@@ -114,19 +114,30 @@ export async function initializeSettings(): Promise<Settings> {
     return defaultSettings;
 }
 
-// 오늘 날짜 가져오기 (YYYY-MM-DD) - 로컬 시간 기준
-export function getTodayDate(): string {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+// 새벽 3시 기준으로 날짜 조정 (0~2시는 전날로 처리)
+function adjustForStudyDay(date: Date): Date {
+    const adjusted = new Date(date);
+    if (adjusted.getHours() < 3) {
+        adjusted.setDate(adjusted.getDate() - 1);
+    }
+    return adjusted;
 }
 
-// 타임스탬프에서 날짜 추출 (YYYY-MM-DD) - 로컬 시간 기준
+// 오늘 날짜 가져오기 (YYYY-MM-DD) - 새벽 3시 기준 (0~2시는 전날로 처리)
+export function getTodayDate(): string {
+    return formatDateYYYYMMDD(adjustForStudyDay(new Date()));
+}
+
+// 오늘 기준 Date 객체 반환 (새벽 3시 기준)
+export function getStudyToday(): Date {
+    const d = adjustForStudyDay(new Date());
+    d.setHours(0, 0, 0, 0);
+    return d;
+}
+
+// 타임스탬프에서 날짜 추출 (YYYY-MM-DD) - 새벽 3시 기준
 export function getDateFromTimestamp(timestamp: number): string {
-    const date = new Date(timestamp);
-    return formatDateYYYYMMDD(date);
+    return formatDateYYYYMMDD(adjustForStudyDay(new Date(timestamp)));
 }
 
 // Date 객체를 YYYY-MM-DD 형식으로 변환 (로컬 시간 기준)

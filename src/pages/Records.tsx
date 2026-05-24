@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { db, formatDuration, formatDateYYYYMMDD, formatDurationHourMinute, getMonday, getSunday } from '../lib/db'
+import { db, formatDuration, formatDateYYYYMMDD, formatDurationHourMinute, getMonday, getSunday, getStudyToday } from '../lib/db'
 import type { StudySession, DailyRecord } from '../lib/db'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LabelList } from 'recharts'
 import { Icon } from '@iconify/react'
@@ -42,8 +42,7 @@ export default function Records() {
 
     // Calculate date range based on viewMode and offset
     const dateRange = useMemo(() => {
-        const today = new Date()
-        today.setHours(0, 0, 0, 0)
+        const today = getStudyToday()
 
         if (viewMode === 'day') {
             const targetDate = new Date(today)

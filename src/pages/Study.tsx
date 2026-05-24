@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts'
 import { useFocusSync } from '../lib/focusSync'
+import { useFocusNative } from '../lib/useFocusNative'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Icon } from '@iconify/react'
@@ -713,62 +715,75 @@ function CircleGauge({ score }: { score: number }) {
                 style={{ transition: 'stroke-dasharray 0.6s ease, stroke 0.6s ease', filter: `drop-shadow(0 0 6px ${color}88)` }}
             />
             <text x="60" y="65" textAnchor="middle" fill="white" fontSize="22" fontWeight="800" fontFamily="inherit">
-                {score}
+                {Math.round(score)}
             </text>
         </svg>
     )
 }
 
-function FocusPanel() {
-    const serverUrl = useMemo(() => localStorage.getItem('focus_server_url') ?? '', [])
-    const { score, etaS, features, connected, sendVideoFrame } = useFocusSync(serverUrl)
+// ── Focus Panel (tabbed) ─────────────────────────────────────────────────────
+
+interface ScorePoint { t: number; score: number }
+
+function MetricCard({ label, value, unit, decimals, color }: { label: string; value: number | undefined | null; unit: string; decimals: number; color: string }) {
+    const valid = value !== undefined && value !== null && isFinite(value as number)
+    return (
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-3 text-center">
+            <span className="block text-[9px] font-black uppercase tracking-widest opacity-40 mb-1">{label}</span>
+            <span className="text-base font-bold tabular-nums" style={{ color: valid ? color : 'rgba(255,255,255,0.2)' }}>
+                {valid ? `${(value as number).toFixed(decimals)}${unit}` : '--'}
+            </span>
+        </div>
+    )
+}
+
+// ── Tab 1: 집중도 ─────────────────────────────────────────────────────────────
+function FocusTab({ score, etaS, scoreHistory }: { score: number | null; etaS: number | null; scoreHistory: ScorePoint[] }) {
+    // Build projection points: extend from last history point using linear trend
+    const projPoints = useMemo(() => {
+        if (scoreHistory.length < 3) return []
+        const last = scoreHistory[scoreHistory.length - 1]
+        const prev = scoreHistory[Math.max(0, scoreHistory.length - 6)]
+        const dt = last.t - prev.t
+        if (dt <= 0) return []
+        const slope = (last.score - prev.score) / dt
+        const pts = []
+        for (let i = 1; i <= 8; i++) {
+            const t = last.t + i * 10
+            const s = Math.max(0, Math.min(100, last.score + slope * i * 10))
+            pts.push({ t, score: undefined as undefined, proj: s })
+        }
+        return pts
+    }, [scoreHistory])
+
+    const chartData = useMemo(() => {
+        const hist = scoreHistory.map(p => ({ t: p.t, score: p.score, proj: undefined as number | undefined }))
+        return [...hist, ...projPoints]
+    }, [scoreHistory, projPoints])
+
+    const scoreColor = score !== null ? (score >= 70 ? '#22c55e' : score >= 40 ? '#f59e0b' : '#ef4444') : 'rgba(255,255,255,0.2)'
 
     return (
-        <div
-            className="mt-6 w-full max-w-3xl mx-auto rounded-3xl border border-white/10 bg-white/5 backdrop-blur-sm p-5"
-            style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
-        >
-            {/* Header row */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span className="text-[10px] font-black uppercase tracking-widest opacity-40">집중도 모니터</span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <div style={{
-                        width: '8px', height: '8px', borderRadius: '50%',
-                        background: connected ? '#22c55e' : '#ef4444',
-                        boxShadow: connected ? '0 0 6px #22c55e' : 'none',
-                        transition: 'background 0.4s ease'
-                    }} />
-                    <span className="text-[10px] font-bold opacity-50">{connected ? 'Connected' : 'Disconnected'}</span>
-                </div>
-            </div>
-
-            {/* Gauge + ETA row */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {/* Gauge row */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
                 <div style={{ flexShrink: 0 }}>
-                    {score !== null
-                        ? <CircleGauge score={score} />
-                        : (
-                            <div style={{
-                                width: '120px', height: '120px', borderRadius: '50%',
-                                border: '8px solid rgba(255,255,255,0.08)',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center'
-                            }}>
-                                <span className="text-[10px] font-bold opacity-30">--</span>
-                            </div>
-                        )
-                    }
+                    {score !== null ? <CircleGauge score={score} /> : (
+                        <div style={{ width: '120px', height: '120px', borderRadius: '50%', border: '8px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <span className="text-[10px] font-bold opacity-30">--</span>
+                        </div>
+                    )}
                 </div>
-
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
                     <div>
-                        <span className="text-[10px] font-black uppercase tracking-widest opacity-40 block mb-0.5">집중도</span>
-                        <span className="text-4xl font-black tabular-nums" style={{ color: score !== null ? (score >= 70 ? '#22c55e' : score >= 40 ? '#f59e0b' : '#ef4444') : 'rgba(255,255,255,0.2)' }}>
-                            {score !== null ? score : '--'}
+                        <span className="text-[10px] font-black uppercase tracking-widest opacity-40 block mb-0.5">집중 점수</span>
+                        <span className="text-4xl font-black tabular-nums" style={{ color: scoreColor }}>
+                            {score !== null ? score.toFixed(1) : '--'}
                             <span className="text-lg font-bold opacity-40"> / 100</span>
                         </span>
                     </div>
                     <div>
-                        <span className="text-[10px] font-black uppercase tracking-widest opacity-40 block mb-0.5">남은 시간</span>
+                        <span className="text-[10px] font-black uppercase tracking-widest opacity-40 block mb-0.5">집중 유지 ETA</span>
                         <span className="text-xl font-bold tabular-nums" style={{ color: 'rgba(255,255,255,0.7)' }}>
                             {etaS !== null ? formatEtaMMSS(etaS) : '측정 중...'}
                         </span>
@@ -776,37 +791,491 @@ function FocusPanel() {
                 </div>
             </div>
 
-            {/* Feature cards */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
-                <FeatureCard label="BPM" value={features?.bpm} unit="" decimals={0} color="#f472b6" />
-                <FeatureCard label="졸음 지표 (EAR)" value={features?.mean_ear} unit="" decimals={3} color="#facc15" />
-                <FeatureCard label="시선 이동률" value={features?.saccade_rate} unit="/s" decimals={2} color="#818cf8" />
+            {/* Score history + projection chart */}
+            {chartData.length > 1 && (
+                <div>
+                    <span className="text-[9px] font-black uppercase tracking-widest opacity-40 block mb-2">집중도 추이 + 예측 곡선</span>
+                    <div style={{ width: '100%', height: '120px' }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                            <LineChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: -28 }}>
+                                <XAxis dataKey="t" hide />
+                                <YAxis domain={[0, 100]} tick={{ fontSize: 9, fill: 'rgba(255,255,255,0.3)' }} />
+                                <Tooltip
+                                    contentStyle={{ background: 'rgba(0,0,0,0.7)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', fontSize: '10px' }}
+                                    labelFormatter={() => ''}
+                                    formatter={(val: number | undefined) => [val != null ? val.toFixed(1) : '--', '']}
+                                />
+                                <ReferenceLine y={70} stroke="rgba(34,197,94,0.3)" strokeDasharray="3 3" />
+                                <ReferenceLine y={40} stroke="rgba(245,158,11,0.3)" strokeDasharray="3 3" />
+                                <Line type="monotone" dataKey="score" stroke="#818cf8" strokeWidth={2} dot={false} connectNulls={false} />
+                                <Line type="monotone" dataKey="proj" stroke="#818cf8" strokeWidth={1.5} strokeDasharray="4 3" dot={false} connectNulls={false} />
+                            </LineChart>
+                        </ResponsiveContainer>
+                    </div>
+                </div>
+            )}
+        </div>
+    )
+}
+
+// ── Tab 2: 시선 ──────────────────────────────────────────────────────────────
+function GazeTab({ features, gazeX, gazeY }: {
+    features: ReturnType<typeof useFocusSync>['features']
+    gazeX?: number | null  // actual calibrated gaze pos, 0-1 normalized (from native)
+    gazeY?: number | null
+}) {
+    const [dotPos, setDotPos] = useState({ x: 0.5, y: 0.5 })
+    const dotPosRef = useRef({ x: 0.5, y: 0.5 })
+    const hasActualGaze = gazeX != null && gazeY != null
+
+    useEffect(() => {
+        if (hasActualGaze) {
+            // Use calibrated gaze position directly (smooth with light EMA)
+            const nx = Math.min(1, Math.max(0, gazeX!))
+            const ny = Math.min(1, Math.max(0, gazeY!))
+            dotPosRef.current = { x: dotPosRef.current.x * 0.6 + nx * 0.4, y: dotPosRef.current.y * 0.6 + ny * 0.4 }
+            setDotPos({ ...dotPosRef.current })
+        }
+    }, [gazeX, gazeY, hasActualGaze])
+
+    const saccadeRate = features?.saccade_rate ?? 0
+    const isSaccade = saccadeRate > 2
+    const dotColor = isSaccade ? '#f472b6' : '#22c55e'
+
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div>
+                <span className="text-[9px] font-black uppercase tracking-widest opacity-40 block mb-2">
+                    {hasActualGaze ? '캘리브레이션 기반 실시간 시선 위치' : '시선 위치 (캘리브레이션 후 정확도 향상)'}
+                </span>
+                <div style={{ position: 'relative', width: '100%', paddingTop: '50%', background: 'rgba(255,255,255,0.03)', borderRadius: '16px', border: `1px solid ${hasActualGaze ? 'rgba(34,197,94,0.2)' : 'rgba(255,255,255,0.08)'}`, overflow: 'hidden' }}>
+                    <div style={{ position: 'absolute', inset: 0 }}>
+                        <div style={{ position: 'absolute', top: '50%', left: 0, right: 0, height: '1px', background: 'rgba(255,255,255,0.06)' }} />
+                        <div style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: '1px', background: 'rgba(255,255,255,0.06)' }} />
+                        <div style={{ position: 'absolute', top: '33%', left: 0, right: 0, height: '1px', background: 'rgba(255,255,255,0.04)' }} />
+                        <div style={{ position: 'absolute', top: '66%', left: 0, right: 0, height: '1px', background: 'rgba(255,255,255,0.04)' }} />
+                    </div>
+                    {hasActualGaze ? (
+                        <motion.div
+                            animate={{ left: `${dotPos.x * 100}%`, top: `${dotPos.y * 100}%` }}
+                            transition={{ type: 'spring', stiffness: 120, damping: 20 }}
+                            style={{ position: 'absolute', width: '18px', height: '18px', borderRadius: '50%', background: dotColor, boxShadow: `0 0 14px 5px ${dotColor}66`, transform: 'translate(-50%, -50%)', pointerEvents: 'none' }}
+                        />
+                    ) : (
+                        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <span className="text-[10px] opacity-30">캘리브레이션 필요</span>
+                        </div>
+                    )}
+                    <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', opacity: 0.12, pointerEvents: 'none' }}>
+                        <div style={{ width: '20px', height: '1px', background: 'white', position: 'absolute', top: 0, left: '-10px' }} />
+                        <div style={{ width: '1px', height: '20px', background: 'white', position: 'absolute', top: '-10px', left: 0 }} />
+                    </div>
+                </div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
+                <MetricCard label="새카드율 (시선 점프)" value={features?.saccade_rate} unit="/s" decimals={2} color="#f472b6" />
+                <MetricCard label="고정 비율 (응시 유지)" value={features?.fixation_ratio} unit="" decimals={2} color="#22c55e" />
+                <MetricCard label="평균 고정 시간" value={features?.mean_fix_duration} unit="s" decimals={3} color="#60a5fa" />
+                <MetricCard label="평균 시선 속도" value={features?.mean_velocity} unit="px/s" decimals={0} color="#a78bfa" />
+                <MetricCard label="속도 분산" value={features?.std_velocity} unit="px/s" decimals={0} color="#fb923c" />
+                <MetricCard label="EAR (눈 감은 정도)" value={features?.mean_ear} unit="" decimals={3} color="#facc15" />
+                <MetricCard label="EAR 최솟값 (순간 졸음)" value={features?.min_ear} unit="" decimals={3} color="#f97316" />
+                <MetricCard label="유효 프레임 비율" value={features?.valid_ratio} unit="" decimals={2} color="#34d399" />
+            </div>
+        </div>
+    )
+}
+
+// ── Tab 3: 생체신호 ───────────────────────────────────────────────────────────
+function BioTab({ features, roiColors }: {
+    features: ReturnType<typeof useFocusSync>['features']
+    roiColors?: { forehead?: string; rightCheek?: string; leftCheek?: string } | null
+}) {
+    const bpm = features?.bpm
+    const pulsePeriodMs = bpm && isFinite(bpm) && bpm > 0 ? (60000 / bpm) : 1000
+    const [pulse, setPulse] = useState(false)
+    const hasActualColors = !!(roiColors?.forehead)
+
+    useEffect(() => {
+        const id = setInterval(() => setPulse(p => !p), pulsePeriodMs / 2)
+        return () => clearInterval(id)
+    }, [pulsePeriodMs])
+
+    // If actual ROI colors are available, use them directly
+    // Otherwise fall back to LF/HF-based estimate
+    const lf_hf = features?.lf_hf
+    const stress = lf_hf && isFinite(lf_hf) ? Math.min(1, lf_hf / 4) : 0.5
+    const rEst = Math.round(200 + stress * 40), gEst = Math.round(120 - stress * 30), bEst = Math.round(120 - stress * 20)
+
+    const foreheadColor = roiColors?.forehead ?? `rgb(${rEst},${gEst},${bEst})`
+    const rCheekColor = roiColors?.rightCheek ?? foreheadColor
+    const lCheekColor = roiColors?.leftCheek ?? foreheadColor
+
+    // Average color for pulsing face
+    const pulseBase = foreheadColor
+    const pulseBright = pulse
+        ? pulseBase.startsWith('#')
+            ? pulseBase + 'cc'  // darken slightly on pulse for hex
+            : pulseBase
+        : pulseBase
+
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div>
+                <span className="text-[9px] font-black uppercase tracking-widest opacity-40 block mb-2">
+                    rPPG 얼굴 ROI 색상 {hasActualColors ? '(실시간 측정값)' : '(추정값)'}
+                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '20px', padding: '16px', background: 'rgba(255,255,255,0.03)', borderRadius: '16px', border: `1px solid ${hasActualColors ? 'rgba(34,197,94,0.2)' : 'rgba(255,255,255,0.08)'}` }}>
+                    {/* Face regions: forehead top + cheeks below */}
+                    <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                        {/* Forehead */}
+                        <motion.div
+                            animate={{ scale: pulse ? 1.06 : 1.0, background: pulseBright }}
+                            transition={{ duration: 0.2, ease: 'easeInOut' }}
+                            style={{ width: '44px', height: '22px', borderRadius: '8px 8px 4px 4px', boxShadow: `0 0 12px 3px ${foreheadColor}88` }}
+                        />
+                        {/* Eyes placeholder */}
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                            <div style={{ width: '14px', height: '8px', borderRadius: '50%', background: 'rgba(255,255,255,0.15)' }} />
+                            <div style={{ width: '14px', height: '8px', borderRadius: '50%', background: 'rgba(255,255,255,0.15)' }} />
+                        </div>
+                        {/* Cheeks */}
+                        <div style={{ display: 'flex', gap: '4px', marginTop: '2px' }}>
+                            <motion.div animate={{ background: rCheekColor }} transition={{ duration: 0.3 }}
+                                style={{ width: '16px', height: '12px', borderRadius: '50%', boxShadow: `0 0 6px ${rCheekColor}88` }} />
+                            <div style={{ width: '12px', height: '22px', borderRadius: '4px', background: 'rgba(255,255,255,0.08)' }} />
+                            <motion.div animate={{ background: lCheekColor }} transition={{ duration: 0.3 }}
+                                style={{ width: '16px', height: '12px', borderRadius: '50%', boxShadow: `0 0 6px ${lCheekColor}88` }} />
+                        </div>
+                    </div>
+
+                    <div style={{ flex: 1 }}>
+                        <p className="text-[10px] opacity-50 leading-relaxed">
+                            <span style={{ color: '#00dcff' }}>이마</span> + <span style={{ color: '#ffa040' }}>양쪽 볼</span> 3곳 ROI의<br />
+                            평균 RGB 색상을 실시간으로 추출합니다.<br />
+                            미세한 <span style={{ color: '#f472b6' }}>혈류 변화</span>로 심박수를 계산합니다.
+                        </p>
+                        {hasActualColors && (
+                            <div style={{ display: 'flex', gap: '6px', marginTop: '8px', alignItems: 'center' }}>
+                                <div style={{ width: '16px', height: '16px', borderRadius: '4px', background: foreheadColor, border: '1px solid rgba(255,255,255,0.2)' }} />
+                                <span className="text-[9px] opacity-40">이마</span>
+                                <div style={{ width: '16px', height: '16px', borderRadius: '4px', background: rCheekColor, border: '1px solid rgba(255,255,255,0.2)' }} />
+                                <span className="text-[9px] opacity-40">오른볼</span>
+                                <div style={{ width: '16px', height: '16px', borderRadius: '4px', background: lCheekColor, border: '1px solid rgba(255,255,255,0.2)' }} />
+                                <span className="text-[9px] opacity-40">왼볼</span>
+                            </div>
+                        )}
+                        {hasActualColors && (
+                            <p className="text-[9px] opacity-25 mt-1 font-mono">{roiColors?.forehead} · {roiColors?.rightCheek} · {roiColors?.leftCheek}</p>
+                        )}
+                    </div>
+                </div>
             </div>
 
-            {/* Tablet camera */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
+                <MetricCard label="BPM (심박수)" value={features?.bpm} unit="" decimals={0} color="#f472b6" />
+                <MetricCard label="RMSSD (심박 변동)" value={features?.rmssd} unit="ms" decimals={1} color="#fb923c" />
+                <MetricCard label="SDNN (전체 변동성)" value={features?.sdnn} unit="ms" decimals={1} color="#facc15" />
+                <MetricCard label="LF/HF (교감/부교감)" value={features?.lf_hf} unit="" decimals={2} color="#60a5fa" />
+                <MetricCard label="X 분산 (좌우 시선)" value={features?.dispersion_x} unit="px" decimals={0} color="#a78bfa" />
+                <MetricCard label="Y 분산 (상하 시선)" value={features?.dispersion_y} unit="px" decimals={0} color="#34d399" />
+            </div>
+        </div>
+    )
+}
+
+const FOCUS_TABS = ['집중도', '시선', '생체신호'] as const
+type FocusTabName = typeof FOCUS_TABS[number]
+
+type MeasureMode = 'pc' | 'native'
+
+function FocusPanel() {
+    const [mode, setMode] = useState<MeasureMode>(() =>
+        (localStorage.getItem('focus_measure_mode') as MeasureMode | null) ?? 'pc'
+    )
+    const saveMode = (m: MeasureMode) => { setMode(m); localStorage.setItem('focus_measure_mode', m) }
+
+    return mode === 'native'
+        ? <FocusPanelNative onSwitchMode={() => saveMode('pc')} />
+        : <FocusPanelPC onSwitchMode={() => saveMode('native')} />
+}
+
+function FocusPanelPC({ onSwitchMode }: { onSwitchMode: () => void }) {
+    const serverUrl = useMemo(() => localStorage.getItem('focus_server_url') ?? '', [])
+    const { score, etaS, features, connected, sendVideoFrame } = useFocusSync(serverUrl)
+    const [activeTab, setActiveTab] = useState<FocusTabName>('집중도')
+    const [scoreHistory, setScoreHistory] = useState<ScorePoint[]>([])
+    const tStartRef = useRef(Date.now())
+
+    useEffect(() => {
+        if (score === null) return
+        setScoreHistory(prev => {
+            const t = (Date.now() - tStartRef.current) / 1000
+            const next = [...prev, { t, score }]
+            return next.length > 60 ? next.slice(next.length - 60) : next
+        })
+    }, [score])
+
+    return (
+        <div className="mt-6 w-full max-w-3xl mx-auto rounded-3xl border border-white/10 bg-white/5 backdrop-blur-sm p-5"
+            style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <FocusPanelHeader
+                label="PC 연결 측정"
+                dot={connected}
+                dotLabel={connected ? 'Connected' : 'Disconnected'}
+                onSwitchMode={onSwitchMode}
+                switchLabel="태블릿 자체 측정으로"
+            />
+            <FocusTabBar activeTab={activeTab} setActiveTab={setActiveTab} />
+            <AnimatePresence mode="wait">
+                <motion.div key={activeTab} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.18 }}>
+                    {activeTab === '집중도' && <FocusTab score={score} etaS={etaS} scoreHistory={scoreHistory} />}
+                    {activeTab === '시선' && <GazeTab features={features} gazeX={null} gazeY={null} />}
+                    {activeTab === '생체신호' && <BioTab features={features} roiColors={null} />}
+                </motion.div>
+            </AnimatePresence>
             <TabletCamera sendVideoFrame={sendVideoFrame} connected={connected} fps={10} />
         </div>
     )
 }
 
-interface FeatureCardProps {
-    label: string
-    value: number | undefined
-    unit: string
-    decimals: number
-    color: string
-}
+function FocusPanelNative({ onSwitchMode }: { onSwitchMode: () => void }) {
+    const { score, etaS, features, running, status, isNative,
+            cameraJpeg, gazeX, gazeY, roiColors,
+            trainingState, addSessionRating,
+            start, stop, startCalibration, setDebugMode } = useFocusNative()
+    const [cameraOpen, setCameraOpen] = useState(false)
+    const [activeTab, setActiveTab] = useState<FocusTabName>('집중도')
+    const [scoreHistory, setScoreHistory] = useState<ScorePoint[]>([])
+    const tStartRef = useRef(Date.now())
+    const sessionMeanRef = useRef<number[]>([])
+    const [showRating, setShowRating] = useState(false)
+    const [ratingHover, setRatingHover] = useState(0)
 
-function FeatureCard({ label, value, unit, decimals, color }: FeatureCardProps) {
+    useEffect(() => {
+        if (score === null) return
+        sessionMeanRef.current.push(score)
+        setScoreHistory(prev => {
+            const t = (Date.now() - tStartRef.current) / 1000
+            const next = [...prev, { t, score }]
+            return next.length > 60 ? next.slice(next.length - 60) : next
+        })
+    }, [score])
+
+    // Show rating UI when session ends; collapse camera when stopped
+    useEffect(() => {
+        if (!running && scoreHistory.length > 5) {
+            setShowRating(true)
+        }
+        if (!running && cameraOpen) {
+            setCameraOpen(false)
+            setDebugMode(false)
+        }
+        if (running) {
+            setShowRating(false)
+            sessionMeanRef.current = []
+        }
+    }, [running])
+
+    const handleRating = async (rating: number) => {
+        const scores = sessionMeanRef.current
+        if (scores.length === 0) return
+        const mean = scores.reduce((a, b) => a + b, 0) / scores.length
+        await addSessionRating(mean, rating)
+        setShowRating(false)
+        sessionMeanRef.current = []
+    }
+
+    const statusLabel = status === 'unavailable' ? '앱에서만 사용 가능'
+        : status === 'starting' ? '시작 중...'
+        : status === 'running' ? '측정 중'
+        : status === 'error' ? '오류'
+        : '대기 중'
+    const statusColor = status === 'running' ? '#22c55e' : status === 'error' ? '#ef4444' : status === 'unavailable' ? '#6b7280' : '#f59e0b'
+
     return (
-        <div className="bg-white/5 border border-white/10 rounded-2xl p-3 text-center">
-            <span className="text-[9px] font-black uppercase tracking-widest opacity-40 block mb-1">{label}</span>
-            <span className="text-lg font-bold tabular-nums" style={{ color: value !== undefined ? color : 'rgba(255,255,255,0.2)' }}>
-                {value !== undefined ? `${value.toFixed(decimals)}${unit}` : '--'}
-            </span>
+        <div className="mt-6 w-full max-w-3xl mx-auto rounded-3xl border border-white/10 bg-white/5 backdrop-blur-sm p-5"
+            style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <FocusPanelHeader
+                label="태블릿 자체 측정"
+                dot={status === 'running'}
+                dotColor={statusColor}
+                dotLabel={statusLabel}
+                onSwitchMode={onSwitchMode}
+                switchLabel="PC 연결로"
+            />
+
+            {/* Start/Stop + Calibration controls */}
+            {isNative && (
+                <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                        onClick={running ? stop : start}
+                        disabled={status === 'starting' || status === 'unavailable'}
+                        style={{
+                            flex: 1, padding: '10px 0', borderRadius: '10px', fontSize: '12px', fontWeight: 800,
+                            background: running ? 'rgba(239,68,68,0.15)' : 'rgba(34,197,94,0.15)',
+                            color: running ? '#f87171' : '#4ade80',
+                            border: `1px solid ${running ? 'rgba(239,68,68,0.3)' : 'rgba(34,197,94,0.3)'}`,
+                            cursor: status === 'starting' || status === 'unavailable' ? 'not-allowed' : 'pointer',
+                            opacity: status === 'starting' || status === 'unavailable' ? 0.5 : 1,
+                            transition: 'all 0.2s ease',
+                        }}
+                    >
+                        {status === 'starting' ? '시작 중...' : running ? '측정 중지' : '측정 시작'}
+                    </button>
+                    <button
+                        onClick={() => startCalibration('monitor')}
+                        style={{
+                            padding: '10px 16px', borderRadius: '10px', fontSize: '12px', fontWeight: 700,
+                            background: 'rgba(129,140,248,0.12)', color: '#a5b4fc',
+                            border: '1px solid rgba(129,140,248,0.25)', cursor: 'pointer',
+                        }}
+                    >
+                        캘리브레이션
+                    </button>
+                </div>
+            )}
+
+            {/* Camera preview — collapsed by default to avoid throttling */}
+            {isNative && running && (
+                <div>
+                    <button
+                        onClick={() => {
+                            const next = !cameraOpen
+                            setCameraOpen(next)
+                            setDebugMode(next)
+                        }}
+                        style={{
+                            width: '100%', padding: '7px 12px', borderRadius: '10px', fontSize: '11px', fontWeight: 700,
+                            background: cameraOpen ? 'rgba(99,102,241,0.12)' : 'rgba(255,255,255,0.04)',
+                            color: cameraOpen ? '#a5b4fc' : 'rgba(255,255,255,0.35)',
+                            border: `1px solid ${cameraOpen ? 'rgba(99,102,241,0.25)' : 'rgba(255,255,255,0.08)'}`,
+                            cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '6px',
+                            transition: 'all 0.2s ease',
+                        }}
+                    >
+                        <span style={{ fontSize: '9px' }}>{cameraOpen ? '▼' : '▶'}</span>
+                        카메라 미리보기 {cameraOpen ? '' : '(성능 영향 없음)'}
+                    </button>
+                    {cameraOpen && (
+                        <div style={{ marginTop: '6px', position: 'relative', borderRadius: '10px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)', background: '#000' }}>
+                            {cameraJpeg
+                                ? <img src={cameraJpeg} alt="카메라 미리보기" style={{ width: '100%', display: 'block', objectFit: 'contain', maxHeight: '240px' }} />
+                                : <div style={{ height: '120px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', color: 'rgba(255,255,255,0.3)' }}>프레임 대기 중...</div>
+                            }
+                            {cameraJpeg && (
+                                <div style={{ position: 'absolute', bottom: '6px', left: '8px', fontSize: '9px', fontWeight: 700,
+                                    color: 'rgba(255,255,255,0.5)', background: 'rgba(0,0,0,0.5)', padding: '2px 6px', borderRadius: '4px' }}>
+                                    LIVE · ROI 오버레이
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* Session rating after measurement */}
+            {isNative && showRating && (
+                <div style={{ padding: '14px', borderRadius: '12px', background: 'rgba(129,140,248,0.08)', border: '1px solid rgba(129,140,248,0.2)' }}>
+                    <p style={{ fontSize: '11px', fontWeight: 700, color: '#a5b4fc', marginBottom: '10px', textAlign: 'center' }}>
+                        세션 집중도를 평가해주세요 (점수 개인화에 사용됩니다)
+                    </p>
+                    <div style={{ display: 'flex', justifyContent: 'center', gap: '10px' }}>
+                        {[1,2,3,4,5].map(r => (
+                            <button
+                                key={r}
+                                onClick={() => handleRating(r)}
+                                onMouseEnter={() => setRatingHover(r)}
+                                onMouseLeave={() => setRatingHover(0)}
+                                style={{
+                                    fontSize: '22px', background: 'none', border: 'none', cursor: 'pointer',
+                                    opacity: ratingHover > 0 ? (r <= ratingHover ? 1 : 0.3) : 0.6,
+                                    transform: r <= ratingHover ? 'scale(1.2)' : 'scale(1)',
+                                    transition: 'all 0.15s ease',
+                                }}
+                            >
+                                ★
+                            </button>
+                        ))}
+                    </div>
+                    {trainingState && (
+                        <p style={{ fontSize: '9px', color: 'rgba(255,255,255,0.3)', textAlign: 'center', marginTop: '6px' }}>
+                            누적 {trainingState.session_count}회 · {trainingState.is_calibrated ? '✓ 개인화 적용 중' : `${3 - trainingState.session_count}회 더 필요`}
+                        </p>
+                    )}
+                    <button
+                        onClick={() => setShowRating(false)}
+                        style={{ display: 'block', margin: '8px auto 0', fontSize: '9px', color: 'rgba(255,255,255,0.25)', background: 'none', border: 'none', cursor: 'pointer' }}
+                    >
+                        건너뛰기
+                    </button>
+                </div>
+            )}
+
+            {!isNative && (
+                <div style={{ padding: '16px', background: 'rgba(107,114,128,0.1)', borderRadius: '12px', border: '1px solid rgba(107,114,128,0.2)', textAlign: 'center' }}>
+                    <p className="text-[11px] opacity-50">태블릿 자체 측정은 Android 앱에서만 사용 가능합니다</p>
+                </div>
+            )}
+
+            <FocusTabBar activeTab={activeTab} setActiveTab={setActiveTab} />
+            <AnimatePresence mode="wait">
+                <motion.div key={activeTab} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.18 }}>
+                    {activeTab === '집중도' && <FocusTab score={score} etaS={etaS} scoreHistory={scoreHistory} />}
+                    {activeTab === '시선' && <GazeTab features={features} gazeX={gazeX} gazeY={gazeY} />}
+                    {activeTab === '생체신호' && <BioTab features={features} roiColors={roiColors} />}
+                </motion.div>
+            </AnimatePresence>
         </div>
     )
 }
+
+function FocusPanelHeader({ label, dot, dotColor, dotLabel, onSwitchMode, switchLabel }: {
+    label: string; dot: boolean; dotColor?: string; dotLabel: string; onSwitchMode: () => void; switchLabel: string
+}) {
+    const color = dotColor ?? (dot ? '#22c55e' : '#ef4444')
+    return (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span className="text-[10px] font-black uppercase tracking-widest opacity-40">집중도 모니터</span>
+                <span className="text-[9px] font-bold px-2 py-0.5 rounded-full" style={{ background: 'rgba(129,140,248,0.15)', color: '#a5b4fc', border: '1px solid rgba(129,140,248,0.2)' }}>{label}</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: color, boxShadow: dot ? `0 0 5px ${color}` : 'none', transition: 'all 0.4s ease' }} />
+                    <span className="text-[10px] font-bold opacity-40">{dotLabel}</span>
+                </div>
+                <button onClick={onSwitchMode} style={{
+                    fontSize: '9px', fontWeight: 700, padding: '3px 8px', borderRadius: '6px',
+                    background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.4)',
+                    border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                }}>
+                    {switchLabel} ↕
+                </button>
+            </div>
+        </div>
+    )
+}
+
+function FocusTabBar({ activeTab, setActiveTab }: { activeTab: FocusTabName; setActiveTab: (t: FocusTabName) => void }) {
+    return (
+        <div style={{ display: 'flex', gap: '4px', padding: '4px', background: 'rgba(255,255,255,0.04)', borderRadius: '12px' }}>
+            {FOCUS_TABS.map(tab => (
+                <button key={tab} onClick={() => setActiveTab(tab)} style={{
+                    flex: 1, padding: '6px 0', borderRadius: '8px', fontSize: '11px', fontWeight: 700,
+                    background: activeTab === tab ? 'rgba(129,140,248,0.25)' : 'transparent',
+                    color: activeTab === tab ? '#a5b4fc' : 'rgba(255,255,255,0.35)',
+                    border: activeTab === tab ? '1px solid rgba(129,140,248,0.35)' : '1px solid transparent',
+                    transition: 'all 0.2s ease', cursor: 'pointer',
+                }}>
+                    {tab}
+                </button>
+            ))}
+        </div>
+    )
+}
+
 
 // ── Sliding Selector ─────────────────────────────────────────────────────────
 

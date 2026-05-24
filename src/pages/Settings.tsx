@@ -4,6 +4,8 @@ import type { Settings, SubjectItem } from '../lib/db'
 import { db } from '../lib/db'
 import { useModal } from '../lib/ModalContext'
 import { useFocusSync } from '../lib/focusSync'
+import { useFocusNative } from '../lib/useFocusNative'
+import { TabletCamera } from '../components/TabletCamera'
 
 interface SettingsPageProps {
     settings: Settings
@@ -50,6 +52,7 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
     const [serverUrlInput, setServerUrlInput] = useState(() => localStorage.getItem('focus_server_url') || '')
     const [activeServerUrl, setActiveServerUrl] = useState(() => localStorage.getItem('focus_server_url') || '')
     const [captureCount, setCaptureCount] = useState(0)
+    const [currentCalibMode, setCurrentCalibMode] = useState<'book' | 'monitor' | null>(null)
     const {
         connected,
         pipelineState,
@@ -57,7 +60,22 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
         sendCalibrateCapture,
         sendPipelineStart,
         sendPipelineStop,
+        sendVideoFrame,
     } = useFocusSync(activeServerUrl)
+
+    const {
+        isNative,
+        status: nativeStatus,
+        trainingState,
+        startCalibration: startNativeCalibration,
+        resetScoreCalibration,
+    } = useFocusNative()
+    const [nativeCalibRunning, setNativeCalibRunning] = useState(false)
+
+    const handleNativeCalibration = async (scenario: 'book' | 'monitor') => {
+        setNativeCalibRunning(true)
+        try { await startNativeCalibration(scenario) } finally { setNativeCalibRunning(false) }
+    }
 
     const handleSaveServerUrl = () => {
         const normalized = normalizeWsUrl(serverUrlInput)
@@ -67,14 +85,25 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
         setCaptureCount(0)
     }
 
+    const CALIB_LABELS = [
+        '좌측 상단', '상단 중앙', '우측 상단',
+        '좌측 중앙', '정중앙',   '우측 중앙',
+        '좌측 하단', '하단 중앙', '우측 하단',
+    ]
+
     const handleCalibrateStart = (mode: 'book' | 'monitor') => {
         sendCalibrateStart(mode)
         setCaptureCount(0)
+        setCurrentCalibMode(mode)
     }
 
     const handleCalibrateCapture = () => {
         sendCalibrateCapture()
-        setCaptureCount(prev => Math.min(prev + 1, 9))
+        setCaptureCount(prev => {
+            const next = Math.min(prev + 1, 9)
+            if (next >= 9) setCurrentCalibMode(null)
+            return next
+        })
     }
 
     // Fetch available Gemini models when API key is set
@@ -409,6 +438,85 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                     </select>
                 </div>
 
+                {/* 태블릿 자체 측정 설정 */}
+                <div className="glass-card p-6 space-y-4">
+                    <div className="flex items-center justify-between">
+                        <label className="text-sm font-medium">태블릿 자체 측정</label>
+                        <div className="flex items-center gap-2">
+                            <div className={`w-2 h-2 rounded-full ${isNative ? 'bg-green-400' : 'bg-white/20'}`} />
+                            <span className="text-xs text-[var(--color-text-secondary)]">
+                                {isNative ? '앱 환경' : '브라우저 — 앱에서만 사용 가능'}
+                            </span>
+                        </div>
+                    </div>
+
+                    {/* Gaze calibration */}
+                    <div className="pt-2 border-t border-[var(--color-border)]">
+                        <p className="text-xs font-medium text-[var(--color-text-secondary)] mb-3">시선 캘리브레이션</p>
+                        {!isNative && (
+                            <p className="text-xs text-[var(--color-text-secondary)] bg-[var(--color-surface)] rounded-xl px-4 py-3">
+                                Android 앱에서만 사용 가능합니다.
+                            </p>
+                        )}
+                        {isNative && (
+                            <>
+                                <p className="text-[10px] text-white/40 mb-3">
+                                    캘리브레이션 화면이 열립니다. 빨간 점을 차례로 응시하고 버튼을 눌러 9개 지점을 캡처하세요.
+                                </p>
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={() => handleNativeCalibration('book')}
+                                        disabled={nativeCalibRunning || nativeStatus === 'starting'}
+                                        className="flex-1 px-4 py-3 rounded-xl bg-indigo-500/10 text-indigo-400 font-medium text-sm hover:bg-indigo-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                    >
+                                        <Icon icon="mdi:book-open-outline" className="text-base" />
+                                        책 캘리브레이션
+                                    </button>
+                                    <button
+                                        onClick={() => handleNativeCalibration('monitor')}
+                                        disabled={nativeCalibRunning || nativeStatus === 'starting'}
+                                        className="flex-1 px-4 py-3 rounded-xl bg-purple-500/10 text-purple-400 font-medium text-sm hover:bg-purple-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                    >
+                                        <Icon icon="mdi:monitor-outline" className="text-base" />
+                                        모니터 캘리브레이션
+                                    </button>
+                                </div>
+                            </>
+                        )}
+                    </div>
+
+                    {/* Score personalization */}
+                    <div className="pt-2 border-t border-[var(--color-border)]">
+                        <p className="text-xs font-medium text-[var(--color-text-secondary)] mb-3">점수 개인화</p>
+                        {trainingState ? (
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-xs text-white/70">
+                                        누적 세션: <span className="font-bold text-white">{trainingState.session_count}회</span>
+                                    </p>
+                                    <p className="text-[10px] text-white/40 mt-0.5">
+                                        {trainingState.is_calibrated
+                                            ? '✓ 개인화 점수 적용 중'
+                                            : `${Math.max(0, 3 - trainingState.session_count)}회 더 평가 필요`}
+                                    </p>
+                                </div>
+                                {isNative && (
+                                    <button
+                                        onClick={resetScoreCalibration}
+                                        className="text-[10px] px-3 py-1.5 rounded-lg bg-red-500/10 text-red-400 font-bold hover:bg-red-500/20 transition-all"
+                                    >
+                                        초기화
+                                    </button>
+                                )}
+                            </div>
+                        ) : (
+                            <p className="text-xs text-[var(--color-text-secondary)]">
+                                측정 세션 종료 후 집중도를 평가하면 점수가 당신에게 맞게 조정됩니다.
+                            </p>
+                        )}
+                    </div>
+                </div>
+
                 {/* PC Focus 연결 설정 */}
                 <div className="glass-card p-6 space-y-4">
                     <div className="flex items-center justify-between mb-2">
@@ -495,6 +603,30 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                             <p className="text-xs text-[var(--color-text-secondary)] bg-[var(--color-surface)] rounded-xl px-4 py-3 mb-3">
                                 PC에 연결되지 않음 — 서버 URL을 저장하면 자동으로 연결됩니다.
                             </p>
+                        )}
+
+                        {/* 캘리 진행 중 안내 */}
+                        {currentCalibMode !== null && captureCount < 9 && (
+                            <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-xl px-4 py-3 mb-3">
+                                <p className="text-xs font-bold text-indigo-400 mb-1">
+                                    {captureCount + 1}/9 — <span className="text-white">{CALIB_LABELS[captureCount]}</span>을(를) 바라보세요
+                                </p>
+                                <p className="text-[10px] text-white/40">
+                                    {currentCalibMode === 'book' ? '책' : '모니터'}의 해당 위치를 응시한 뒤 캡처 버튼을 누르세요
+                                </p>
+                            </div>
+                        )}
+                        {currentCalibMode === null && captureCount >= 9 && (
+                            <div className="bg-green-500/10 border border-green-500/20 rounded-xl px-4 py-3 mb-3">
+                                <p className="text-xs font-bold text-green-400">캘리브레이션 완료!</p>
+                            </div>
+                        )}
+
+                        {/* 캘리 중 카메라 자동 활성 (video_frame PC 전송) */}
+                        {currentCalibMode !== null && (
+                            <div style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', width: 1, height: 1, overflow: 'hidden' }}>
+                                <TabletCamera sendVideoFrame={sendVideoFrame} connected={connected} fps={15} autoStart />
+                            </div>
                         )}
 
                         <div className="flex gap-2 mb-3">
