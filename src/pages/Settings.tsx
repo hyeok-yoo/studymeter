@@ -43,6 +43,9 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
     const [geminiModel, setGeminiModel] = useState(settings.geminiModel || 'gemini-2.0-flash')
     const [theme, setTheme] = useState(settings.theme)
     const [profilePicture, setProfilePicture] = useState(settings.profilePicture || '')
+    const [dailyGoalHours, setDailyGoalHours] = useState(
+        settings.dailyGoalMs ? String(settings.dailyGoalMs / 3600000) : ''
+    )
     const [saved, setSaved] = useState(false)
     const [geminiModels, setGeminiModels] = useState<GeminiModel[]>([])
     const [loadingModels, setLoadingModels] = useState(false)
@@ -213,6 +216,7 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
     }
 
     const handleSave = async () => {
+        const goalHours = parseFloat(dailyGoalHours)
         const newSettings: Settings = {
             ...settings,
             userName,
@@ -221,7 +225,8 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
             geminiApiKey: geminiApiKey || undefined,
             geminiModel: geminiModel || undefined,
             theme,
-            profilePicture: profilePicture || undefined
+            profilePicture: profilePicture || undefined,
+            dailyGoalMs: (!isNaN(goalHours) && goalHours > 0) ? Math.round(goalHours * 3600000) : undefined
         }
 
         await db.settings.update(settings.id!, newSettings as any)
@@ -297,6 +302,30 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                         onChange={(e) => setUserName(e.target.value)}
                         className="w-full px-4 py-3 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)]"
                     />
+                </div>
+
+                {/* Daily Goal */}
+                <div className="glass-card p-6">
+                    <label className="block text-sm font-medium mb-1">일일 목표 시간</label>
+                    <p className="text-xs text-[var(--color-text-secondary)] mb-3">공부 화면에 진척 바로 표시됩니다. 비워두면 비활성화.</p>
+                    <div className="flex items-center gap-3">
+                        <input
+                            type="number"
+                            min="0"
+                            max="24"
+                            step="0.5"
+                            value={dailyGoalHours}
+                            onChange={(e) => setDailyGoalHours(e.target.value)}
+                            placeholder="예: 8"
+                            className="w-28 px-4 py-3 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)] text-center text-lg font-bold"
+                        />
+                        <span className="text-[var(--color-text-secondary)] font-medium">시간</span>
+                        {dailyGoalHours && (
+                            <span className="text-xs text-purple-400 font-bold ml-2">
+                                = {parseFloat(dailyGoalHours) * 60}분 목표
+                            </span>
+                        )}
+                    </div>
                 </div>
 
                 {/* Subjects with Hierarchy Management */}

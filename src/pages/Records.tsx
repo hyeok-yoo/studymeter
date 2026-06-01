@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { db, formatDuration, formatDateYYYYMMDD, formatDurationHourMinute, getMonday, getSunday, getStudyToday } from '../lib/db'
 import type { StudySession, DailyRecord } from '../lib/db'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LabelList } from 'recharts'
@@ -33,7 +33,7 @@ function formatDurationChange(ms: number): string {
 export default function Records() {
     const [sessions, setSessions] = useState<StudySession[]>([])
     const [prevSessions, setPrevSessions] = useState<StudySession[]>([])
-    const [viewMode, setViewMode] = useState<'day' | 'week' | 'month'>('day')
+    const [viewMode, setViewMode] = useState<'day' | 'week' | 'month' | 'year'>('day')
     const [offset, setOffset] = useState(0) // 0 = current, -1 = previous, 1 = next
     const [chartData, setChartData] = useState<{ name: string; 총합: number; 순공: number }[]>([])
     const [pieData, setPieData] = useState<{ name: string; value: number }[]>([])
@@ -73,6 +73,12 @@ export default function Records() {
                 label: `${formatDateShort(monday)} ~ ${formatDateShort(sunday)}`,
                 prevStartStr: formatDateYYYYMMDD(prevMonday),
                 prevEndStr: formatDateYYYYMMDD(prevSunday)
+            }
+        } else if (viewMode === 'year') {
+            return {
+                start: today, end: today,
+                startStr: formatDateYYYYMMDD(today), endStr: formatDateYYYYMMDD(today),
+                label: '연간 기록', prevStartStr: '', prevEndStr: ''
             }
         } else {
             // Month: First day of month + offset
@@ -183,22 +189,24 @@ export default function Records() {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
                 <div className="flex flex-col gap-1">
                     <h1 className="text-3xl font-bold gradient-text">기록</h1>
-                    <div className="flex items-center gap-2">
-                        <button onClick={handlePrev} className="p-2 rounded-lg bg-[var(--color-surface)] hover:bg-[var(--color-surface-elevated)] transition-all flex items-center justify-center">
-                            <Icon icon="mdi:chevron-left" className="text-xl" />
-                        </button>
-                        <p className="text-sm text-[var(--color-text-secondary)] min-w-[150px] text-center flex items-center justify-center gap-1">
-                            <Icon icon="mdi:calendar" className="text-lg" /> {dateRange.label}
-                        </p>
-                        <button onClick={handleNext} className="p-2 rounded-lg bg-[var(--color-surface)] hover:bg-[var(--color-surface-elevated)] transition-all flex items-center justify-center">
-                            <Icon icon="mdi:chevron-right" className="text-xl" />
-                        </button>
-                        {offset !== 0 && (
-                            <button onClick={handleToday} className="px-3 py-1 rounded-lg bg-[var(--color-primary)] text-white text-xs font-bold">
-                                오늘
+                    {viewMode !== 'year' && (
+                        <div className="flex items-center gap-2">
+                            <button onClick={handlePrev} className="p-2 rounded-lg bg-[var(--color-surface)] hover:bg-[var(--color-surface-elevated)] transition-all flex items-center justify-center">
+                                <Icon icon="mdi:chevron-left" className="text-xl" />
                             </button>
-                        )}
-                    </div>
+                            <p className="text-sm text-[var(--color-text-secondary)] min-w-[150px] text-center flex items-center justify-center gap-1">
+                                <Icon icon="mdi:calendar" className="text-lg" /> {dateRange.label}
+                            </p>
+                            <button onClick={handleNext} className="p-2 rounded-lg bg-[var(--color-surface)] hover:bg-[var(--color-surface-elevated)] transition-all flex items-center justify-center">
+                                <Icon icon="mdi:chevron-right" className="text-xl" />
+                            </button>
+                            {offset !== 0 && (
+                                <button onClick={handleToday} className="px-3 py-1 rounded-lg bg-[var(--color-primary)] text-white text-xs font-bold">
+                                    오늘
+                                </button>
+                            )}
+                        </div>
+                    )}
                 </div>
 
                 {/* View Mode Toggle */}
@@ -230,11 +238,23 @@ export default function Records() {
                     >
                         월별
                     </button>
+                    <button
+                        onClick={() => { setViewMode('year'); setOffset(0) }}
+                        className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${viewMode === 'year'
+                            ? 'bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-secondary)] text-white'
+                            : 'bg-[var(--color-surface)] text-[var(--color-text-secondary)]'
+                            }`}
+                    >
+                        연간
+                    </button>
                 </div>
             </div>
 
+            {/* Annual Contribution Graph */}
+            {viewMode === 'year' && <AnnualContributionGraph />}
+
             {/* Summary Cards with Comparison */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+            {viewMode !== 'year' && <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
                 <div className="glass-card p-4">
                     <p className="text-sm text-[var(--color-text-secondary)] mb-1">총 공부 시간</p>
                     <p className="text-2xl font-bold gradient-text">{formatDuration(totalTime)}</p>
@@ -263,7 +283,7 @@ export default function Records() {
                         {totalTime > 0 ? Math.round((selfStudyTime / totalTime) * 100) : 0}%
                     </p>
                 </div>
-            </div>
+            </div>}
 
             {/* Monthly Calendar View */}
             {viewMode === 'month' && (
@@ -347,8 +367,8 @@ export default function Records() {
                 </div>
             )}
 
-            {/* Charts (hide bar for month view) */}
-            <div className="grid md:grid-cols-2 gap-6 mb-8">
+            {/* Charts (hide for year view) */}
+            {viewMode !== 'year' && <div className="grid md:grid-cols-2 gap-6 mb-8">
                 {/* Bar Chart */}
                 <div className="glass-card p-6">
                     <h3 className="text-lg font-semibold mb-4">과목별 공부 시간</h3>
@@ -420,7 +440,7 @@ export default function Records() {
                         </ResponsiveContainer>
                     </div>
                 </div>
-            </div>
+            </div>}
 
             {/* Daily Schedule (Day View Only) */}
             {viewMode === 'day' && dailyRecord && (dailyRecord.wakeUpTime || dailyRecord.arrivalTime || dailyRecord.leaveTime || dailyRecord.bedTime) && (
@@ -460,7 +480,7 @@ export default function Records() {
             )}
 
             {/* Recent Sessions */}
-            <div className="glass-card p-6">
+            {viewMode !== 'year' && <div className="glass-card p-6">
                 <h3 className="text-lg font-semibold mb-4">최근 기록</h3>
                 <div className="space-y-3 max-h-96 overflow-y-auto stagger-children">
                     {[...sessions].sort((a, b) => b.startTime - a.startTime).slice(0, 20).map((session) => (
@@ -510,6 +530,236 @@ export default function Records() {
                             아직 기록이 없습니다. 공부를 시작해보세요! <Icon icon="mdi:bookshelf" className="text-xl text-indigo-400" />
                         </p>
                     )}
+                </div>
+            </div>}
+        </div>
+    )
+}
+
+// ── Annual Contribution Graph ────────────────────────────────────────────────
+
+function getContributionColor(ms: number): string {
+    if (ms === 0) return 'rgba(255,255,255,0.06)'
+    const h = ms / 3600000
+    if (h < 2) return 'rgba(79,70,229,0.35)'
+    if (h < 4) return '#312e81'
+    if (h < 6) return '#4338ca'
+    if (h < 9) return '#6d28d9'
+    return '#a855f7'
+}
+
+function getContributionGlow(ms: number): string {
+    const h = ms / 3600000
+    if (h >= 9) return '0 0 8px 1px rgba(168,85,247,0.5)'
+    if (h >= 6) return '0 0 5px 1px rgba(109,40,217,0.4)'
+    return 'none'
+}
+
+function AnnualContributionGraph() {
+    const [studyData, setStudyData] = useState<Map<string, number>>(new Map())
+    const [tooltip, setTooltip] = useState<{ date: string; ms: number; col: number; row: number } | null>(null)
+    const [stats, setStats] = useState({ totalDays: 0, bestStreak: 0, bestDay: { date: '', ms: 0 }, totalMs: 0, currentStreak: 0 })
+    const containerRef = useRef<HTMLDivElement>(null)
+
+    useEffect(() => {
+        async function load() {
+            const today = getStudyToday()
+            const start = new Date(today)
+            start.setDate(start.getDate() - 364)
+            const startStr = formatDateYYYYMMDD(start)
+            const todayStr = formatDateYYYYMMDD(today)
+
+            const allSessions = await db.sessions
+                .where('date').between(startStr, todayStr, true, true).toArray()
+
+            const data = new Map<string, number>()
+            allSessions.forEach(s => data.set(s.date, (data.get(s.date) || 0) + s.duration))
+            setStudyData(data)
+
+            let totalDays = 0, bestStreak = 0, currentStreak = 0, curCurrent = 0, totalMs = 0
+            let bestDay = { date: '', ms: 0 }
+            const cur = new Date(start)
+            while (cur <= today) {
+                const dateStr = formatDateYYYYMMDD(new Date(cur))
+                const ms = data.get(dateStr) || 0
+                totalMs += ms
+                if (ms > 0) {
+                    totalDays++
+                    currentStreak++
+                    curCurrent++
+                    if (currentStreak > bestStreak) bestStreak = currentStreak
+                    if (ms > bestDay.ms) bestDay = { date: dateStr, ms }
+                } else {
+                    currentStreak = 0
+                    if (cur < today) curCurrent = 0
+                }
+                cur.setDate(cur.getDate() + 1)
+            }
+            setStats({ totalDays, bestStreak, bestDay, totalMs, currentStreak: curCurrent })
+        }
+        load()
+    }, [])
+
+    const today = getStudyToday()
+    const gridStart = new Date(today)
+    gridStart.setDate(gridStart.getDate() - 364)
+    const monday = getMonday(gridStart)
+
+    // Build week columns
+    const weeks: Array<Array<{ date: string; ms: number; valid: boolean }>> = []
+    const monthLabels: Array<{ label: string; colIdx: number }> = []
+    let lastMonth = -1
+    const cur2 = new Date(monday)
+
+    while (cur2 <= today) {
+        const col: { date: string; ms: number; valid: boolean }[] = []
+        for (let d = 0; d < 7; d++) {
+            const dateStr = formatDateYYYYMMDD(new Date(cur2))
+            const valid = cur2 >= gridStart && cur2 <= today
+            if (valid && cur2.getMonth() !== lastMonth) {
+                monthLabels.push({ label: `${cur2.getMonth() + 1}월`, colIdx: weeks.length })
+                lastMonth = cur2.getMonth()
+            }
+            col.push({ date: dateStr, ms: studyData.get(dateStr) || 0, valid })
+            cur2.setDate(cur2.getDate() + 1)
+        }
+        weeks.push(col)
+    }
+
+    const CELL = 13, GAP = 3, STEP = CELL + GAP
+    const DAY_LABELS = ['월', '', '수', '', '금', '', '일']
+    const formatDateKo = (dateStr: string) => {
+        const d = new Date(dateStr + 'T00:00:00')
+        return `${d.getMonth() + 1}월 ${d.getDate()}일`
+    }
+    const formatHourMin = (ms: number) => {
+        const h = Math.floor(ms / 3600000), m = Math.floor((ms % 3600000) / 60000)
+        if (h > 0) return `${h}h ${m}m`
+        return `${m}m`
+    }
+
+    return (
+        <div className="space-y-6">
+            {/* Stats Row */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="glass-card p-4 text-center">
+                    <p className="text-xs text-[var(--color-text-secondary)] mb-1 uppercase tracking-widest font-bold">공부한 날</p>
+                    <p className="text-3xl font-black gradient-text">{stats.totalDays}<span className="text-base font-bold opacity-60">일</span></p>
+                </div>
+                <div className="glass-card p-4 text-center">
+                    <p className="text-xs text-[var(--color-text-secondary)] mb-1 uppercase tracking-widest font-bold">최장 연속</p>
+                    <p className="text-3xl font-black" style={{ color: '#a855f7' }}>{stats.bestStreak}<span className="text-base font-bold opacity-60">일</span></p>
+                </div>
+                <div className="glass-card p-4 text-center">
+                    <p className="text-xs text-[var(--color-text-secondary)] mb-1 uppercase tracking-widest font-bold">현재 연속</p>
+                    <p className="text-3xl font-black" style={{ color: stats.currentStreak > 0 ? '#22c55e' : 'rgba(255,255,255,0.3)' }}>{stats.currentStreak}<span className="text-base font-bold opacity-60">일</span></p>
+                </div>
+                <div className="glass-card p-4 text-center">
+                    <p className="text-xs text-[var(--color-text-secondary)] mb-1 uppercase tracking-widest font-bold">연간 총합</p>
+                    <p className="text-2xl font-black text-indigo-400">{Math.floor(stats.totalMs / 3600000)}<span className="text-base font-bold opacity-60">h</span></p>
+                </div>
+            </div>
+
+            {/* Contribution Grid */}
+            <div className="glass-card p-6 relative overflow-hidden">
+                <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-bold">연간 공부 기록</h3>
+                    {stats.bestDay.date && (
+                        <span className="text-xs text-[var(--color-text-secondary)]">
+                            최고 <span className="text-purple-400 font-bold">{formatDateKo(stats.bestDay.date)}</span> · {formatHourMin(stats.bestDay.ms)}
+                        </span>
+                    )}
+                </div>
+
+                <div className="overflow-x-auto pb-2" ref={containerRef}>
+                    <div style={{ position: 'relative', display: 'inline-block' }}>
+                        {/* Month labels */}
+                        <div style={{ display: 'flex', marginLeft: '24px', marginBottom: '4px', height: '16px', position: 'relative', width: `${weeks.length * STEP}px` }}>
+                            {monthLabels.map(({ label, colIdx }) => (
+                                <span key={label + colIdx} style={{
+                                    position: 'absolute', left: `${colIdx * STEP}px`,
+                                    fontSize: '10px', fontWeight: 700, color: 'rgba(255,255,255,0.4)',
+                                    whiteSpace: 'nowrap'
+                                }}>{label}</span>
+                            ))}
+                        </div>
+
+                        {/* Grid */}
+                        <div style={{ display: 'flex', gap: `${GAP}px` }}>
+                            {/* Day labels */}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: `${GAP}px`, marginTop: '1px' }}>
+                                {DAY_LABELS.map((label, i) => (
+                                    <div key={i} style={{ width: '16px', height: `${CELL}px`, fontSize: '9px', fontWeight: 700, color: 'rgba(255,255,255,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                                        {label}
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Week columns */}
+                            {weeks.map((week, wi) => (
+                                <div key={wi} style={{ display: 'flex', flexDirection: 'column', gap: `${GAP}px` }}>
+                                    {week.map((cell, di) => (
+                                        <div
+                                            key={di}
+                                            onMouseEnter={() => cell.valid ? setTooltip({ date: cell.date, ms: cell.ms, col: wi, row: di }) : null}
+                                            onMouseLeave={() => setTooltip(null)}
+                                            onClick={() => cell.valid ? setTooltip(tooltip?.date === cell.date ? null : { date: cell.date, ms: cell.ms, col: wi, row: di }) : null}
+                                            style={{
+                                                width: `${CELL}px`, height: `${CELL}px`,
+                                                borderRadius: '3px',
+                                                background: cell.valid ? getContributionColor(cell.ms) : 'transparent',
+                                                boxShadow: cell.valid ? getContributionGlow(cell.ms) : 'none',
+                                                cursor: cell.valid ? 'pointer' : 'default',
+                                                transition: 'transform 0.1s, box-shadow 0.1s',
+                                            }}
+                                            onMouseOver={e => { if (cell.valid && cell.ms > 0) (e.currentTarget as HTMLDivElement).style.transform = 'scale(1.3)' }}
+                                            onMouseOut={e => { (e.currentTarget as HTMLDivElement).style.transform = 'scale(1)' }}
+                                        />
+                                    ))}
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Tooltip */}
+                        {tooltip && (
+                            <div style={{
+                                position: 'absolute',
+                                left: `${24 + tooltip.col * STEP + STEP / 2}px`,
+                                top: `${tooltip.row * STEP + 16}px`,
+                                transform: 'translate(-50%, -110%)',
+                                background: 'rgba(0,0,0,0.85)',
+                                backdropFilter: 'blur(12px)',
+                                border: '1px solid rgba(255,255,255,0.15)',
+                                borderRadius: '10px',
+                                padding: '8px 12px',
+                                fontSize: '11px',
+                                fontWeight: 700,
+                                color: 'white',
+                                whiteSpace: 'nowrap',
+                                zIndex: 10,
+                                pointerEvents: 'none',
+                                boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
+                            }}>
+                                <div style={{ color: 'rgba(255,255,255,0.6)', marginBottom: '2px' }}>{formatDateKo(tooltip.date)}</div>
+                                <div style={{ color: tooltip.ms > 0 ? '#a855f7' : 'rgba(255,255,255,0.3)', fontSize: '13px' }}>
+                                    {tooltip.ms > 0 ? formatHourMin(tooltip.ms) : '공부 없음'}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Legend */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '12px', justifyContent: 'flex-end' }}>
+                    <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)', marginRight: '4px' }}>적음</span>
+                    {[0, 3600000, 7200000 * 2, 3600000 * 6, 3600000 * 9].map((ms, i) => (
+                        <div key={i} style={{
+                            width: `${CELL}px`, height: `${CELL}px`, borderRadius: '3px',
+                            background: getContributionColor(ms),
+                            boxShadow: getContributionGlow(ms)
+                        }} />
+                    ))}
+                    <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)', marginLeft: '4px' }}>많음</span>
                 </div>
             </div>
         </div>

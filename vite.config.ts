@@ -3,8 +3,11 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
+const base = '/studymeter/'
+
 // https://vite.dev/config/
 export default defineConfig({
+  base,
   define: {
     __BUILD_DATE__: JSON.stringify(new Date().toISOString()),
   },
@@ -22,7 +25,7 @@ export default defineConfig({
       },
       includeAssets: ['logo_chart.svg', 'logo.svg', 'pwa-192x192.png', 'pwa-512x512.png'],
       manifest: {
-        id: '/',
+        id: base,
         name: 'StudyMeter',
         short_name: 'StudyMeter',
         description: '몰입형 공부 타이머 & 학습 분석 앱',
@@ -30,8 +33,8 @@ export default defineConfig({
         background_color: '#f0f4f8',
         display: 'standalone',
         orientation: 'portrait',
-        start_url: '/',
-        scope: '/',
+        start_url: base,
+        scope: base,
         icons: [
           {
             src: 'pwa-192x192.png',

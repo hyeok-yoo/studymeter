@@ -50,6 +50,17 @@ export interface Settings {
     theme: 'light' | 'dark' | 'system';
     profilePicture?: string; // Base64 encoded image for offline storage
     isManualModel?: boolean; // Whether to use manual model name input
+    dailyGoalMs?: number; // 일일 목표 공부 시간 (ms)
+}
+
+// 세션 중 주차된 생각 인터페이스
+export interface ThoughtNote {
+    id?: number;
+    date: string;            // study day (3am 기준)
+    sessionStartTime: number; // 어느 세션에서 주차됐는지
+    createdAt: number;       // 주차된 시각
+    content: string;
+    reviewed: boolean;       // 나중에 검토했는지
 }
 
 // Dexie 데이터베이스 클래스
@@ -57,6 +68,7 @@ class StudyMeterDB extends Dexie {
     sessions!: EntityTable<StudySession, 'id'>;
     dailyRecords!: EntityTable<DailyRecord, 'date'>;
     settings!: EntityTable<Settings, 'id'>;
+    thoughtNotes!: EntityTable<ThoughtNote, 'id'>;
 
     constructor() {
         super('StudyMeterDB');
@@ -65,6 +77,13 @@ class StudyMeterDB extends Dexie {
             sessions: '++id, date, subject, type, startTime',
             dailyRecords: 'date',
             settings: '++id'
+        });
+
+        this.version(2).stores({
+            sessions: '++id, date, subject, type, startTime',
+            dailyRecords: 'date',
+            settings: '++id',
+            thoughtNotes: '++id, date, sessionStartTime'
         });
     }
 }
@@ -311,4 +330,23 @@ export async function adjustOverlappingSession(
             duration: newDuration
         });
     }
+}
+
+// ── 생각 주차장 헬퍼 ─────────────────────────────────────────────────────────
+
+export async function addThoughtNote(note: Omit<ThoughtNote, 'id'>): Promise<number> {
+    return await db.thoughtNotes.add(note) as number;
+}
+
+export async function getThoughtNotesBySessionStart(sessionStartTime: number): Promise<ThoughtNote[]> {
+    return await db.thoughtNotes.where('sessionStartTime').equals(sessionStartTime).sortBy('createdAt');
+}
+
+export async function markThoughtsReviewed(ids: number[]): Promise<void> {
+    await Promise.all(ids.map(id => db.thoughtNotes.update(id, { reviewed: true })));
+}
+
+export async function getUnreviewedThoughtNotes(): Promise<ThoughtNote[]> {
+    const all = await db.thoughtNotes.toArray();
+    return all.filter(n => !n.reviewed).sort((a, b) => b.createdAt - a.createdAt);
 }

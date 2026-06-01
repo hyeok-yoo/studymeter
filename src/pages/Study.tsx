@@ -5,7 +5,7 @@ import { useFocusNative } from '../lib/useFocusNative'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Icon } from '@iconify/react'
-import type { Settings, StudySession, SessionEvaluation } from '../lib/db'
+import type { Settings, StudySession, SessionEvaluation, ThoughtNote } from '../lib/db'
 import {
     db,
     getTodayDate,
@@ -16,7 +16,8 @@ import {
     formatDuration,
     getMonday,
     getSunday,
-    formatDateYYYYMMDD
+    formatDateYYYYMMDD,
+    addThoughtNote
 } from '../lib/db'
 import TestTimerModal from '../components/TestTimerModal'
 import SessionEvalModal from '../components/SessionEvalModal'
@@ -49,6 +50,8 @@ export default function Study({ settings }: StudyProps) {
     const [isEnding, setIsEnding] = useState(false)
     const [lastSessionId, setLastSessionId] = useState<number | null>(null)
     const [lastSessionDuration, setLastSessionDuration] = useState(0)
+    const [showParkingDrawer, setShowParkingDrawer] = useState(false)
+    const [parkedNotes, setParkedNotes] = useState<ThoughtNote[]>([])
 
     // Get current subject's children
     const currentSubjectData = settings.subjects.find(s => s.name === currentSubject)
@@ -566,11 +569,53 @@ export default function Study({ settings }: StudyProps) {
                     </div>
                 </div>
 
+                {/* Daily Goal Progress Bar */}
+                {settings.dailyGoalMs && (() => {
+                    const total = todayTotal + sessionTime
+                    const pct = Math.min(100, Math.round((total / settings.dailyGoalMs!) * 100))
+                    const goalH = Math.floor(settings.dailyGoalMs! / 3600000)
+                    const goalM = Math.floor((settings.dailyGoalMs! % 3600000) / 60000)
+                    return (
+                        <div className="w-full max-w-3xl mx-auto mt-4 px-1">
+                            <div className="flex justify-between text-[10px] font-black uppercase tracking-widest opacity-40 mb-1.5">
+                                <span>일일 목표 {goalH > 0 ? `${goalH}h` : ''}{goalM > 0 ? ` ${goalM}m` : ''}</span>
+                                <span style={{ color: pct >= 100 ? '#22c55e' : 'inherit' }}>{pct}%{pct >= 100 ? ' ✓' : ''}</span>
+                            </div>
+                            <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
+                                <div
+                                    className="h-full rounded-full transition-all duration-1000"
+                                    style={{
+                                        width: `${pct}%`,
+                                        background: pct >= 100
+                                            ? 'linear-gradient(90deg, #22c55e, #4ade80)'
+                                            : 'linear-gradient(90deg, #6366f1, #a855f7)',
+                                        boxShadow: pct >= 100 ? '0 0 8px rgba(34,197,94,0.5)' : '0 0 8px rgba(168,85,247,0.3)'
+                                    }}
+                                />
+                            </div>
+                        </div>
+                    )
+                })()}
+
                 {/* Focus Panel */}
                 <FocusPanel />
 
                 {/* Controls Area */}
                 <div className="mt-16 flex items-center justify-center gap-10">
+                    {/* Thought Parking Button */}
+                    <button
+                        onClick={() => setShowParkingDrawer(true)}
+                        className="flex flex-col items-center gap-1 group"
+                    >
+                        <div className="w-16 h-16 rounded-2xl bg-white/8 hover:bg-blue-500/20 border border-white/10 hover:border-blue-400/40 flex flex-col items-center justify-center gap-0.5 transition-all duration-300 active:scale-90">
+                            <span className="text-xl font-black text-blue-400 leading-none">P</span>
+                            {parkedNotes.length > 0 && (
+                                <span className="text-[10px] font-black text-blue-300 leading-none">{parkedNotes.length}</span>
+                            )}
+                        </div>
+                        <span className="text-[9px] font-black uppercase tracking-wider opacity-30 group-hover:opacity-50">주차장</span>
+                    </button>
+
                     <button
                         onClick={handlePauseResume}
                         className={`w-28 h-28 rounded-full flex items-center justify-center shadow-2xl transition-all duration-500 hover:scale-110 active:scale-90 cursor-pointer ${isRunning ? 'bg-yellow-400 hover:bg-yellow-300' : 'bg-green-500 hover:bg-green-400'}`}
@@ -586,6 +631,9 @@ export default function Study({ settings }: StudyProps) {
                             <div className="w-0 h-0 border-l-[24px] border-l-white border-t-[16px] border-t-transparent border-b-[16px] border-b-transparent ml-2 pointer-events-none"></div>
                         )}
                     </button>
+
+                    {/* Spacer to balance layout */}
+                    <div className="w-16 h-16" />
                 </div>
             </main>
 
@@ -682,6 +730,25 @@ export default function Study({ settings }: StudyProps) {
                 sessionDuration={lastSessionDuration}
                 subject={currentSubject}
                 subItem={currentSubItem}
+                parkedNotes={parkedNotes}
+            />
+
+            {/* Thought Parking Drawer */}
+            <ThoughtParkingDrawer
+                isOpen={showParkingDrawer}
+                onClose={() => setShowParkingDrawer(false)}
+                parkedNotes={parkedNotes}
+                onPark={async (content) => {
+                    const note: ThoughtNote = {
+                        date: getTodayDate(),
+                        sessionStartTime: originalStartTimeRef.current,
+                        createdAt: Date.now(),
+                        content,
+                        reviewed: false
+                    }
+                    const id = await addThoughtNote(note)
+                    setParkedNotes(prev => [...prev, { ...note, id }])
+                }}
             />
         </div>
     )
@@ -1348,5 +1415,161 @@ function SlidingSelector({ items, currentValue, onChange, activeColor, activeTex
                 </button>
             ))}
         </div>
+    )
+}
+
+// ── Thought Parking Drawer ────────────────────────────────────────────────────
+
+interface ThoughtParkingDrawerProps {
+    isOpen: boolean
+    onClose: () => void
+    parkedNotes: ThoughtNote[]
+    onPark: (content: string) => Promise<void>
+}
+
+function ThoughtParkingDrawer({ isOpen, onClose, parkedNotes, onPark }: ThoughtParkingDrawerProps) {
+    const [input, setInput] = useState('')
+    const [justParked, setJustParked] = useState<string | null>(null)
+    const inputRef = useRef<HTMLTextAreaElement>(null)
+
+    useEffect(() => {
+        if (isOpen) {
+            setTimeout(() => inputRef.current?.focus(), 300)
+        }
+    }, [isOpen])
+
+    const handlePark = async () => {
+        const text = input.trim()
+        if (!text) return
+        setJustParked(text)
+        setInput('')
+        await onPark(text)
+        setTimeout(() => setJustParked(null), 2000)
+    }
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault()
+            handlePark()
+        }
+        if (e.key === 'Escape') onClose()
+    }
+
+    const formatAgo = (ts: number) => {
+        const diff = Math.floor((Date.now() - ts) / 1000)
+        if (diff < 60) return `${diff}초 전`
+        return `${Math.floor(diff / 60)}분 전`
+    }
+
+    return (
+        <AnimatePresence>
+            {isOpen && (
+                <div className="fixed inset-0 z-[200] flex items-end">
+                    {/* Backdrop */}
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+                        onClick={onClose}
+                    />
+
+                    {/* Drawer */}
+                    <motion.div
+                        initial={{ y: '100%' }}
+                        animate={{ y: 0 }}
+                        exit={{ y: '100%' }}
+                        transition={{ type: 'spring', damping: 26, stiffness: 300 }}
+                        className="relative w-full liquid-modal rounded-b-none rounded-t-[2rem] p-6 pb-10 max-h-[80vh] flex flex-col"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* Handle bar */}
+                        <div className="w-12 h-1 bg-white/20 rounded-full mx-auto mb-5" />
+
+                        {/* Header */}
+                        <div className="flex items-center justify-between mb-1">
+                            <div className="flex items-center gap-3">
+                                <div className="w-9 h-9 rounded-xl bg-blue-500/20 border border-blue-400/30 flex items-center justify-center">
+                                    <span className="text-base font-black text-blue-400">P</span>
+                                </div>
+                                <div>
+                                    <h3 className="text-lg font-black text-white">생각 주차장</h3>
+                                    <p className="text-[11px] text-white/40">지금 공부와 관계없는 생각을 여기 버려두고 집중으로 돌아가세요</p>
+                                </div>
+                            </div>
+                            <button onClick={onClose} className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-white/40 hover:bg-white/20 transition-all">
+                                ×
+                            </button>
+                        </div>
+
+                        {/* Parked notes list */}
+                        {parkedNotes.length > 0 && (
+                            <div className="mt-4 space-y-2 max-h-44 overflow-y-auto no-scrollbar">
+                                <p className="text-[10px] font-black uppercase tracking-widest text-white/30 mb-2">이번 세션에 주차됨</p>
+                                <AnimatePresence>
+                                    {[...parkedNotes].reverse().map((note, i) => (
+                                        <motion.div
+                                            key={note.id ?? i}
+                                            initial={{ opacity: 0, x: -20 }}
+                                            animate={{ opacity: 1, x: 0 }}
+                                            className="flex items-start gap-2 px-3 py-2.5 rounded-xl bg-blue-500/10 border border-blue-400/20"
+                                        >
+                                            <span className="text-blue-400 font-black text-xs mt-0.5 flex-shrink-0">P</span>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-sm text-white/80 leading-relaxed">{note.content}</p>
+                                                <p className="text-[10px] text-white/25 mt-0.5">{formatAgo(note.createdAt)}</p>
+                                            </div>
+                                        </motion.div>
+                                    ))}
+                                </AnimatePresence>
+                            </div>
+                        )}
+
+                        {/* Success flash */}
+                        <AnimatePresence>
+                            {justParked && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0 }}
+                                    className="mt-3 px-4 py-2.5 rounded-xl bg-green-500/15 border border-green-400/25 text-center"
+                                >
+                                    <p className="text-xs font-bold text-green-400">주차 완료! 이 생각은 안전해요.</p>
+                                    <p className="text-[10px] text-white/30 mt-0.5">"{justParked.slice(0, 30)}{justParked.length > 30 ? '...' : ''}"</p>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+
+                        {/* Input area */}
+                        <div className="mt-4 flex flex-col gap-3">
+                            <textarea
+                                ref={inputRef}
+                                value={input}
+                                onChange={(e) => setInput(e.target.value)}
+                                onKeyDown={handleKeyDown}
+                                placeholder="지금 머릿속에 걸리는 생각... (Enter로 주차)"
+                                rows={3}
+                                className="w-full px-4 py-4 rounded-2xl bg-white/5 border border-white/10 text-white placeholder:text-white/20 resize-none outline-none focus:border-blue-400/40 focus:bg-white/[0.08] transition-all font-medium text-sm leading-relaxed"
+                            />
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={handlePark}
+                                    disabled={!input.trim()}
+                                    className="flex-1 py-4 rounded-2xl bg-blue-500/80 hover:bg-blue-500 disabled:opacity-30 disabled:cursor-not-allowed text-white font-black text-sm transition-all active:scale-95 flex items-center justify-center gap-2"
+                                >
+                                    <span className="text-base font-black">P</span> 주차하기
+                                </button>
+                                <button
+                                    onClick={onClose}
+                                    className="flex-1 py-4 rounded-2xl bg-white/5 hover:bg-white/10 text-white/50 font-bold text-sm transition-all active:scale-95"
+                                >
+                                    집중으로 돌아가기 →
+                                </button>
+                            </div>
+                        </div>
+                    </motion.div>
+                </div>
+            )}
+        </AnimatePresence>
     )
 }

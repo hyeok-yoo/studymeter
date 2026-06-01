@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Icon } from '@iconify/react'
-import type { SessionEvaluation } from '../lib/db'
+import type { SessionEvaluation, ThoughtNote } from '../lib/db'
+import { markThoughtsReviewed } from '../lib/db'
 
 interface SessionEvalModalProps {
     isOpen: boolean
@@ -10,6 +11,7 @@ interface SessionEvalModalProps {
     sessionDuration: number
     subject: string
     subItem?: string
+    parkedNotes?: ThoughtNote[]
 }
 
 export default function SessionEvalModal({
@@ -18,7 +20,8 @@ export default function SessionEvalModal({
     onSave,
     sessionDuration,
     subject,
-    subItem
+    subItem,
+    parkedNotes = []
 }: SessionEvalModalProps) {
     const [focus, setFocus] = useState(5)
     const [satisfaction, setSatisfaction] = useState(5)
@@ -34,7 +37,11 @@ export default function SessionEvalModal({
         return `${minutes}분`
     }
 
-    const handleSave = () => {
+    const handleSave = async () => {
+        if (parkedNotes.length > 0) {
+            const ids = parkedNotes.map(n => n.id!).filter(Boolean)
+            await markThoughtsReviewed(ids)
+        }
         const evaluation: SessionEvaluation = {
             focus,
             satisfaction,
@@ -145,6 +152,25 @@ export default function SessionEvalModal({
                                 {renderRatingButtons(focus, setFocus, '집중도', 'text-indigo-400', <Icon icon="mdi:fire" className="text-orange-400" />)}
                                 {renderRatingButtons(satisfaction, setSatisfaction, '만족도', 'text-emerald-400', <Icon icon="mdi:diamond-stone" className="text-cyan-400" />)}
                             </div>
+
+                            {/* Parked Thoughts Section */}
+                            {parkedNotes.length > 0 && (
+                                <div className="px-2 pt-2 border-t border-white/5">
+                                    <div className="flex items-center gap-2 mb-3">
+                                        <span className="text-lg font-black text-blue-400">🅿</span>
+                                        <span className="text-xs font-black uppercase tracking-widest text-white/50">주차된 생각 {parkedNotes.length}개</span>
+                                    </div>
+                                    <div className="space-y-2 max-h-36 overflow-y-auto no-scrollbar">
+                                        {parkedNotes.map((note, i) => (
+                                            <div key={i} className="flex items-start gap-2 px-3 py-2 rounded-xl bg-blue-500/10 border border-blue-500/20">
+                                                <span className="text-blue-400 text-xs mt-0.5 font-black flex-shrink-0">P</span>
+                                                <p className="text-xs text-white/70 leading-relaxed">{note.content}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <p className="text-[10px] text-white/25 mt-2 text-center">저장 시 검토 완료로 표시됩니다</p>
+                                </div>
+                            )}
 
                             {/* Additional Info Section */}
                             <div className="space-y-6 pt-2 border-t border-white/5">
