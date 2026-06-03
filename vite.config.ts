@@ -2,6 +2,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
+import pkg from './package.json'
 
 const base = '/studymeter/'
 
@@ -10,6 +11,7 @@ export default defineConfig({
   base,
   define: {
     __BUILD_DATE__: JSON.stringify(new Date().toISOString()),
+    __APP_VERSION__: JSON.stringify(pkg.version),
   },
   server: {
     host: true,

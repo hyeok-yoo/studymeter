@@ -27,32 +27,41 @@ class FocusPlugin : Plugin() {
     private var cameraProvider: ProcessCameraProvider? = null
     private var imageAnalysis: ImageAnalysis? = null
     private var isRunning = false
+    @Volatile private var pipelineReady = false
     private val executor = Executors.newSingleThreadExecutor()
 
     override fun load() {
-        OpenCVLoader.initDebug()
+        // 화면 크기만 주입하고, 무거운 CV 스택(OpenCV/MediaPipe/ONNX)은 여기서 초기화하지 않는다.
+        // 초기화는 startPipeline()에서 지연 로드하고 stopPipeline()에서 완전히 해제하여,
+        // 측정하지 않을 때(대기 상태)의 자원 사용을 일반 타이머 수준으로 유지한다.
         val metrics = activity.resources.displayMetrics
         pipeline.screenWidth = metrics.widthPixels
         pipeline.screenHeight = metrics.heightPixels
 
-        executor.submit {
-            val ok = pipeline.init()
-            Log.i(TAG, "Pipeline init: $ok")
-            val state = JSObject().apply {
-                put("type", "pipeline_state")
-                put("running", false)
-                put("model", if (ok) "focus_lgbm.onnx" else null)
-                put("calibration", "SharedPreferences")
-            }
-            notifyListeners("pipelineState", state)
+        val state = JSObject().apply {
+            put("type", "pipeline_state")
+            put("running", false)
+            put("model", null)
+            put("calibration", "SharedPreferences")
         }
+        notifyListeners("pipelineState", state)
     }
 
     @PluginMethod
     fun startPipeline(call: PluginCall) {
         if (isRunning) { call.resolve(); return }
-        startCamera()
         isRunning = true
+        // 측정 시작 시점에 한 번만 무거운 모델을 초기화한다. (executor 단일 스레드에서
+        // analyzer 콜백보다 먼저 큐에 들어가므로, 첫 프레임 처리 전에 init이 완료된다.)
+        executor.submit {
+            if (!pipelineReady) {
+                OpenCVLoader.initDebug()
+                val ok = pipeline.init()
+                pipelineReady = ok
+                Log.i(TAG, "Pipeline lazy init: $ok")
+            }
+        }
+        startCamera()
         val state = JSObject().apply {
             put("type", "pipeline_state"); put("running", true)
             put("model", "focus_lgbm.onnx"); put("calibration", "SharedPreferences")
@@ -65,6 +74,13 @@ class FocusPlugin : Plugin() {
     fun stopPipeline(call: PluginCall) {
         isRunning = false
         cameraProvider?.unbindAll()
+        cameraProvider = null
+        // 카메라와 더불어 CV 모델(FaceLandmarker/ONNX)도 해제하여 대기 상태에서
+        // 메모리/자원을 점유하지 않도록 한다. 다음 startPipeline()에서 다시 초기화된다.
+        executor.submit {
+            pipeline.close()
+            pipelineReady = false
+        }
         val state = JSObject().apply { put("type", "pipeline_state"); put("running", false); put("model", null); put("calibration", null) }
         notifyListeners("pipelineState", state)
         call.resolve()

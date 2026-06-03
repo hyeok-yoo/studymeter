@@ -23,7 +23,7 @@ export default function Layout({ settings }: LayoutProps) {
                 <div className="glass-card h-full flex flex-col p-6 overflow-hidden text-[var(--color-text)]">
                     {/* Logo */}
                     <div className="mb-10 px-2 flex items-center gap-3">
-                        <img src="/logo_chart.svg" alt="StudyMeter Logo" className="w-10 h-10 drop-shadow-lg logo-float" />
+                        <img src={`${import.meta.env.BASE_URL}logo_chart.svg`} alt="StudyMeter Logo" className="w-10 h-10 drop-shadow-lg logo-float" />
                         <h1 className="text-2xl font-black tracking-tight gradient-text">StudyMeter</h1>
                     </div>
                     <div className="-mt-8 mb-8 px-2">
