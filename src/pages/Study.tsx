@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts'
 import { useFocusSync } from '../lib/focusSync'
+import type { FocusFeatures } from '../lib/focusSync'
 import { useFocusNative } from '../lib/useFocusNative'
+import { useFocusWeb } from '../lib/useFocusWeb'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Icon } from '@iconify/react'
@@ -1054,17 +1056,21 @@ function BioTab({ features, roiColors }: {
 const FOCUS_TABS = ['집중도', '시선', '생체신호'] as const
 type FocusTabName = typeof FOCUS_TABS[number]
 
-type MeasureMode = 'pc' | 'native'
+type MeasureMode = 'pc' | 'native' | 'web'
 
 function FocusPanel() {
-    const [mode, setMode] = useState<MeasureMode>(() =>
-        (localStorage.getItem('focus_measure_mode') as MeasureMode | null) ?? 'pc'
-    )
+    const isApp = NativeBridge.isNative()
+    const localMode: MeasureMode = isApp ? 'native' : 'web'
+    const [mode, setMode] = useState<MeasureMode>(() => {
+        const saved = localStorage.getItem('focus_measure_mode') as MeasureMode | null
+        return saved === 'pc' ? 'pc' : localMode
+    })
     const saveMode = (m: MeasureMode) => { setMode(m); localStorage.setItem('focus_measure_mode', m) }
 
-    return mode === 'native'
+    if (mode === 'pc') return <FocusPanelPC onSwitchMode={() => saveMode(localMode)} />
+    return isApp
         ? <FocusPanelNative onSwitchMode={() => saveMode('pc')} />
-        : <FocusPanelPC onSwitchMode={() => saveMode('native')} />
+        : <FocusPanelWeb onSwitchMode={() => saveMode('pc')} />
 }
 
 function FocusPanelPC({ onSwitchMode }: { onSwitchMode: () => void }) {
@@ -1106,11 +1112,67 @@ function FocusPanelPC({ onSwitchMode }: { onSwitchMode: () => void }) {
     )
 }
 
+/** 태블릿(네이티브) / 브라우저(웹) 자체 측정 엔진의 공통 인터페이스. */
+interface FocusEngine {
+    score: number | null
+    etaS: number | null
+    features: FocusFeatures | null
+    running: boolean
+    status: string
+    cameraJpeg: string | null
+    gazeX: number | null
+    gazeY: number | null
+    roiColors: { forehead?: string; rightCheek?: string; leftCheek?: string } | null
+    trainingState: { session_count: number; is_calibrated: boolean } | null
+    start: () => void | Promise<void>
+    stop: () => void | Promise<void>
+    startCalibration: (scenario?: 'book' | 'monitor') => Promise<boolean | void>
+    setDebugMode: (enabled: boolean) => void | Promise<void>
+    addSessionRating: (mean: number, rating: number) => void | Promise<void>
+}
+
 function FocusPanelNative({ onSwitchMode }: { onSwitchMode: () => void }) {
-    const { score, etaS, features, running, status, isNative,
+    const engine = useFocusNative()
+    return (
+        <LocalFocusPanel
+            engine={engine}
+            available={engine.isNative}
+            supportsCalibration
+            label="태블릿 자체 측정"
+            switchLabel="PC 연결로"
+            unavailableMsg="태블릿 자체 측정은 Android 앱에서만 사용 가능합니다"
+            onSwitchMode={onSwitchMode}
+        />
+    )
+}
+
+function FocusPanelWeb({ onSwitchMode }: { onSwitchMode: () => void }) {
+    const engine = useFocusWeb()
+    return (
+        <LocalFocusPanel
+            engine={engine}
+            available
+            supportsCalibration={false}
+            label="브라우저 자체 측정"
+            switchLabel="PC 연결로"
+            onSwitchMode={onSwitchMode}
+        />
+    )
+}
+
+function LocalFocusPanel({ engine, available, supportsCalibration, label, switchLabel, unavailableMsg, onSwitchMode }: {
+    engine: FocusEngine
+    available: boolean
+    supportsCalibration: boolean
+    label: string
+    switchLabel: string
+    unavailableMsg?: string
+    onSwitchMode: () => void
+}) {
+    const { score, etaS, features, running, status,
             cameraJpeg, gazeX, gazeY, roiColors,
             trainingState, addSessionRating,
-            start, stop, startCalibration, setDebugMode } = useFocusNative()
+            start, stop, startCalibration, setDebugMode } = engine
     const [cameraOpen, setCameraOpen] = useState(false)
     const [activeTab, setActiveTab] = useState<FocusTabName>('집중도')
     const [scoreHistory, setScoreHistory] = useState<ScorePoint[]>([])
@@ -1164,16 +1226,16 @@ function FocusPanelNative({ onSwitchMode }: { onSwitchMode: () => void }) {
         <div className="mt-6 w-full max-w-3xl mx-auto rounded-3xl border border-white/10 bg-white/5 backdrop-blur-sm p-5"
             style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
             <FocusPanelHeader
-                label="태블릿 자체 측정"
+                label={label}
                 dot={status === 'running'}
                 dotColor={statusColor}
                 dotLabel={statusLabel}
                 onSwitchMode={onSwitchMode}
-                switchLabel="PC 연결로"
+                switchLabel={switchLabel}
             />
 
             {/* Start/Stop + Calibration controls */}
-            {isNative && (
+            {available && (
                 <div style={{ display: 'flex', gap: '8px' }}>
                     <button
                         onClick={running ? stop : start}
@@ -1190,21 +1252,23 @@ function FocusPanelNative({ onSwitchMode }: { onSwitchMode: () => void }) {
                     >
                         {status === 'starting' ? '시작 중...' : running ? '측정 중지' : '측정 시작'}
                     </button>
-                    <button
-                        onClick={() => startCalibration('monitor')}
-                        style={{
-                            padding: '10px 16px', borderRadius: '10px', fontSize: '12px', fontWeight: 700,
-                            background: 'rgba(129,140,248,0.12)', color: '#a5b4fc',
-                            border: '1px solid rgba(129,140,248,0.25)', cursor: 'pointer',
-                        }}
-                    >
-                        캘리브레이션
-                    </button>
+                    {supportsCalibration && (
+                        <button
+                            onClick={() => startCalibration('monitor')}
+                            style={{
+                                padding: '10px 16px', borderRadius: '10px', fontSize: '12px', fontWeight: 700,
+                                background: 'rgba(129,140,248,0.12)', color: '#a5b4fc',
+                                border: '1px solid rgba(129,140,248,0.25)', cursor: 'pointer',
+                            }}
+                        >
+                            캘리브레이션
+                        </button>
+                    )}
                 </div>
             )}
 
             {/* Camera preview — collapsed by default to avoid throttling */}
-            {isNative && running && (
+            {available && running && (
                 <div>
                     <button
                         onClick={() => {
@@ -1242,7 +1306,7 @@ function FocusPanelNative({ onSwitchMode }: { onSwitchMode: () => void }) {
             )}
 
             {/* Session rating after measurement */}
-            {isNative && showRating && (
+            {available && showRating && (
                 <div style={{ padding: '14px', borderRadius: '12px', background: 'rgba(129,140,248,0.08)', border: '1px solid rgba(129,140,248,0.2)' }}>
                     <p style={{ fontSize: '11px', fontWeight: 700, color: '#a5b4fc', marginBottom: '10px', textAlign: 'center' }}>
                         세션 집중도를 평가해주세요 (점수 개인화에 사용됩니다)
@@ -1279,9 +1343,9 @@ function FocusPanelNative({ onSwitchMode }: { onSwitchMode: () => void }) {
                 </div>
             )}
 
-            {!isNative && (
+            {!available && unavailableMsg && (
                 <div style={{ padding: '16px', background: 'rgba(107,114,128,0.1)', borderRadius: '12px', border: '1px solid rgba(107,114,128,0.2)', textAlign: 'center' }}>
-                    <p className="text-[11px] opacity-50">태블릿 자체 측정은 Android 앱에서만 사용 가능합니다</p>
+                    <p className="text-[11px] opacity-50">{unavailableMsg}</p>
                 </div>
             )}
 
