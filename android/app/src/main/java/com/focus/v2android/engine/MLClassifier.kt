@@ -93,7 +93,9 @@ class MLClassifier(private val context: Context) {
     }
 
     fun close() {
+        // session만 닫고 null로 비운다. (env는 프로세스 전역 싱글톤이므로 닫지 않고 재사용 →
+        // stop 후 재시작 시 load()로 세션을 다시 생성할 수 있다.)
         session?.close()
-        env?.close()
+        session = null
     }
 }

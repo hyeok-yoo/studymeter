@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Icon } from '@iconify/react'
 import type { Settings, SubjectItem } from '../lib/db'
 import { db } from '../lib/db'
+import { exportBackup, importBackup } from '../lib/backup'
 import { useModal } from '../lib/ModalContext'
 import { useFocusSync } from '../lib/focusSync'
 import { useFocusNative } from '../lib/useFocusNative'
@@ -50,6 +51,9 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
     const [geminiModels, setGeminiModels] = useState<GeminiModel[]>([])
     const [loadingModels, setLoadingModels] = useState(false)
     const fileInputRef = useRef<HTMLInputElement>(null)
+    const backupInputRef = useRef<HTMLInputElement>(null)
+    const [exporting, setExporting] = useState(false)
+    const [importing, setImporting] = useState(false)
 
     // PC Focus 연결 설정 상태
     const [serverUrlInput, setServerUrlInput] = useState(() => localStorage.getItem('focus_server_url') || '')
@@ -244,6 +248,53 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
 
         setSaved(true)
         setTimeout(() => setSaved(false), 2000)
+    }
+
+    const handleExportBackup = async () => {
+        if (exporting) return
+        setExporting(true)
+        try {
+            await exportBackup(__APP_VERSION__)
+        } catch (e) {
+            console.error('백업 내보내기 실패', e)
+            // 사용자가 공유 시트를 취소한 경우는 오류로 보지 않음
+            const msg = e instanceof Error ? e.message : ''
+            if (!/cancel/i.test(msg)) {
+                await showAlert('내보내기 실패', '백업 파일을 만들지 못했습니다. 잠시 후 다시 시도하세요.')
+            }
+        } finally {
+            setExporting(false)
+        }
+    }
+
+    const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0]
+        // 같은 파일을 다시 선택할 수 있도록 input 초기화
+        e.target.value = ''
+        if (!file) return
+
+        const confirmed = await showConfirm(
+            '데이터 복원',
+            '현재 기기의 모든 설정·기록이 백업 파일 내용으로 교체됩니다. 계속하시겠습니까?'
+        )
+        if (!confirmed) return
+
+        setImporting(true)
+        try {
+            const text = await file.text()
+            const summary = await importBackup(text)
+            await showAlert(
+                '복원 완료',
+                `세션 ${summary.sessions}개, 일일기록 ${summary.dailyRecords}개, 메모 ${summary.thoughtNotes}개를 불러왔습니다. 적용을 위해 앱을 다시 시작합니다.`
+            )
+            window.location.reload()
+        } catch (err) {
+            console.error('백업 가져오기 실패', err)
+            const msg = err instanceof Error ? err.message : '알 수 없는 오류가 발생했습니다.'
+            await showAlert('복원 실패', msg)
+        } finally {
+            setImporting(false)
+        }
     }
 
     return (
@@ -701,6 +752,47 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                     </div>
                 </div>
 
+                {/* 데이터 백업 / 복원 */}
+                <div className="glass-card p-6 space-y-4">
+                    <div className="flex items-center gap-2">
+                        <Icon icon="mdi:database-arrow-down-outline" className="text-lg text-[var(--color-primary)]" />
+                        <label className="text-sm font-medium">데이터 백업 / 복원</label>
+                    </div>
+                    <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed">
+                        모든 설정·공부 기록·일일 기록·메모를 하나의 JSON 파일로 저장합니다.
+                        앱을 재설치하거나 기기를 바꿀 때 이 파일로 데이터를 그대로 옮길 수 있습니다.
+                    </p>
+
+                    <div className="flex gap-2">
+                        <button
+                            onClick={handleExportBackup}
+                            disabled={exporting || importing}
+                            className="flex-1 px-4 py-3 rounded-xl bg-indigo-500/10 text-indigo-400 font-medium text-sm hover:bg-indigo-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                        >
+                            <Icon icon="mdi:export-variant" className="text-base" />
+                            {exporting ? '내보내는 중...' : '내보내기 (백업)'}
+                        </button>
+                        <button
+                            onClick={() => backupInputRef.current?.click()}
+                            disabled={exporting || importing}
+                            className="flex-1 px-4 py-3 rounded-xl bg-green-500/10 text-green-400 font-medium text-sm hover:bg-green-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                        >
+                            <Icon icon="mdi:import" className="text-base" />
+                            {importing ? '복원 중...' : '가져오기 (복원)'}
+                        </button>
+                    </div>
+                    <p className="text-[10px] text-[var(--color-text-secondary)] opacity-60 leading-relaxed">
+                        ⚠️ 가져오기를 하면 현재 기기의 데이터가 백업 파일 내용으로 모두 교체됩니다.
+                    </p>
+                    <input
+                        ref={backupInputRef}
+                        type="file"
+                        accept="application/json,.json"
+                        onChange={handleImportFile}
+                        className="hidden"
+                    />
+                </div>
+
                 {/* Save Button */}
                 <button
                     onClick={handleSave}
@@ -715,7 +807,7 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                         Made by SeungHyeok Yoo
                     </p>
                     <p className="text-[10px] text-[var(--color-text-secondary)] font-mono opacity-60">
-                        StudyMeter Version 1.1.2
+                        StudyMeter Version {__APP_VERSION__}
                     </p>
                     <p className="text-[10px] text-[var(--color-text-secondary)] font-mono opacity-40">
                         Build: {new Date(__BUILD_DATE__).toLocaleString('ko-KR', {

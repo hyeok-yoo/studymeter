@@ -255,6 +255,8 @@ class FocusPipeline(private val context: Context) {
 
     fun close() {
         landmarker?.close()
+        landmarker = null
         classifier.close()
+        lastDebugJpeg = null
     }
 }
