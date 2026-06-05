@@ -3,6 +3,7 @@ import { db, formatDuration, formatDateYYYYMMDD, formatDurationHourMinute, getMo
 import type { StudySession, DailyRecord } from '../lib/db'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LabelList } from 'recharts'
 import { Icon } from '@iconify/react'
+import { HelpButton } from '../components/HelpButton'
 
 const COLORS = ['#6366f1', '#a855f7', '#06b6d4', '#10b981', '#f59e0b', '#ef4444']
 
@@ -188,7 +189,15 @@ export default function Records() {
         <div className="animate-fade-in max-w-6xl mx-auto">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
                 <div className="flex flex-col gap-1">
-                    <h1 className="text-3xl font-bold gradient-text">기록</h1>
+                    <div className="flex items-center gap-2">
+                        <h1 className="text-3xl font-bold gradient-text">기록</h1>
+                        <HelpButton title="학습 기록 안내" items={[
+                            { description: '공부 세션 데이터를 일·주·월·연간 단위로 분석합니다.' },
+                            { title: '총합 vs 순공', description: '총합은 강의·자습·테스트 모든 타입의 합계이고, 순공은 자습+테스트 타입만 집계한 실질 자기주도 학습 시간입니다.' },
+                            { title: '기간 이동', description: '좌우 화살표 버튼으로 이전/다음 기간으로 이동할 수 있습니다.' },
+                            { title: '월별 달력', description: '월별 보기에서는 날짜별 공부 시간을 한눈에 확인하고, 날짜를 탭하면 해당 날의 상세 기록으로 이동합니다.' },
+                        ]} />
+                    </div>
                     {viewMode !== 'year' && (
                         <div className="flex items-center gap-2">
                             <button onClick={handlePrev} className="p-2 rounded-lg bg-[var(--color-surface)] hover:bg-[var(--color-surface-elevated)] transition-all flex items-center justify-center">
@@ -265,7 +274,13 @@ export default function Records() {
                     )}
                 </div>
                 <div className="glass-card p-4">
-                    <p className="text-sm text-[var(--color-text-secondary)] mb-1">순공 시간</p>
+                    <div className="flex items-center gap-1.5 mb-1">
+                        <p className="text-sm text-[var(--color-text-secondary)]">순공 시간</p>
+                        <HelpButton title="순공 시간이란?" items={[
+                            { description: '자습·테스트 타입으로 공부한 시간만 합산한 값입니다.' },
+                            { title: '총합과의 차이', description: '총합에는 강의 시청 시간도 포함되지만, 순공은 스스로 학습한 시간만 측정합니다. 수험생이 실질 학습 시간을 파악할 때 주로 활용합니다.' },
+                        ]} />
+                    </div>
                     <p className="text-2xl font-bold">{formatDuration(selfStudyTime)}</p>
                     {prevSelfStudyTime > 0 && (
                         <p className={`text-xs mt-1 ${selfStudyChange >= 0 ? 'text-green-500' : 'text-red-500'}`}>
@@ -371,7 +386,14 @@ export default function Records() {
             {viewMode !== 'year' && <div className="grid md:grid-cols-2 gap-6 mb-8">
                 {/* Bar Chart */}
                 <div className="glass-card p-6">
-                    <h3 className="text-lg font-semibold mb-4">과목별 공부 시간</h3>
+                    <div className="flex items-center gap-2 mb-4">
+                        <h3 className="text-lg font-semibold">과목별 공부 시간</h3>
+                        <HelpButton title="과목별 공부 시간 차트" items={[
+                            { description: '선택한 기간 동안 각 과목별 총합(파란색)과 순공(분홍색) 시간을 막대그래프로 비교합니다.' },
+                            { title: '총합 (파란색)', description: '강의·자습·테스트 등 모든 학습 타입을 포함한 합계입니다.' },
+                            { title: '순공 (분홍색)', description: '자습·테스트 타입만 합산한 자기주도 학습 시간입니다.' },
+                        ]} />
+                    </div>
                     <div className="h-72">
                         <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={chartData} barGap={8}>

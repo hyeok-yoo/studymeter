@@ -25,6 +25,7 @@ import TestTimerModal from '../components/TestTimerModal'
 import SessionEvalModal from '../components/SessionEvalModal'
 import { TabletCamera } from '../components/TabletCamera'
 import { NativeBridge } from '../lib/NativeBridge'
+import { HelpButton } from '../components/HelpButton'
 
 interface StudyProps {
     settings: Settings
@@ -531,9 +532,17 @@ export default function Study({ settings }: StudyProps) {
                 <div className="absolute inset-0 bg-gradient-to-b from-indigo-500/10 via-transparent to-transparent blur-[120px] pointer-events-none -z-10"></div>
 
                 <div className="relative text-center flex flex-col gap-4">
-                    <h2 className="text-xl font-bold opacity-40 uppercase tracking-[0.3em]">
-                        {currentSubject}{currentSubItem ? ` › ${currentSubItem}` : ''} · {currentType}
-                    </h2>
+                    <div className="flex items-center justify-center gap-2">
+                        <h2 className="text-xl font-bold opacity-40 uppercase tracking-[0.3em]">
+                            {currentSubject}{currentSubItem ? ` › ${currentSubItem}` : ''} · {currentType}
+                        </h2>
+                        <HelpButton dark title="타이머 표시 안내" items={[
+                            { description: '큰 숫자는 오늘 총 공부 시간 + 현재 세션 시간을 합산하여 실시간으로 표시합니다.' },
+                            { title: '과목·타입 전환', description: '상단 버튼으로 과목이나 학습 유형을 바꾸면 현재 세션이 저장되고 새 세션이 시작됩니다.' },
+                            { title: '일시정지', description: '아래 일시정지 버튼을 누르면 타이머가 멈추고 공부 시간에 포함되지 않습니다.' },
+                            { title: '테스트 타입 선택 시', description: '시간을 설정하면 카운트다운 타이머로 전환됩니다. 시간이 끝나면 알림이 표시됩니다.' },
+                        ]} />
+                    </div>
 
                     {countdownDuration ? (
                         <div className="flex flex-col items-center gap-2">
@@ -553,19 +562,34 @@ export default function Study({ settings }: StudyProps) {
                     {/* 4 Metric Cards */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8 w-full max-w-3xl mx-auto">
                         <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-4 text-center">
-                            <span className="text-[10px] font-black uppercase tracking-widest opacity-40 block mb-1">{currentSubject} 누적</span>
+                            <div className="flex items-center justify-center gap-1.5 mb-1">
+                                <span className="text-[10px] font-black uppercase tracking-widest opacity-40">{currentSubject} 누적</span>
+                                <HelpButton dark title={`${currentSubject} 오늘 누적`} items={`오늘 "${currentSubject}" 과목에서 모든 타입(강의·자습·테스트 등)으로 공부한 총 시간입니다. 과목을 전환해도 이전 세션 시간이 합산됩니다.`} />
+                            </div>
                             <span className="text-2xl md:text-3xl font-bold tabular-nums">{formatDuration(todaySubjectTotal + sessionTime)}</span>
                         </div>
                         <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-4 text-center">
-                            <span className="text-[10px] font-black uppercase tracking-widest opacity-40 block mb-1">{currentSubject}+{currentType}</span>
+                            <div className="flex items-center justify-center gap-1.5 mb-1">
+                                <span className="text-[10px] font-black uppercase tracking-widest opacity-40">{currentSubject}+{currentType}</span>
+                                <HelpButton dark title="과목+타입 누적" items={`오늘 "${currentSubject}" 과목에서 "${currentType}" 타입으로만 공부한 시간입니다. 예: 수학 강의만, 영어 자습만 따로 보고 싶을 때 유용합니다.`} />
+                            </div>
                             <span className="text-2xl md:text-3xl font-bold tabular-nums text-indigo-300">{formatDuration(todaySubjectTypeTotal + sessionTime)}</span>
                         </div>
                         <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-4 text-center">
-                            <span className="text-[10px] font-black uppercase tracking-widest opacity-40 block mb-1">현재 세션</span>
+                            <div className="flex items-center justify-center gap-1.5 mb-1">
+                                <span className="text-[10px] font-black uppercase tracking-widest opacity-40">현재 세션</span>
+                                <HelpButton dark title="현재 세션 시간" items="이번 공부 시작 버튼을 누른 순간부터 지금까지의 경과 시간입니다. 타입이나 과목을 전환하면 세션이 분리되어 다시 0부터 시작합니다." />
+                            </div>
                             <span className="text-2xl md:text-3xl font-bold tabular-nums text-cyan-400">{formatDuration(sessionTime)}</span>
                         </div>
                         <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-4 text-center">
-                            <span className="text-[10px] font-black uppercase tracking-widest opacity-40 block mb-1">순공 (자습)</span>
+                            <div className="flex items-center justify-center gap-1.5 mb-1">
+                                <span className="text-[10px] font-black uppercase tracking-widest opacity-40">순공 (자습)</span>
+                                <HelpButton dark title="순공 시간이란?" items={[
+                                    { description: '자습·테스트 타입 세션만 합산한 시간입니다. 강의 수강 시간은 포함되지 않습니다.' },
+                                    { title: '왜 따로 보나요?', description: '수동적인 강의 시청과 능동적인 자습·문제풀이를 구분하여, 실제 스스로 공부한 시간을 파악하기 위함입니다.' },
+                                ]} />
+                            </div>
                             <span className="text-2xl md:text-3xl font-bold tabular-nums text-purple-400">{formatDuration(todaySelfStudyTotal + ((currentType === '자습' || currentType === '테스트') ? sessionTime : 0))}</span>
                         </div>
                     </div>
@@ -605,18 +629,25 @@ export default function Study({ settings }: StudyProps) {
                 {/* Controls Area */}
                 <div className="mt-16 flex items-center justify-center gap-10">
                     {/* Thought Parking Button */}
-                    <button
-                        onClick={() => setShowParkingDrawer(true)}
-                        className="flex flex-col items-center gap-1 group"
-                    >
-                        <div className="w-16 h-16 rounded-2xl bg-white/8 hover:bg-blue-500/20 border border-white/10 hover:border-blue-400/40 flex flex-col items-center justify-center gap-0.5 transition-all duration-300 active:scale-90">
-                            <span className="text-xl font-black text-blue-400 leading-none">P</span>
-                            {parkedNotes.length > 0 && (
-                                <span className="text-[10px] font-black text-blue-300 leading-none">{parkedNotes.length}</span>
-                            )}
-                        </div>
-                        <span className="text-[9px] font-black uppercase tracking-wider opacity-30 group-hover:opacity-50">주차장</span>
-                    </button>
+                    <div className="flex flex-col items-center gap-1">
+                        <button
+                            onClick={() => setShowParkingDrawer(true)}
+                            className="flex flex-col items-center gap-0.5 group"
+                        >
+                            <div className="w-16 h-16 rounded-2xl bg-white/8 hover:bg-blue-500/20 border border-white/10 hover:border-blue-400/40 flex flex-col items-center justify-center gap-0.5 transition-all duration-300 active:scale-90">
+                                <span className="text-xl font-black text-blue-400 leading-none">P</span>
+                                {parkedNotes.length > 0 && (
+                                    <span className="text-[10px] font-black text-blue-300 leading-none">{parkedNotes.length}</span>
+                                )}
+                            </div>
+                            <span className="text-[9px] font-black uppercase tracking-wider opacity-30 group-hover:opacity-50">주차장</span>
+                        </button>
+                        <HelpButton dark title="생각 주차장 (P)" items={[
+                            { description: '공부 중 갑자기 떠오른 관련 없는 생각(할 일, 아이디어 등)을 빠르게 기록해 두는 공간입니다.' },
+                            { title: '왜 쓰나요?', description: '생각을 직접 메모 앱으로 전환하면 집중이 깨집니다. 주차장에 버려두면 잊어버릴 걱정 없이 공부에 바로 복귀할 수 있습니다.' },
+                            { title: '나중에 확인', description: '세션 평가 화면에서 주차된 생각을 한꺼번에 확인하고 처리할 수 있습니다.' },
+                        ]} />
+                    </div>
 
                     <button
                         onClick={handlePauseResume}
@@ -1370,6 +1401,13 @@ function FocusPanelHeader({ label, dot, dotColor, dotLabel, onSwitchMode, switch
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span className="text-[10px] font-black uppercase tracking-widest opacity-40">집중도 모니터</span>
                 <span className="text-[9px] font-bold px-2 py-0.5 rounded-full" style={{ background: 'rgba(129,140,248,0.15)', color: '#a5b4fc', border: '1px solid rgba(129,140,248,0.2)' }}>{label}</span>
+                <HelpButton dark title="집중도 모니터란?" items={[
+                    { description: '카메라로 얼굴을 분석해 집중 점수(0–100)를 실시간으로 측정합니다.' },
+                    { title: '집중도 탭', description: '전체 집중 점수와 트렌드 그래프, 집중 유지 예상 시간(ETA)을 보여줍니다.' },
+                    { title: '시선 탭', description: '눈 움직임(새카드율·고정 비율)을 분석해 시선이 분산되는지 추적합니다.' },
+                    { title: '생체신호 탭', description: 'rPPG 기술로 카메라에서 심박수·심박 변동성 등 생체 신호를 비접촉으로 측정합니다.' },
+                    { title: '측정 모드', description: '브라우저 자체 측정(웹캠) 또는 PC 연결 측정(별도 서버)을 지원합니다.' },
+                ]} />
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>

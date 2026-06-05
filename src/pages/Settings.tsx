@@ -7,6 +7,7 @@ import { useModal } from '../lib/ModalContext'
 import { useFocusSync } from '../lib/focusSync'
 import { useFocusNative } from '../lib/useFocusNative'
 import { TabletCamera } from '../components/TabletCamera'
+import { HelpButton } from '../components/HelpButton'
 
 interface SettingsPageProps {
     settings: Settings
@@ -357,7 +358,14 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
 
                 {/* Daily Goal */}
                 <div className="glass-card p-6">
-                    <label className="block text-sm font-medium mb-1">일일 목표 시간</label>
+                    <div className="flex items-center gap-2 mb-1">
+                        <label className="block text-sm font-medium">일일 목표 시간</label>
+                        <HelpButton title="일일 목표 시간" items={[
+                            { description: '하루 동안 달성하고 싶은 총 공부 시간 목표를 설정합니다.' },
+                            { title: '진척 바', description: '공부 타이머 화면 하단에 목표 대비 진행률을 퍼센트 바로 실시간 표시합니다.' },
+                            { title: '비워두면', description: '진척 바가 비활성화되며 목표 없이 자유롭게 사용할 수 있습니다.' },
+                        ]} />
+                    </div>
                     <p className="text-xs text-[var(--color-text-secondary)] mb-3">공부 화면에 진척 바로 표시됩니다. 비워두면 비활성화.</p>
                     <div className="flex items-center gap-3">
                         <input
@@ -382,7 +390,14 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                 {/* Subjects with Hierarchy Management */}
                 <div className="glass-card p-6">
                     <div className="flex items-center justify-between mb-4">
-                        <label className="text-sm font-medium">과목 및 하위 항목 관리</label>
+                        <div className="flex items-center gap-2">
+                            <label className="text-sm font-medium">과목 및 하위 항목 관리</label>
+                            <HelpButton title="과목 및 하위 항목" items={[
+                                { description: '공부하는 과목 목록을 관리합니다. 공부 시작 시 과목을 선택하면 통계가 과목별로 집계됩니다.' },
+                                { title: '하위 항목', description: '과목에 세부 분류를 추가할 수 있습니다. 예: 수학 > 미분, 적분 / 영어 > 문법, 독해. 타이머 화면에서 선택하면 더 세밀하게 시간을 관리할 수 있습니다.' },
+                                { title: '삭제 주의', description: '과목을 삭제해도 기존 기록은 유지됩니다. 하지만 새로운 세션에서는 해당 과목을 선택할 수 없게 됩니다.' },
+                            ]} />
+                        </div>
                         <button
                             onClick={handleAddSubject}
                             className="text-xs px-3 py-1.5 rounded-lg bg-indigo-500/10 text-indigo-500 font-bold hover:bg-indigo-500/20 transition-all"
@@ -436,7 +451,15 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
 
                 {/* Types */}
                 <div className="glass-card p-6">
-                    <label className="block text-sm font-medium mb-2">유형 (쉼표로 구분)</label>
+                    <div className="flex items-center gap-2 mb-2">
+                        <label className="block text-sm font-medium">유형 (쉼표로 구분)</label>
+                        <HelpButton title="학습 유형 설정" items={[
+                            { description: '공부 방식을 분류하는 태그입니다. 타이머 화면 상단에서 선택합니다.' },
+                            { title: '순공 계산', description: '"자습"과 "테스트" 유형으로 기록된 세션만 순공 시간에 포함됩니다. 강의·수업 등은 총합에는 포함되지만 순공에서는 제외됩니다.' },
+                            { title: '테스트 특수 기능', description: '"테스트" 유형 선택 시 카운트다운 타이머를 설정할 수 있습니다. 시험 시간을 미리 설정하고 시간 내에 문제를 풀 수 있습니다.' },
+                            { title: '커스터마이즈', description: '원하는 유형명을 자유롭게 추가하되, 순공 집계가 필요하면 "자습"이나 "테스트"라는 단어를 포함시켜야 합니다.' },
+                        ]} />
+                    </div>
                     <input
                         type="text"
                         value={types}
@@ -483,7 +506,14 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
 
                 {/* Gemini API */}
                 <div className="glass-card p-6">
-                    <label className="block text-sm font-medium mb-2">Gemini API Key</label>
+                    <div className="flex items-center gap-2 mb-2">
+                        <label className="block text-sm font-medium">Gemini API Key</label>
+                        <HelpButton title="Gemini AI 연동" items={[
+                            { description: 'Google의 Gemini AI를 StudyMeter에 연결하여 AI 학습 도우미 기능을 사용할 수 있습니다.' },
+                            { title: 'AI 학습 도우미', description: '"AI 도우미" 메뉴에서 공부 내용을 질문하거나, 학습 계획을 상담하거나, 개념 설명을 요청할 수 있습니다.' },
+                            { title: 'API 키 발급', description: 'Google AI Studio(aistudio.google.com)에서 무료로 발급받을 수 있습니다. 키는 기기에만 저장되며 외부 서버로 전송되지 않습니다.' },
+                        ]} />
+                    </div>
                     <input
                         type="password"
                         value={geminiApiKey}
@@ -521,7 +551,15 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                 {/* 태블릿 자체 측정 설정 */}
                 <div className="glass-card p-6 space-y-4">
                     <div className="flex items-center justify-between">
-                        <label className="text-sm font-medium">태블릿 자체 측정</label>
+                        <div className="flex items-center gap-2">
+                            <label className="text-sm font-medium">태블릿 자체 측정</label>
+                            <HelpButton title="집중도 측정 — 태블릿" items={[
+                                { description: 'Android 앱에서 전면 카메라를 이용해 얼굴·시선·생체신호를 분석하고 실시간 집중 점수를 측정합니다.' },
+                                { title: '시선 캘리브레이션', description: '9개 지점을 응시하면 시선 추적이 개인화됩니다. 책 모드(하향 시선)와 모니터 모드(정면 시선) 중 환경에 맞게 선택하세요.' },
+                                { title: '점수 개인화', description: '세션 종료 후 별점 평가를 여러 번 하면 나의 집중 패턴에 맞게 점수 기준이 조정됩니다.' },
+                                { title: '웹 버전', description: '앱이 아닌 브라우저에서도 웹캠을 통해 간략한 집중도 측정을 사용할 수 있습니다.' },
+                            ]} />
+                        </div>
                         <div className="flex items-center gap-2">
                             <div className={`w-2 h-2 rounded-full ${isNative ? 'bg-green-400' : 'bg-white/20'}`} />
                             <span className="text-xs text-[var(--color-text-secondary)]">
@@ -600,7 +638,15 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                 {/* PC Focus 연결 설정 */}
                 <div className="glass-card p-6 space-y-4">
                     <div className="flex items-center justify-between mb-2">
-                        <label className="text-sm font-medium">PC Focus 서버 연결</label>
+                        <div className="flex items-center gap-2">
+                            <label className="text-sm font-medium">PC Focus 서버 연결</label>
+                            <HelpButton title="PC Focus 서버 연결" items={[
+                                { description: 'PC(노트북·데스크탑)의 웹캠을 이용해 집중도를 분석하는 별도 서버에 접속합니다.' },
+                                { title: '사용 방법', description: 'PC에 Focus 분석 서버 프로그램을 실행하고, 같은 Wi-Fi에 연결된 상태에서 PC의 IP 주소를 입력하여 연결합니다.' },
+                                { title: '언제 사용?', description: '태블릿을 책 받침으로 세워 두고 PC 카메라로 얼굴을 찍고 싶을 때, 또는 더 좋은 카메라 화질로 집중도를 측정하고 싶을 때 사용합니다.' },
+                                { title: '캘리브레이션', description: '9개 지점을 순서대로 응시하며 캡처하면 시선 추적이 정교해집니다. 책/모니터 환경에 따라 모드를 선택하세요.' },
+                            ]} />
+                        </div>
                         <div className="flex items-center gap-2">
                             <div className={`w-2 h-2 rounded-full ${connected ? 'bg-green-400' : 'bg-red-400'}`} />
                             <span className={`text-xs font-medium ${connected ? 'text-green-400' : 'text-[var(--color-text-secondary)]'}`}>
