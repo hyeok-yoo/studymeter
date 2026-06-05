@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { Icon } from '@iconify/react'
 import type { Settings } from '../lib/db'
 import {
@@ -10,9 +10,17 @@ import {
     formatDuration
 } from '../lib/db'
 import StartStudyModal from '../components/StartStudyModal'
-import PWAInstallPrompt from '../components/PWAInstallPrompt'
+import PWAInstallPrompt, {
+    IOSInstallGuide,
+    getCapturedPrompt,
+    clearCapturedPrompt,
+    isStandaloneMode,
+    isIOSDevice,
+    type BeforeInstallPromptEvent,
+} from '../components/PWAInstallPrompt'
 import { HelpButton } from '../components/HelpButton'
 import { HOME_PHRASES, getRandomPhrase } from '../lib/phrases'
+import { NativeBridge } from '../lib/NativeBridge'
 
 interface HomeProps {
     settings: Settings
@@ -25,6 +33,45 @@ export default function Home({ settings }: HomeProps) {
     const [todayTotal, setTodayTotal] = useState(0)
     const [subjectTimes, setSubjectTimes] = useState<Map<string, { total: number; selfStudy: number }>>(new Map())
     const randomPhrase = useMemo(() => getRandomPhrase(HOME_PHRASES), [])
+
+    // ── 홈 화면 추가 버튼 상태 ─────────────────────────────────────────────
+    const [showAddBtn, setShowAddBtn] = useState(false)
+    const [addBtnIOS, setAddBtnIOS] = useState(false)
+    const [showIOSGuide, setShowIOSGuide] = useState(false)
+    const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null)
+
+    useEffect(() => {
+        // 이미 PWA로 실행 중이거나 네이티브 앱이면 버튼 숨김
+        if (isStandaloneMode() || NativeBridge.isNative()) return
+
+        setShowAddBtn(true)
+        setAddBtnIOS(isIOSDevice())
+
+        // 모듈 레벨에서 이미 캡처된 프롬프트 사용
+        const captured = getCapturedPrompt()
+        if (captured) setInstallPrompt(captured)
+
+        // 이후 발생하는 이벤트도 수신
+        const handler = (e: Event) => {
+            e.preventDefault()
+            setInstallPrompt(e as BeforeInstallPromptEvent)
+        }
+        window.addEventListener('beforeinstallprompt', handler)
+        window.addEventListener('appinstalled', () => setShowAddBtn(false))
+
+        return () => window.removeEventListener('beforeinstallprompt', handler)
+    }, [])
+
+    const handleAddToHome = async () => {
+        if (addBtnIOS) { setShowIOSGuide(true); return }
+        if (!installPrompt) return
+        await installPrompt.prompt()
+        const { outcome } = await installPrompt.userChoice
+        if (outcome === 'accepted') setShowAddBtn(false)
+        clearCapturedPrompt()
+        setInstallPrompt(null)
+    }
+    // ─────────────────────────────────────────────────────────────────────
 
     useEffect(() => {
         async function loadData() {
@@ -108,12 +155,12 @@ export default function Home({ settings }: HomeProps) {
             </section>
 
             {/* Main Actions */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className={`grid gap-6 ${showAddBtn ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-1 md:grid-cols-3'}`}>
                 <motion.button
                     whileHover={{ scale: 1.02, translateY: -4 }}
                     whileTap={{ scale: 0.95 }}
                     onClick={() => setShowModal(true)}
-                    className="btn btn-primary text-xl font-black py-8 flex flex-col gap-2 group overflow-hidden relative"
+                    className={`btn btn-primary text-xl font-black py-8 flex flex-col gap-2 group overflow-hidden relative ${showAddBtn ? 'col-span-2 md:col-span-1' : ''}`}
                 >
                     <Icon icon="mdi:play-circle-outline" className="text-4xl group-hover:scale-125 transition-transform duration-500" />
                     <span>공부 시작하기</span>
@@ -139,7 +186,35 @@ export default function Home({ settings }: HomeProps) {
                     <Icon icon="mdi:pencil-outline" className="text-3xl text-purple-400" />
                     <span>학습 기록 편집</span>
                 </motion.button>
+
+                {/* 홈 화면 추가 버튼 — 웹 브라우저에서만 표시 */}
+                <AnimatePresence>
+                    {showAddBtn && (
+                        <motion.button
+                            initial={{ opacity: 0, scale: 0.9 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.9 }}
+                            whileHover={{ scale: 1.02, translateY: -4 }}
+                            whileTap={{ scale: 0.95 }}
+                            onClick={handleAddToHome}
+                            className="btn btn-glass text-lg font-bold py-8 flex flex-col gap-2 border border-indigo-400/30 bg-indigo-500/10 hover:bg-indigo-500/20 relative overflow-hidden"
+                        >
+                            <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-purple-500/5 pointer-events-none" />
+                            <Icon
+                                icon={addBtnIOS ? 'mdi:export-variant' : 'mdi:cellphone-arrow-down'}
+                                className="text-3xl text-indigo-400 relative z-10"
+                            />
+                            <span className="relative z-10 text-indigo-300">홈 화면에 추가</span>
+                            <span className="text-[10px] font-medium text-indigo-400/60 relative z-10 -mt-1">
+                                {addBtnIOS ? 'Safari → 공유 → 홈 화면에 추가' : '앱처럼 설치하기'}
+                            </span>
+                        </motion.button>
+                    )}
+                </AnimatePresence>
             </div>
+
+            {/* iOS 설치 가이드 모달 */}
+            <IOSInstallGuide isOpen={showIOSGuide} onClose={() => setShowIOSGuide(false)} />
 
             {showModal && (
                 <StartStudyModal
