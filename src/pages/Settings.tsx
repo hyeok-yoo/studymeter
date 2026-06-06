@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Icon } from '@iconify/react'
 import type { Settings, SubjectItem } from '../lib/db'
 import { db } from '../lib/db'
@@ -37,6 +38,7 @@ interface GeminiModel {
 }
 
 export default function SettingsPage({ settings, onSettingsChange }: SettingsPageProps) {
+    const navigate = useNavigate()
     const { showAlert, showConfirm, showPrompt } = useModal()
     const [userName, setUserName] = useState(settings.userName)
     const [localSubjects, setLocalSubjects] = useState<SubjectItem[]>(settings.subjects)
@@ -847,24 +849,35 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                     {saved ? <><Icon icon="mdi:check-bold" className="text-xl" /> 저장됨!</> : '저장하기'}
                 </button>
 
-                {/* Build Information */}
-                <div className="mt-8 pt-8 border-t border-[var(--color-border)] text-center flex flex-col items-center gap-1">
-                    <p className="text-xs font-bold text-[var(--color-text-secondary)] opacity-80 mb-1">
-                        Made by SeungHyeok Yoo
-                    </p>
-                    <p className="text-[10px] text-[var(--color-text-secondary)] font-mono opacity-60">
-                        StudyMeter Version {__APP_VERSION__}
-                    </p>
-                    <p className="text-[10px] text-[var(--color-text-secondary)] font-mono opacity-40">
-                        Build: {new Date(__BUILD_DATE__).toLocaleString('ko-KR', {
-                            year: 'numeric',
-                            month: '2-digit',
-                            day: '2-digit',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                            second: '2-digit'
-                        })}
-                    </p>
+                {/* 개발자 & 버전 정보 */}
+                <div className="mt-4 pt-8 border-t border-[var(--color-border)] flex flex-col gap-3">
+                    <button
+                        onClick={() => navigate('/developer')}
+                        className="w-full flex items-center justify-between px-5 py-3.5 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-[var(--color-primary)]/30 transition-all group"
+                    >
+                        <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-xs font-black flex-shrink-0">
+                                Y
+                            </div>
+                            <div className="text-left">
+                                <p className="text-xs font-black text-[var(--color-text-secondary)] leading-tight">개발자</p>
+                                <p className="text-sm font-bold text-[var(--color-text)] leading-tight">Yoo Seung Hyeok</p>
+                            </div>
+                        </div>
+                        <Icon icon="mdi:chevron-right" className="text-lg text-[var(--color-text-secondary)] opacity-40 group-hover:opacity-70 transition-all" />
+                    </button>
+
+                    <div className="text-center flex flex-col items-center gap-0.5">
+                        <p className="text-[10px] text-[var(--color-text-secondary)] font-mono opacity-50">
+                            StudyMeter v{__APP_VERSION__}
+                        </p>
+                        <p className="text-[10px] text-[var(--color-text-secondary)] font-mono opacity-30">
+                            Build: {new Date(__BUILD_DATE__).toLocaleString('ko-KR', {
+                                year: 'numeric', month: '2-digit', day: '2-digit',
+                                hour: '2-digit', minute: '2-digit',
+                            })}
+                        </p>
+                    </div>
                 </div>
             </div>
         </div>

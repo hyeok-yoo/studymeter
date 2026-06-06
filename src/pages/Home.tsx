@@ -216,6 +216,25 @@ export default function Home({ settings }: HomeProps) {
             {/* iOS 설치 가이드 모달 */}
             <IOSInstallGuide isOpen={showIOSGuide} onClose={() => setShowIOSGuide(false)} />
 
+            {/* 개발자 크레딧 */}
+            <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.97 }}
+                onClick={() => navigate('/developer')}
+                className="w-full flex items-center justify-between px-5 py-3.5 rounded-2xl bg-white/5 hover:bg-white/10 dark:bg-white/3 border border-white/10 hover:border-[var(--color-primary)]/30 transition-all group"
+            >
+                <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-xs font-black flex-shrink-0">
+                        Y
+                    </div>
+                    <div className="text-left">
+                        <p className="text-xs font-black text-[var(--color-text-secondary)] leading-tight">개발자</p>
+                        <p className="text-sm font-bold text-[var(--color-text)] leading-tight">Yoo Seung Hyeok</p>
+                    </div>
+                </div>
+                <Icon icon="mdi:chevron-right" className="text-lg text-[var(--color-text-secondary)] opacity-40 group-hover:opacity-70 group-hover:translate-x-0.5 transition-all" />
+            </motion.button>
+
             {showModal && (
                 <StartStudyModal
                     settings={settings}
