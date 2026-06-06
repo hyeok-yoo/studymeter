@@ -8,6 +8,7 @@ import Records from './pages/Records'
 import GeminiChat from './pages/GeminiChat'
 import SettingsPage from './pages/Settings'
 import EditRecords from './pages/EditRecords'
+import DeveloperPage from './pages/Developer'
 import { NativeBridge } from './lib/NativeBridge'
 
 function App() {
@@ -86,6 +87,7 @@ function App() {
         <Route path="edit-records" element={<EditRecords settings={settings!} />} />
         <Route path="gemini" element={<GeminiChat settings={settings!} />} />
         <Route path="settings" element={<SettingsPage settings={settings!} onSettingsChange={setSettings} />} />
+        <Route path="developer" element={<DeveloperPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />
