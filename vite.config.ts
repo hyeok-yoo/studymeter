@@ -4,7 +4,9 @@ import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 import pkg from './package.json'
 
-const base = '/studymeter/'
+// Capacitor(네이티브 앱)는 루트(/)에서 에셋을 서빙하므로 base를 '/'로 둬야 한다.
+// GitHub Pages는 '/studymeter/' 하위 경로에서 서빙한다.
+const base = process.env.BUILD_TARGET === 'capacitor' ? '/' : '/studymeter/'
 
 // https://vite.dev/config/
 export default defineConfig({

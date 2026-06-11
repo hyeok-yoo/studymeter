@@ -26,3 +26,7 @@ build_log.txt
 *.njsproj
 *.sln
 *.sw?
+
+# native/: 자체 .git을 가진 임베디드 저장소 + Gradle 빌드 산출물(APK 274MB 등) — 별도 관리
+native/
+*.apk
