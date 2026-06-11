@@ -15,6 +15,17 @@ export interface FocusFeatures {
     valid_ratio: number;
     mean_ear: number;
     min_ear: number;
+    // 신규 졸음·자세 피처 (옵셔널, null 가능)
+    perclos?: number | null;
+    blink_rate_hz?: number | null;
+    mean_blink_dur_s?: number | null;
+    ear_norm?: number | null;
+    disp_norm?: number | null;
+    head_pitch_deg?: number | null;
+    head_yaw_deg?: number | null;
+    head_move_std_deg?: number | null;
+    ear_slope_60s?: number | null;
+    fix_ratio_slope_60s?: number | null;
 }
 
 export interface FocusUpdate {
@@ -38,6 +49,67 @@ interface PipelineStateMessage {
     model: string | null;
     calibration: string | null;
     fps: number;
+}
+
+// ── 개발자 모드 프로토콜 ────────────────────────────────────────────────────────
+
+export interface CollectState {
+    active: boolean;
+    label: 0 | 1 | null;
+    rows: number;
+    output: string;
+}
+
+export interface TrainStats {
+    val_accuracy?: number | null;
+    n_samples?: number | null;
+    framework?: string | null;
+    [key: string]: unknown;
+}
+
+export interface TrainResult {
+    ok: boolean;
+    model: string | null;
+    stats: TrainStats | null;
+    error: string | null;
+}
+
+export interface ModelInfo {
+    name: string;
+    mtime: number;
+    size_kb: number;
+    active: boolean;
+}
+
+interface CollectStateMessage {
+    type: 'collect_state';
+    active: boolean;
+    label: 0 | 1 | null;
+    rows: number;
+    output: string;
+}
+
+interface TrainStateMessage {
+    type: 'train_state';
+    running: boolean;
+}
+
+interface TrainResultMessage {
+    type: 'train_result';
+    ok: boolean;
+    model: string | null;
+    stats: TrainStats | null;
+    error: string | null;
+}
+
+interface ModelListMessage {
+    type: 'model_list';
+    models: ModelInfo[];
+}
+
+interface ErrorMessage {
+    type: 'error';
+    message: string;
 }
 
 type CalibrationScenario = 'book' | 'monitor';
@@ -72,6 +144,28 @@ interface PipelineStatusMessage {
     type: 'pipeline_status';
 }
 
+interface CollectStartMessage {
+    type: 'collect_start';
+    label: 0 | 1;
+}
+
+interface CollectStopMessage {
+    type: 'collect_stop';
+}
+
+interface TrainStartMessage {
+    type: 'train_start';
+}
+
+interface ModelListRequestMessage {
+    type: 'model_list';
+}
+
+interface ModelApplyMessage {
+    type: 'model_apply';
+    name: string;
+}
+
 type OutgoingMessage =
     | CalibrateStartMessage
     | CalibrateCaptureMessage
@@ -79,7 +173,12 @@ type OutgoingMessage =
     | VideoFrameMessage
     | PipelineStartMessage
     | PipelineStopMessage
-    | PipelineStatusMessage;
+    | PipelineStatusMessage
+    | CollectStartMessage
+    | CollectStopMessage
+    | TrainStartMessage
+    | ModelListRequestMessage
+    | ModelApplyMessage;
 
 export type ConnectionStatus =
     | 'idle'           // 연결 시도 안 함
@@ -107,6 +206,13 @@ export function useFocusSync(
     status: ConnectionStatus;
     lastError: string | null;
     pipelineState: PipelineState | null;
+    // 개발자 모드 상태
+    collectState: CollectState | null;
+    trainRunning: boolean;
+    trainResult: TrainResult | null;
+    modelList: ModelInfo[] | null;
+    devError: string | null;
+    clearDevError: () => void;
     connect: () => void;
     disconnect: () => void;
     sendCalibrateStart: (scenario: CalibrationScenario) => void;
@@ -115,6 +221,12 @@ export function useFocusSync(
     sendPipelineStart: () => void;
     sendPipelineStop: () => void;
     sendPipelineStatus: () => void;
+    // 개발자 모드 명령
+    sendCollectStart: (label: 0 | 1) => void;
+    sendCollectStop: () => void;
+    sendTrainStart: () => void;
+    requestModelList: () => void;
+    applyModel: (name: string) => void;
 } {
     const autoConnect = options?.autoConnect !== false;
 
@@ -124,6 +236,12 @@ export function useFocusSync(
     const [pipelineState, setPipelineState] = useState<PipelineState | null>(null);
     const [status, setStatus] = useState<ConnectionStatus>('idle');
     const [lastError, setLastError] = useState<string | null>(null);
+    // 개발자 모드 상태
+    const [collectState, setCollectState] = useState<CollectState | null>(null);
+    const [trainRunning, setTrainRunning] = useState<boolean>(false);
+    const [trainResult, setTrainResult] = useState<TrainResult | null>(null);
+    const [modelList, setModelList] = useState<ModelInfo[] | null>(null);
+    const [devError, setDevError] = useState<string | null>(null);
 
     const wsRef = useRef<WebSocket | null>(null);
     const connectedRef = useRef<boolean>(false);
@@ -151,6 +269,14 @@ export function useFocusSync(
     const sendPipelineStart = useCallback(() => send({ type: 'pipeline_start' }), [send]);
     const sendPipelineStop = useCallback(() => send({ type: 'pipeline_stop' }), [send]);
     const sendPipelineStatus = useCallback(() => send({ type: 'pipeline_status' }), [send]);
+
+    // 개발자 모드 명령
+    const sendCollectStart = useCallback((label: 0 | 1) => send({ type: 'collect_start', label }), [send]);
+    const sendCollectStop = useCallback(() => send({ type: 'collect_stop' }), [send]);
+    const sendTrainStart = useCallback(() => send({ type: 'train_start' }), [send]);
+    const requestModelList = useCallback(() => send({ type: 'model_list' }), [send]);
+    const applyModel = useCallback((name: string) => send({ type: 'model_apply', name }), [send]);
+    const clearDevError = useCallback(() => setDevError(null), []);
 
     const connect = useCallback(() => connectFnRef.current(), []);
     const disconnect = useCallback(() => disconnectFnRef.current(), []);
@@ -261,6 +387,47 @@ export function useFocusSync(
                     });
                     return;
                 }
+
+                if (msgType === 'collect_state') {
+                    const cs = parsed as CollectStateMessage;
+                    setCollectState({
+                        active: cs.active === true,
+                        label: cs.label === 0 || cs.label === 1 ? cs.label : null,
+                        rows: typeof cs.rows === 'number' ? cs.rows : 0,
+                        output: typeof cs.output === 'string' ? cs.output : '',
+                    });
+                    return;
+                }
+
+                if (msgType === 'train_state') {
+                    const ts = parsed as TrainStateMessage;
+                    setTrainRunning(ts.running === true);
+                    return;
+                }
+
+                if (msgType === 'train_result') {
+                    const tr = parsed as TrainResultMessage;
+                    setTrainResult({
+                        ok: tr.ok === true,
+                        model: typeof tr.model === 'string' ? tr.model : null,
+                        stats: tr.stats && typeof tr.stats === 'object' ? tr.stats : null,
+                        error: typeof tr.error === 'string' ? tr.error : null,
+                    });
+                    setTrainRunning(false);
+                    return;
+                }
+
+                if (msgType === 'model_list') {
+                    const ml = parsed as ModelListMessage;
+                    setModelList(Array.isArray(ml.models) ? ml.models : []);
+                    return;
+                }
+
+                if (msgType === 'error') {
+                    const em = parsed as ErrorMessage;
+                    setDevError(typeof em.message === 'string' ? em.message : '알 수 없는 오류');
+                    return;
+                }
             };
 
             ws.onerror = () => {
@@ -280,6 +447,8 @@ export function useFocusSync(
                     wsRef.current = null;
                 }
                 setPipelineState(null);
+                setCollectState(null);
+                setTrainRunning(false);
                 if (cancelled) return;
 
                 isFirstAttempt = false;
@@ -389,6 +558,12 @@ export function useFocusSync(
         status,
         lastError,
         pipelineState,
+        collectState,
+        trainRunning,
+        trainResult,
+        modelList,
+        devError,
+        clearDevError,
         connect,
         disconnect,
         sendCalibrateStart,
@@ -397,5 +572,10 @@ export function useFocusSync(
         sendPipelineStart,
         sendPipelineStop,
         sendPipelineStatus,
+        sendCollectStart,
+        sendCollectStop,
+        sendTrainStart,
+        requestModelList,
+        applyModel,
     };
 }

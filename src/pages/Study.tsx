@@ -982,6 +982,51 @@ function GazeTab({ features, gazeX, gazeY }: {
                 <MetricCard label="EAR 최솟값 (순간 졸음)" value={features?.min_ear} unit="" decimals={3} color="#f97316" />
                 <MetricCard label="유효 프레임 비율" value={features?.valid_ratio} unit="" decimals={2} color="#34d399" />
             </div>
+
+            {/* 고급 모드: 졸음·자세 상세 지표 */}
+            <AdvancedFeaturesSection features={features} />
+        </div>
+    )
+}
+
+// ── 고급 모드: 졸음·자세 ───────────────────────────────────────────────────────
+
+const ADVANCED_FEATURES_KEY = 'sm_advanced_features'
+
+/** 고급 모드 전용 지표 카드. perclos는 ×100 후 %, 나머지는 지정 단위/소수. null/비유한 → "—". */
+function AdvancedMetricCard({ label, value, unit, decimals, scale = 1, color }: {
+    label: string; value: number | undefined | null; unit: string; decimals: number; scale?: number; color: string
+}) {
+    const valid = value !== undefined && value !== null && isFinite(value as number)
+    return (
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-3 text-center">
+            <span className="block text-[9px] font-black uppercase tracking-widest opacity-40 mb-1">{label}</span>
+            <span className="text-base font-bold tabular-nums" style={{ color: valid ? color : 'rgba(255,255,255,0.2)' }}>
+                {valid ? `${((value as number) * scale).toFixed(decimals)}${unit}` : '—'}
+            </span>
+        </div>
+    )
+}
+
+function AdvancedFeaturesSection({ features }: { features: ReturnType<typeof useFocusSync>['features'] }) {
+    const enabled = localStorage.getItem(ADVANCED_FEATURES_KEY) === 'true'
+    if (!enabled) return null
+
+    return (
+        <div>
+            <span className="text-[9px] font-black uppercase tracking-widest opacity-40 block mb-2 mt-2">졸음·자세 (고급 모드)</span>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
+                <AdvancedMetricCard label="PERCLOS (눈 감은 비율)" value={features?.perclos} unit="%" decimals={1} scale={100} color="#f97316" />
+                <AdvancedMetricCard label="깜빡임 빈도" value={features?.blink_rate_hz} unit="/s" decimals={2} color="#facc15" />
+                <AdvancedMetricCard label="평균 깜빡임 시간" value={features?.mean_blink_dur_s} unit="s" decimals={2} color="#fb923c" />
+                <AdvancedMetricCard label="EAR 정규화" value={features?.ear_norm} unit="" decimals={3} color="#fbbf24" />
+                <AdvancedMetricCard label="시선 분산 정규화" value={features?.disp_norm} unit="" decimals={3} color="#a78bfa" />
+                <AdvancedMetricCard label="고개 상하 각도" value={features?.head_pitch_deg} unit="°" decimals={1} color="#60a5fa" />
+                <AdvancedMetricCard label="고개 좌우 각도" value={features?.head_yaw_deg} unit="°" decimals={1} color="#22d3ee" />
+                <AdvancedMetricCard label="고개 움직임 표준편차" value={features?.head_move_std_deg} unit="°" decimals={2} color="#34d399" />
+                <AdvancedMetricCard label="EAR 추세 (60초)" value={features?.ear_slope_60s} unit="" decimals={3} color="#f472b6" />
+                <AdvancedMetricCard label="고정비율 추세 (60초)" value={features?.fix_ratio_slope_60s} unit="" decimals={3} color="#818cf8" />
+            </div>
         </div>
     )
 }

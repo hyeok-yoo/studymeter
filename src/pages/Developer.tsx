@@ -1,9 +1,14 @@
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Icon } from '@iconify/react'
+import { useFocusSync } from '../lib/focusSync'
+import type { ModelInfo } from '../lib/focusSync'
 
 const GITHUB_URL = 'https://github.com/hyeok-yoo'
 const SPONSORS_URL = 'https://github.com/sponsors/hyeok-yoo'
+
+const ADVANCED_FEATURES_KEY = 'sm_advanced_features'
 
 const SKILLS = [
     { icon: 'mdi:react', label: 'React / TypeScript', color: '#61dafb' },
@@ -181,6 +186,9 @@ export default function DeveloperPage() {
                 </a>
             </motion.div>
 
+            {/* 개발자 도구 */}
+            <DeveloperTools />
+
             {/* 앱 링크 */}
             <motion.div
                 initial={{ opacity: 0 }}
@@ -193,5 +201,342 @@ export default function DeveloperPage() {
                 </p>
             </motion.div>
         </div>
+    )
+}
+
+// ── 개발자 도구 ───────────────────────────────────────────────────────────────
+
+function DeveloperTools() {
+    const serverUrl = useMemo(() => localStorage.getItem('focus_server_url') ?? '', [])
+    const {
+        connected,
+        collectState,
+        trainRunning,
+        trainResult,
+        modelList,
+        devError,
+        clearDevError,
+        sendCollectStart,
+        sendCollectStop,
+        sendTrainStart,
+        requestModelList,
+        applyModel,
+    } = useFocusSync(serverUrl)
+
+    // 연결되면 모델 목록 1회 요청
+    useEffect(() => {
+        if (connected) requestModelList()
+    }, [connected, requestModelList])
+
+    return (
+        <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.38, duration: 0.5 }}
+            className="glass-card p-6 md:p-8 border-none dark:bg-white/5 bg-white/40 space-y-6"
+        >
+            <div className="flex items-center gap-2.5">
+                <Icon icon="mdi:tools" className="text-2xl text-indigo-400" />
+                <h2 className="text-xl font-black gradient-text">개발자 도구</h2>
+            </div>
+
+            {/* 에러 배너 */}
+            {devError && (
+                <div className="flex items-start gap-2 px-4 py-3 rounded-2xl bg-red-500/15 border border-red-400/30">
+                    <Icon icon="mdi:alert-circle" className="text-lg text-red-400 flex-shrink-0 mt-0.5" />
+                    <p className="flex-1 text-sm font-bold text-red-400 leading-snug break-all">{devError}</p>
+                    <button
+                        onClick={clearDevError}
+                        className="text-red-400/60 hover:text-red-400 text-lg leading-none flex-shrink-0"
+                        aria-label="닫기"
+                    >
+                        ×
+                    </button>
+                </div>
+            )}
+
+            {/* 연결 상태 */}
+            <ConnectionStatusCard connected={connected} />
+
+            {connected ? (
+                <>
+                    <CollectSection collectState={collectState} onStart={sendCollectStart} onStop={sendCollectStop} />
+                    <TrainSection running={trainRunning} result={trainResult} onStart={sendTrainStart} />
+                    <ModelSection
+                        models={modelList}
+                        onRefresh={requestModelList}
+                        onApply={applyModel}
+                    />
+                </>
+            ) : (
+                <p className="text-sm text-[var(--color-text-secondary)] opacity-70 leading-relaxed">
+                    서버에 연결되지 않았습니다. Settings에서 서버 IP를 설정한 뒤 다시 시도하세요.
+                </p>
+            )}
+
+            {/* 고급 모드 토글 (연결 여부와 무관) */}
+            <AdvancedModeToggle />
+        </motion.div>
+    )
+}
+
+function ConnectionStatusCard({ connected }: { connected: boolean }) {
+    return (
+        <div className="flex items-center justify-between px-4 py-3 rounded-2xl bg-white/5 border border-white/10">
+            <div className="flex items-center gap-2.5">
+                <div
+                    className="w-2.5 h-2.5 rounded-full"
+                    style={{
+                        background: connected ? '#22c55e' : '#ef4444',
+                        boxShadow: connected ? '0 0 6px #22c55e' : 'none',
+                    }}
+                />
+                <span className="text-sm font-black text-[var(--color-text)]">
+                    {connected ? '서버 연결됨' : '서버 미연결'}
+                </span>
+            </div>
+            {!connected && (
+                <span className="text-xs text-[var(--color-text-secondary)] opacity-60">
+                    Settings에서 서버 IP 설정 후 연결
+                </span>
+            )}
+        </div>
+    )
+}
+
+// ── 데이터 수집 ───────────────────────────────────────────────────────────────
+
+function CollectSection({
+    collectState,
+    onStart,
+    onStop,
+}: {
+    collectState: ReturnType<typeof useFocusSync>['collectState']
+    onStart: (label: 0 | 1) => void
+    onStop: () => void
+}) {
+    const active = collectState?.active === true
+    const label = collectState?.label
+    const labelText = label === 0 ? '집중(0)' : label === 1 ? '산만(1)' : '—'
+    const rows = collectState?.rows ?? 0
+    const output = collectState?.output ?? ''
+
+    return (
+        <section className="space-y-3">
+            <h3 className="text-sm font-black text-[var(--color-text)] uppercase tracking-wider opacity-70">데이터 수집</h3>
+            <div className="flex flex-col sm:flex-row gap-2">
+                <button
+                    onClick={() => onStart(0)}
+                    disabled={active}
+                    className="flex-1 py-3 px-4 rounded-2xl font-black text-sm transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-400/30 text-emerald-300"
+                >
+                    집중(0) 수집
+                </button>
+                <button
+                    onClick={() => onStart(1)}
+                    disabled={active}
+                    className="flex-1 py-3 px-4 rounded-2xl font-black text-sm transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed bg-amber-500/15 hover:bg-amber-500/25 border border-amber-400/30 text-amber-300"
+                >
+                    산만(1) 수집
+                </button>
+                <button
+                    onClick={onStop}
+                    disabled={!active}
+                    className="flex-1 py-3 px-4 rounded-2xl font-black text-sm transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed bg-rose-500/15 hover:bg-rose-500/25 border border-rose-400/30 text-rose-300"
+                >
+                    수집 정지
+                </button>
+            </div>
+            <div className="px-4 py-3 rounded-2xl bg-white/5 border border-white/10">
+                {active ? (
+                    <p className="text-sm font-bold text-[var(--color-text)]">
+                        <span className="text-emerald-400">● 수집 중</span>
+                        {' — 라벨: '}{labelText}
+                        {' — '}{rows.toLocaleString()}행
+                        {output ? <span className="opacity-50"> — {output}</span> : null}
+                    </p>
+                ) : (
+                    <p className="text-sm text-[var(--color-text-secondary)] opacity-60">
+                        대기 중{rows > 0 ? ` — 마지막 ${rows.toLocaleString()}행` : ''}
+                        {output ? <span className="opacity-70"> — {output}</span> : null}
+                    </p>
+                )}
+            </div>
+        </section>
+    )
+}
+
+// ── 모델 학습 ─────────────────────────────────────────────────────────────────
+
+function TrainSection({
+    running,
+    result,
+    onStart,
+}: {
+    running: boolean
+    result: ReturnType<typeof useFocusSync>['trainResult']
+    onStart: () => void
+}) {
+    return (
+        <section className="space-y-3">
+            <h3 className="text-sm font-black text-[var(--color-text)] uppercase tracking-wider opacity-70">모델 학습</h3>
+            <button
+                onClick={onStart}
+                disabled={running}
+                className="w-full py-3 px-4 rounded-2xl font-black text-sm transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-400/30 text-indigo-300 flex items-center justify-center gap-2"
+            >
+                {running ? (
+                    <>
+                        <Icon icon="mdi:loading" className="text-lg animate-spin" />
+                        학습 중...
+                    </>
+                ) : (
+                    '학습 시작'
+                )}
+            </button>
+            {result && !running && (
+                result.ok ? (
+                    <div className="px-4 py-3 rounded-2xl bg-emerald-500/12 border border-emerald-400/25">
+                        <p className="text-sm font-bold text-emerald-400 break-all">
+                            ✓ {result.model ?? '모델'}
+                            {result.stats ? (() => {
+                                const acc = result.stats.val_accuracy
+                                const n = result.stats.n_samples
+                                const fw = result.stats.framework
+                                const accStr = typeof acc === 'number' ? ` — val ${(acc * 100).toFixed(1)}%` : ''
+                                const nStr = typeof n === 'number' ? `n=${n.toLocaleString()}` : ''
+                                const fwStr = typeof fw === 'string' ? fw : ''
+                                const meta = [nStr, fwStr].filter(Boolean).join(', ')
+                                return `${accStr}${meta ? ` (${meta})` : ''}`
+                            })() : ''}
+                            {' — 자동 적용됨'}
+                        </p>
+                    </div>
+                ) : (
+                    <div className="px-4 py-3 rounded-2xl bg-red-500/12 border border-red-400/25">
+                        <p className="text-sm font-bold text-red-400 break-all">
+                            학습 실패 — {result.error ?? '알 수 없는 오류'}
+                        </p>
+                    </div>
+                )
+            )}
+        </section>
+    )
+}
+
+// ── 모델 관리 ─────────────────────────────────────────────────────────────────
+
+function ModelSection({
+    models,
+    onRefresh,
+    onApply,
+}: {
+    models: ModelInfo[] | null
+    onRefresh: () => void
+    onApply: (name: string) => void
+}) {
+    return (
+        <section className="space-y-3">
+            <div className="flex items-center justify-between">
+                <h3 className="text-sm font-black text-[var(--color-text)] uppercase tracking-wider opacity-70">모델 관리</h3>
+                <button
+                    onClick={onRefresh}
+                    className="text-xs font-bold px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-[var(--color-text-secondary)] transition-all active:scale-95 flex items-center gap-1.5"
+                >
+                    <Icon icon="mdi:refresh" className="text-sm" />
+                    목록 새로고침
+                </button>
+            </div>
+            {models === null ? (
+                <p className="text-sm text-[var(--color-text-secondary)] opacity-50">목록을 불러오는 중...</p>
+            ) : models.length === 0 ? (
+                <p className="text-sm text-[var(--color-text-secondary)] opacity-50">학습된 모델이 없습니다.</p>
+            ) : (
+                <div className="space-y-2">
+                    {models.map((m) => (
+                        <div
+                            key={m.name}
+                            className={`flex items-center gap-3 px-4 py-3 rounded-2xl border transition-all ${
+                                m.active
+                                    ? 'bg-indigo-500/12 border-indigo-400/40'
+                                    : 'bg-white/5 border-white/10'
+                            }`}
+                        >
+                            <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                    <p className="text-sm font-bold text-[var(--color-text)] truncate">{m.name}</p>
+                                    {m.active && (
+                                        <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-indigo-500/30 text-indigo-300 border border-indigo-400/30 flex-shrink-0">
+                                            현재
+                                        </span>
+                                    )}
+                                </div>
+                                <p className="text-[11px] text-[var(--color-text-secondary)] opacity-50 mt-0.5">
+                                    {formatMtime(m.mtime)} · {m.size_kb != null ? `${m.size_kb.toLocaleString()} KB` : ''}
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => onApply(m.name)}
+                                disabled={m.active}
+                                className="flex-shrink-0 text-xs font-black px-3.5 py-2 rounded-xl transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-400/30 text-indigo-300"
+                            >
+                                {m.active ? '적용됨' : '적용'}
+                            </button>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </section>
+    )
+}
+
+function formatMtime(mtime: number): string {
+    if (typeof mtime !== 'number' || !isFinite(mtime)) return ''
+    // 초 단위 epoch면 ms로 보정
+    const ms = mtime < 1e12 ? mtime * 1000 : mtime
+    try {
+        return new Date(ms).toLocaleString('ko-KR', {
+            month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+        })
+    } catch {
+        return ''
+    }
+}
+
+// ── 고급 모드 토글 ────────────────────────────────────────────────────────────
+
+function AdvancedModeToggle() {
+    const [enabled, setEnabled] = useState<boolean>(() => localStorage.getItem(ADVANCED_FEATURES_KEY) === 'true')
+
+    const toggle = () => {
+        const next = !enabled
+        setEnabled(next)
+        localStorage.setItem(ADVANCED_FEATURES_KEY, next ? 'true' : 'false')
+    }
+
+    return (
+        <section className="pt-2 border-t border-white/10">
+            <div className="flex items-center justify-between gap-4 pt-4">
+                <div className="flex-1 min-w-0">
+                    <h3 className="text-sm font-black text-[var(--color-text)]">고급 모드</h3>
+                    <p className="text-xs text-[var(--color-text-secondary)] opacity-60 mt-0.5 leading-snug">
+                        Study 탭에 졸음·자세 상세 지표 표시
+                    </p>
+                </div>
+                <button
+                    role="switch"
+                    aria-checked={enabled}
+                    onClick={toggle}
+                    className="relative flex-shrink-0 w-12 h-7 rounded-full transition-colors duration-300"
+                    style={{ background: enabled ? '#6366f1' : 'rgba(255,255,255,0.15)' }}
+                >
+                    <motion.div
+                        className="absolute top-1 left-1 w-5 h-5 rounded-full bg-white shadow-md"
+                        animate={{ x: enabled ? 20 : 0 }}
+                        transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                    />
+                </button>
+            </div>
+        </section>
     )
 }

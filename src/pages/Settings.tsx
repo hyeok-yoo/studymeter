@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { motion } from 'framer-motion'
 import { Icon } from '@iconify/react'
 import type { Settings, SubjectItem } from '../lib/db'
 import { db } from '../lib/db'
@@ -853,18 +854,24 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                 <div className="mt-4 pt-8 border-t border-[var(--color-border)] flex flex-col gap-3">
                     <button
                         onClick={() => navigate('/developer')}
-                        className="w-full flex items-center justify-between px-5 py-3.5 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-[var(--color-primary)]/30 transition-all group"
+                        className="w-full flex items-center justify-between px-5 py-3.5 rounded-2xl bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-pink-500/10 hover:from-indigo-500/20 hover:via-purple-500/20 hover:to-pink-500/20 border border-indigo-400/25 hover:border-indigo-400/45 transition-all group"
                     >
                         <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-xs font-black flex-shrink-0">
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-xs font-black flex-shrink-0 ring-2 ring-indigo-400/20">
                                 Y
                             </div>
                             <div className="text-left">
-                                <p className="text-xs font-black text-[var(--color-text-secondary)] leading-tight">개발자</p>
-                                <p className="text-sm font-bold text-[var(--color-text)] leading-tight">Yoo Seung Hyeok</p>
+                                <p className="text-xs font-black text-[var(--color-text-secondary)] leading-tight">개발자 / Yoo Seung Hyeok</p>
+                                <p className="text-sm font-bold gradient-text leading-tight">개발자 이야기 &amp; 개발자 도구 →</p>
                             </div>
                         </div>
-                        <Icon icon="mdi:chevron-right" className="text-lg text-[var(--color-text-secondary)] opacity-40 group-hover:opacity-70 transition-all" />
+                        <motion.span
+                            animate={{ x: [0, 5, 0] }}
+                            transition={{ duration: 1.4, repeat: Infinity, ease: 'easeInOut' }}
+                            className="flex-shrink-0"
+                        >
+                            <Icon icon="mdi:chevron-right" className="text-xl text-indigo-400 opacity-70 group-hover:opacity-100 transition-all" />
+                        </motion.span>
                     </button>
 
                     <div className="text-center flex flex-col items-center gap-0.5">
