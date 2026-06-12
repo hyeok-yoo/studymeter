@@ -54,6 +54,11 @@ export function useFocusWeb() {
                 dispersion_y: f.gazeDispersionYPx, bpm: f.bpm, rmssd: f.rmssdMs,
                 sdnn: f.sdnnMs, lf_hf: f.lfHfRatio, valid_ratio: f.validRatio,
                 mean_ear: f.meanEar, min_ear: f.minEar,
+                // v3 — 인브라우저 추출기가 계산하는 신규 지표 (고급 모드 카드용)
+                perclos: f.perclos, blink_rate_hz: f.blinkRateHz,
+                mean_blink_dur_s: f.meanBlinkDurS, ear_norm: f.earNorm,
+                disp_norm: f.dispNorm, ear_slope_60s: f.earSlope60s,
+                fix_ratio_slope_60s: f.fixRatioSlope60s,
             };
             setFeatures(fx);
         }
