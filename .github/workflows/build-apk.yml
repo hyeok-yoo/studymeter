@@ -30,8 +30,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build web assets
-        run: npm run build
+      - name: Build web assets (Capacitor target)
+        run: npm run build:app
 
       - name: Sync Capacitor to Android
         run: npx cap sync android
