@@ -38,7 +38,11 @@ export function mergedRGB(s: RPPGSample): number[] | null {
     );
 }
 
-/** 14개 특징 벡터 (Python FEATURE_NAMES와 동일 순서). */
+/**
+ * 특징 벡터 — 기본 14개(Python FEATURE_NAMES v2와 동일 순서) +
+ * v3 신규 피처 중 순수 수학으로 계산 가능한 7개 (헤드포즈 3종은 범위 밖, NaN 고정).
+ * 신규 피처는 계산 불가 시 NaN.
+ */
 export interface FeatureVector {
     timestampMs: number;
     saccadeRateHz: number;
@@ -55,6 +59,16 @@ export interface FeatureVector {
     sdnnMs: number;
     lfHfRatio: number;
     validRatio: number;
+    // ---- v3 신규 (DMS 표준 졸음 지표 + 시간 추세) ----
+    perclos: number;            // EAR < 0.4×baseline 시간 비율 (PERCLOS P80 근사)
+    blinkRateHz: number;        // 블링크(지속 ≤0.5s 눈감김) 빈도
+    meanBlinkDurS: number;      // 모든 눈감김 이벤트 평균 지속시간
+    earNorm: number;            // mean_ear ÷ 개인 EAR 베이스라인 (세션 90퍼센타일 폴백)
+    dispNorm: number;           // max(분산) ÷ max(화면 크기)
+    earSlope60s: number;        // mean_ear 60초 추세 (값/분)
+    fixRatioSlope60s: number;   // fixation_ratio 60초 추세 (값/분)
+    /** HRV 박동 수 — 피처 아님, 수집 CSV의 hrv_n_beats 컬럼용. */
+    hrvNBeats: number;
 }
 
 /** ONNX 입력용 Float32Array (14개). FEATURE_NAMES 순서와 일치. */
@@ -91,12 +105,18 @@ export interface ETAResult {
     fitDegree: number;
 }
 
+/** 점수 산출 경로 — 로컬 학습 모델 > ONNX > 휴리스틱 순 우선순위. */
+export type ScoreSource = 'local' | 'onnx' | 'heuristic';
+
 /** 파이프라인 최종 출력. (FocusResult 포트) */
 export interface FocusResult {
     score: number;
     etaS: number | null;
     features: FeatureVector | null;
     isHeuristicMode: boolean;
+    scoreSource: ScoreSource;
+    /** scoreSource가 'local'일 때 적용 중인 로컬 모델 이름. */
+    localModelName: string | null;
     gazeScreenX: number | null;
     gazeScreenY: number | null;
     roiForehead: number[] | null;

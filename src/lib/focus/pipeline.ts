@@ -12,7 +12,10 @@ import { RPPGExtractor } from './rppgExtractor';
 import { FeatureExtractor } from './featureExtractor';
 import { Forecaster } from './forecaster';
 import { MLClassifier } from './mlClassifier';
-import type { FocusResult, FeatureVector, GazeSample } from './types';
+import { LocalModelRunner } from './localModel';
+import { loadActiveLocalModel } from './localData';
+import { featureVectorToRecord } from './featureNames';
+import type { FocusResult, FeatureVector, GazeSample, ScoreSource } from './types';
 
 const MEDIAPIPE_WASM_CDN = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm';
 
@@ -38,6 +41,9 @@ export class FocusPipeline {
     private featureExtractor = new FeatureExtractor();
     private forecaster = new Forecaster();
     private classifier: MLClassifier;
+    // 온디바이스 학습 모델 — 적용 시 ONNX보다 우선 (CDN 비의존이라 오프라인 동작)
+    private localModel: LocalModelRunner | null = null;
+    private localModelName: string | null = null;
     private lastFrameTs = 0;
 
     // rPPG 샘플링용 오프스크린 캔버스 (다운스케일)
@@ -56,6 +62,7 @@ export class FocusPipeline {
     constructor() {
         this.calibration = CalibrationModel.load(this.screenWidth, this.screenHeight);
         this.gazeTracker = new GazeTracker(this.calibration);
+        this.featureExtractor.screenSize = [this.screenWidth, this.screenHeight];
         const urls = modelUrls();
         this.classifier = new MLClassifier(urls.onnx, urls.impute);
 
@@ -67,6 +74,7 @@ export class FocusPipeline {
     }
 
     async init(): Promise<boolean> {
+        await this.reloadLocalModel(); // 적용된 온디바이스 모델 (없으면 null)
         await this.classifier.load(); // 실패해도 휴리스틱 폴백
         try {
             const fileset = await FilesetResolver.forVisionTasks(MEDIAPIPE_WASM_CDN);
@@ -128,14 +136,18 @@ export class FocusPipeline {
         const feat = this.featureExtractor.maybeEmit();
         if (!feat) return null;
 
+        // 점수 산출 우선순위: 로컬 학습 모델 > ONNX > 휴리스틱
         let score: number;
-        let isHeuristic: boolean;
-        if (this.classifier.isReady) {
+        let scoreSource: ScoreSource;
+        if (this.localModel) {
+            score = this.localModel.predictFocusScore(featureVectorToRecord(feat));
+            scoreSource = 'local';
+        } else if (this.classifier.isReady) {
             score = await this.classifier.predictFocusScore(feat);
-            isHeuristic = false;
+            scoreSource = 'onnx';
         } else {
             score = this.heuristicFocusScore(feat);
-            isHeuristic = true;
+            scoreSource = 'heuristic';
         }
 
         const eta = this.forecaster.update(nowMs, score);
@@ -144,7 +156,9 @@ export class FocusPipeline {
             score,
             etaS: eta.etaS,
             features: feat,
-            isHeuristicMode: isHeuristic,
+            isHeuristicMode: scoreSource === 'heuristic',
+            scoreSource,
+            localModelName: scoreSource === 'local' ? this.localModelName : null,
             gazeScreenX: gazeSample?.screenX ?? null,
             gazeScreenY: gazeSample?.screenY ?? null,
             roiForehead: rppgSample.foreheadRGB,
@@ -207,6 +221,19 @@ export class FocusPipeline {
     reloadCalibration(): void {
         this.calibration = CalibrationModel.load(this.screenWidth, this.screenHeight);
         this.gazeTracker = new GazeTracker(this.calibration);
+    }
+
+    /** 적용 중인 온디바이스 모델 재로드 (적용/해제 직후 호출). */
+    async reloadLocalModel(): Promise<void> {
+        try {
+            const stored = await loadActiveLocalModel();
+            this.localModel = stored ? new LocalModelRunner(stored.payload) : null;
+            this.localModelName = stored?.name ?? null;
+        } catch (e) {
+            console.error('local model load failed', e);
+            this.localModel = null;
+            this.localModelName = null;
+        }
     }
 
     close(): void {

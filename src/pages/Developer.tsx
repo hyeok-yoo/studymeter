@@ -1,14 +1,16 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Icon } from '@iconify/react'
 import { useFocusSync } from '../lib/focusSync'
 import type { ModelInfo } from '../lib/focusSync'
+import { useLocalFocusLab } from '../lib/useLocalFocusLab'
 
 const GITHUB_URL = 'https://github.com/hyeok-yoo'
 const SPONSORS_URL = 'https://github.com/sponsors/hyeok-yoo'
 
 const ADVANCED_FEATURES_KEY = 'sm_advanced_features'
+const DEVTOOLS_MODE_KEY = 'sm_devtools_mode' // 'local' | 'server'
 
 const SKILLS = [
     { icon: 'mdi:react', label: 'React / TypeScript', color: '#61dafb' },
@@ -207,6 +209,55 @@ export default function DeveloperPage() {
 // ── 개발자 도구 ───────────────────────────────────────────────────────────────
 
 function DeveloperTools() {
+    const [mode, setMode] = useState<'local' | 'server'>(() =>
+        localStorage.getItem(DEVTOOLS_MODE_KEY) === 'server' ? 'server' : 'local')
+
+    const switchMode = (next: 'local' | 'server') => {
+        setMode(next)
+        localStorage.setItem(DEVTOOLS_MODE_KEY, next)
+    }
+
+    return (
+        <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.38, duration: 0.5 }}
+            className="glass-card p-6 md:p-8 border-none dark:bg-white/5 bg-white/40 space-y-6"
+        >
+            <div className="flex items-center gap-2.5">
+                <Icon icon="mdi:tools" className="text-2xl text-indigo-400" />
+                <h2 className="text-xl font-black gradient-text">개발자 도구</h2>
+            </div>
+
+            {/* 모드 전환: 온디바이스(기본) ↔ PC 서버 */}
+            <div className="flex gap-2 p-1 rounded-2xl bg-white/5 border border-white/10">
+                {([['local', '온디바이스', 'mdi:cellphone'], ['server', 'PC 서버', 'mdi:server']] as const).map(([key, text, icon]) => (
+                    <button
+                        key={key}
+                        onClick={() => switchMode(key)}
+                        className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-black transition-all ${
+                            mode === key
+                                ? 'bg-indigo-500/25 border border-indigo-400/40 text-indigo-300'
+                                : 'text-[var(--color-text-secondary)] opacity-60 hover:opacity-100'
+                        }`}
+                    >
+                        <Icon icon={icon} className="text-lg" />
+                        {text}
+                    </button>
+                ))}
+            </div>
+
+            {mode === 'local' ? <LocalLabTools /> : <ServerTools />}
+
+            {/* 고급 모드 토글 (모드와 무관) */}
+            <AdvancedModeToggle />
+        </motion.div>
+    )
+}
+
+// ── PC 서버 모드 (기존 WS 기반 — 무변경 로직) ────────────────────────────────
+
+function ServerTools() {
     const serverUrl = useMemo(() => localStorage.getItem('focus_server_url') ?? '', [])
     const {
         connected,
@@ -229,17 +280,7 @@ function DeveloperTools() {
     }, [connected, requestModelList])
 
     return (
-        <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.38, duration: 0.5 }}
-            className="glass-card p-6 md:p-8 border-none dark:bg-white/5 bg-white/40 space-y-6"
-        >
-            <div className="flex items-center gap-2.5">
-                <Icon icon="mdi:tools" className="text-2xl text-indigo-400" />
-                <h2 className="text-xl font-black gradient-text">개발자 도구</h2>
-            </div>
-
+        <div className="space-y-6">
             {/* 에러 배너 */}
             {devError && (
                 <div className="flex items-start gap-2 px-4 py-3 rounded-2xl bg-red-500/15 border border-red-400/30">
@@ -273,10 +314,260 @@ function DeveloperTools() {
                     서버에 연결되지 않았습니다. Settings에서 서버 IP를 설정한 뒤 다시 시도하세요.
                 </p>
             )}
+        </div>
+    )
+}
 
-            {/* 고급 모드 토글 (연결 여부와 무관) */}
-            <AdvancedModeToggle />
-        </motion.div>
+// ── 온디바이스(로컬) 모드 — PC 없이 수집·학습·적용 ───────────────────────────
+
+function LocalLabTools() {
+    const lab = useLocalFocusLab()
+    const fileInputRef = useRef<HTMLInputElement | null>(null)
+    const [importMsg, setImportMsg] = useState<string | null>(null)
+
+    const measuring = lab.status === 'running'
+    const collecting = lab.collectLabel != null
+
+    return (
+        <div className="space-y-6">
+            {/* 에러 배너 */}
+            {lab.labError && (
+                <div className="flex items-start gap-2 px-4 py-3 rounded-2xl bg-red-500/15 border border-red-400/30">
+                    <Icon icon="mdi:alert-circle" className="text-lg text-red-400 flex-shrink-0 mt-0.5" />
+                    <p className="flex-1 text-sm font-bold text-red-400 leading-snug break-all">{lab.labError}</p>
+                    <button
+                        onClick={lab.clearLabError}
+                        className="text-red-400/60 hover:text-red-400 text-lg leading-none flex-shrink-0"
+                        aria-label="닫기"
+                    >
+                        ×
+                    </button>
+                </div>
+            )}
+
+            {/* 측정 상태 카드 */}
+            <div className="flex items-center justify-between px-4 py-3 rounded-2xl bg-white/5 border border-white/10">
+                <div className="flex items-center gap-2.5">
+                    <div
+                        className="w-2.5 h-2.5 rounded-full"
+                        style={{
+                            background: measuring ? '#22c55e' : lab.status === 'starting' ? '#eab308' : '#64748b',
+                            boxShadow: measuring ? '0 0 6px #22c55e' : 'none',
+                        }}
+                    />
+                    <span className="text-sm font-black text-[var(--color-text)]">
+                        {measuring
+                            ? `측정 중${lab.score != null ? ` — ${lab.score.toFixed(0)}점` : ''}`
+                            : lab.status === 'starting' ? '카메라 시작 중...' : '측정 꺼짐'}
+                    </span>
+                    {measuring && lab.scoreSource && (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/10 text-[var(--color-text-secondary)]">
+                            {lab.scoreSource}
+                        </span>
+                    )}
+                </div>
+                <button
+                    onClick={measuring ? lab.stopMeasure : lab.startMeasure}
+                    disabled={lab.status === 'starting'}
+                    className="text-xs font-black px-3.5 py-2 rounded-xl transition-all active:scale-95 disabled:opacity-40 bg-white/5 hover:bg-white/10 border border-white/10 text-[var(--color-text-secondary)]"
+                >
+                    {measuring ? '측정 끄기' : '측정 켜기'}
+                </button>
+            </div>
+
+            {/* 데이터 수집 */}
+            <section className="space-y-3">
+                <h3 className="text-sm font-black text-[var(--color-text)] uppercase tracking-wider opacity-70">
+                    데이터 수집 (기기 저장)
+                </h3>
+                <div className="flex flex-col sm:flex-row gap-2">
+                    <button
+                        onClick={() => lab.startCollect(0)}
+                        disabled={lab.collectLabel === 0}
+                        className="flex-1 py-3 px-4 rounded-2xl font-black text-sm transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-400/30 text-emerald-300"
+                    >
+                        집중(0) 수집
+                    </button>
+                    <button
+                        onClick={() => lab.startCollect(1)}
+                        disabled={lab.collectLabel === 1}
+                        className="flex-1 py-3 px-4 rounded-2xl font-black text-sm transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed bg-amber-500/15 hover:bg-amber-500/25 border border-amber-400/30 text-amber-300"
+                    >
+                        산만(1) 수집
+                    </button>
+                    <button
+                        onClick={lab.stopCollect}
+                        disabled={!collecting}
+                        className="flex-1 py-3 px-4 rounded-2xl font-black text-sm transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed bg-rose-500/15 hover:bg-rose-500/25 border border-rose-400/30 text-rose-300"
+                    >
+                        수집 정지
+                    </button>
+                </div>
+                <div className="px-4 py-3 rounded-2xl bg-white/5 border border-white/10">
+                    {collecting ? (
+                        <p className="text-sm font-bold text-[var(--color-text)]">
+                            <span className="text-emerald-400">● 수집 중</span>
+                            {' — 라벨: '}{lab.collectLabel === 0 ? '집중(0)' : '산만(1)'}
+                            {' — 총 '}{lab.rowCount.toLocaleString()}행
+                        </p>
+                    ) : (
+                        <p className="text-sm text-[var(--color-text-secondary)] opacity-60">
+                            대기 중 — 누적 {lab.rowCount.toLocaleString()}행
+                            {lab.rowCount > 0 && ` (집중 ${lab.focusedCount.toLocaleString()} / 산만 ${lab.distractedCount.toLocaleString()})`}
+                        </p>
+                    )}
+                </div>
+                {/* CSV 관리 */}
+                <div className="flex flex-wrap gap-2">
+                    <button
+                        onClick={lab.exportCsv}
+                        disabled={lab.rowCount === 0}
+                        className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-[var(--color-text-secondary)] transition-all active:scale-95 disabled:opacity-40"
+                    >
+                        <Icon icon="mdi:export" className="text-sm" />
+                        CSV 내보내기
+                    </button>
+                    <button
+                        onClick={() => fileInputRef.current?.click()}
+                        className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-[var(--color-text-secondary)] transition-all active:scale-95"
+                    >
+                        <Icon icon="mdi:import" className="text-sm" />
+                        CSV 가져오기
+                    </button>
+                    <button
+                        onClick={async () => {
+                            if (window.confirm(`수집 데이터 ${lab.rowCount.toLocaleString()}행을 모두 삭제할까요?`)) {
+                                await lab.clearSamples()
+                            }
+                        }}
+                        disabled={lab.rowCount === 0}
+                        className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 border border-red-400/20 text-red-400 transition-all active:scale-95 disabled:opacity-40"
+                    >
+                        <Icon icon="mdi:delete-outline" className="text-sm" />
+                        전체 삭제
+                    </button>
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept=".csv,text/csv"
+                        className="hidden"
+                        onChange={async (e) => {
+                            const f = e.target.files?.[0]
+                            if (f) {
+                                const n = await lab.importCsv(f)
+                                if (n > 0) setImportMsg(`${n.toLocaleString()}행 가져옴`)
+                            }
+                            e.target.value = ''
+                        }}
+                    />
+                </div>
+                {importMsg && (
+                    <p className="text-xs font-bold text-emerald-400">✓ {importMsg}</p>
+                )}
+            </section>
+
+            {/* 온디바이스 학습 */}
+            <section className="space-y-3">
+                <h3 className="text-sm font-black text-[var(--color-text)] uppercase tracking-wider opacity-70">
+                    온디바이스 학습
+                </h3>
+                <button
+                    onClick={lab.train}
+                    disabled={lab.training || lab.rowCount < 40}
+                    className="w-full py-3 px-4 rounded-2xl font-black text-sm transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-400/30 text-indigo-300 flex items-center justify-center gap-2"
+                >
+                    {lab.training ? (
+                        <>
+                            <Icon icon="mdi:loading" className="text-lg animate-spin" />
+                            학습 중...{lab.trainProgress ? ` (${lab.trainProgress.epoch}/${lab.trainProgress.totalEpochs})` : ''}
+                        </>
+                    ) : (
+                        `이 기기에서 학습 시작 (${lab.rowCount.toLocaleString()}행 · ${lab.featureCount}피처)`
+                    )}
+                </button>
+                {lab.rowCount < 40 && !lab.training && (
+                    <p className="text-xs text-[var(--color-text-secondary)] opacity-60">
+                        학습에는 최소 40행(집중·산만 모두 포함)이 필요합니다.
+                    </p>
+                )}
+                {lab.trainResult && !lab.training && (
+                    lab.trainResult.ok ? (
+                        <div className="px-4 py-3 rounded-2xl bg-emerald-500/12 border border-emerald-400/25">
+                            <p className="text-sm font-bold text-emerald-400 break-all">
+                                ✓ {lab.trainResult.name}
+                                {typeof lab.trainResult.valAccuracy === 'number' &&
+                                    ` — val ${(lab.trainResult.valAccuracy * 100).toFixed(1)}%`}
+                                {typeof lab.trainResult.valF1 === 'number' &&
+                                    ` (F1 ${lab.trainResult.valF1.toFixed(3)}, n=${lab.trainResult.nSamples?.toLocaleString()})`}
+                                {' — 자동 적용됨'}
+                            </p>
+                        </div>
+                    ) : (
+                        <div className="px-4 py-3 rounded-2xl bg-red-500/12 border border-red-400/25">
+                            <p className="text-sm font-bold text-red-400 break-all">
+                                학습 실패 — {lab.trainResult.error ?? '알 수 없는 오류'}
+                            </p>
+                        </div>
+                    )
+                )}
+            </section>
+
+            {/* 로컬 모델 관리 */}
+            <section className="space-y-3">
+                <h3 className="text-sm font-black text-[var(--color-text)] uppercase tracking-wider opacity-70">
+                    로컬 모델 관리
+                </h3>
+                {lab.models.length === 0 ? (
+                    <p className="text-sm text-[var(--color-text-secondary)] opacity-50">학습된 로컬 모델이 없습니다.</p>
+                ) : (
+                    <div className="space-y-2">
+                        {lab.models.map((m) => {
+                            const active = m.id === lab.activeModelId
+                            return (
+                                <div
+                                    key={m.id}
+                                    className={`flex items-center gap-3 px-4 py-3 rounded-2xl border transition-all ${
+                                        active ? 'bg-indigo-500/12 border-indigo-400/40' : 'bg-white/5 border-white/10'
+                                    }`}
+                                >
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2">
+                                            <p className="text-sm font-bold text-[var(--color-text)] truncate">{m.name}</p>
+                                            {active && (
+                                                <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-indigo-500/30 text-indigo-300 border border-indigo-400/30 flex-shrink-0">
+                                                    현재
+                                                </span>
+                                            )}
+                                        </div>
+                                        <p className="text-[11px] text-[var(--color-text-secondary)] opacity-50 mt-0.5">
+                                            {formatMtime(m.createdAt)} · val {(m.valAccuracy * 100).toFixed(1)}% · n={m.nSamples.toLocaleString()}
+                                        </p>
+                                    </div>
+                                    <button
+                                        onClick={() => lab.applyModel(active ? null : m.id!)}
+                                        className="flex-shrink-0 text-xs font-black px-3.5 py-2 rounded-xl transition-all active:scale-95 bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-400/30 text-indigo-300"
+                                    >
+                                        {active ? '해제' : '적용'}
+                                    </button>
+                                    <button
+                                        onClick={async () => {
+                                            if (window.confirm(`모델 "${m.name}"을 삭제할까요?`)) await lab.deleteModel(m.id!)
+                                        }}
+                                        className="flex-shrink-0 text-xs font-black px-2.5 py-2 rounded-xl transition-all active:scale-95 bg-red-500/10 hover:bg-red-500/20 border border-red-400/20 text-red-400"
+                                        aria-label="모델 삭제"
+                                    >
+                                        <Icon icon="mdi:delete-outline" className="text-sm" />
+                                    </button>
+                                </div>
+                            )
+                        })}
+                    </div>
+                )}
+                <p className="text-xs text-[var(--color-text-secondary)] opacity-50 leading-snug">
+                    적용된 로컬 모델은 Study 탭 측정에서도 최우선으로 사용됩니다 (로컬 &gt; ONNX &gt; 휴리스틱).
+                </p>
+            </section>
+        </div>
     )
 }
 
