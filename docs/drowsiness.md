@@ -70,16 +70,20 @@ Web Audio 출력은 미디어 스트림(`STREAM_MUSIC`)으로 재생되므로:
 배터리에서 **유의미한(대략 20~35% 추정) 절감**이 가능하다. "딱히 차이가 없으면 기각"의
 조건에 해당하지 않는다 — 차이는 존재한다.
 
-### 권장
-- 졸음 단독 기능을 원한다면 **새 아키텍처가 아니라 기존 파이프라인에 경량 플래그**
-  (`lightMode`/`drowsinessOnly`)를 추가해 rPPG·HRV·ONNX 단계를 건너뛰는 방식으로 구현한다.
-  - 웹: `FocusPipeline.processFrame` 에서 rPPG/classifier 분기 스킵.
-  - 네이티브: `FocusPipeline.kt` 동일.
-- 집중도 측정 중에는 졸음 감지가 **항상 함께** 동작한다(현재 구현). 별도 비용이 거의 없다
-  (EAR 추적은 이미 흐르는 피처 위에서 동작).
+### 결정 → 구현 (라이트 모드)
+권장대로 **새 아키텍처가 아니라 기존 파이프라인의 경량 플래그(`lightMode`)** 로 구현했다.
 
-이번 변경에서는 1번(졸음 감지)을 집중도와 함께 동작하도록 먼저 완성했고, 단독 경량 모드는
-위 권장에 따라 후속으로 분리 구현할 수 있도록 설계를 정리해 두었다.
+- **웹**: `FocusPipeline.init(lightMode)` 에서 ONNX/로컬 모델 로드를 생략하고,
+  `processFrame` 에서 **rPPG(ROI 샘플링 + HRV) 와 ML 분류기 추론을 스킵**한다.
+  FaceLandmarker→GazeTracker(EAR)와 FeatureExtractor(mean_ear)는 유지하므로 졸음 감지는 그대로 동작.
+- **네이티브**: `FocusPipeline.kt` / `FocusPlugin.startPipeline({ lightMode })` 동일하게 분기.
+- **UI**: 집중도 패널에 모드 선택 토글 **[집중도 + 졸음] | [졸음만(라이트)]** 추가.
+  - 라이트 모드로 시작하면 집중 점수/생체신호 탭 대신 `LightModeStatus`(눈 상태 감시) 카드를 보여주고,
+    NaN 점수는 집중도 이력/개인화 평점에서 제외한다.
+- 집중도 측정 중에는 졸음 감지가 **항상 함께** 동작한다(추가 비용 ≈ 0 — 이미 흐르는 EAR 피처 사용).
+
+관련 파일: `src/lib/focus/pipeline.ts`, `src/lib/useFocusWeb.ts`, `src/lib/useFocusNative.ts`,
+`src/pages/Study.tsx`, `android/.../FocusPipeline.kt`, `android/.../FocusPlugin.kt`.
 
 ---
 

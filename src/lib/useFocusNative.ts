@@ -29,7 +29,7 @@ interface PipelineStatePayload {
 }
 
 interface FocusPluginInterface {
-    startPipeline(): Promise<void>;
+    startPipeline(options?: { lightMode?: boolean }): Promise<void>;
     stopPipeline(): Promise<void>;
     getPipelineState(): Promise<PipelineStatePayload>;
     startCalibration(options: { scenario: string }): Promise<{ success: boolean }>;
@@ -111,9 +111,9 @@ export function useFocusNative() {
         };
     }, [isNative]);
 
-    const start = useCallback(async () => {
+    const start = useCallback(async (opts?: { lightMode?: boolean }) => {
         if (!isNative) return;
-        try { setStatus('starting'); await FocusPlugin.startPipeline(); }
+        try { setStatus('starting'); await FocusPlugin.startPipeline({ lightMode: opts?.lightMode ?? false }); }
         catch (e) { console.error('FocusPlugin.startPipeline error', e); setStatus('error'); }
     }, [isNative]);
 

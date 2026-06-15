@@ -87,8 +87,9 @@ export function useFocusWeb() {
         setCameraJpeg(null);
     }, []);
 
-    const start = useCallback(async () => {
+    const start = useCallback(async (opts?: { lightMode?: boolean }) => {
         if (running || status === 'starting') return;
+        const lightMode = opts?.lightMode ?? false;
         setStatus('starting');
         try {
             // 1) 카메라
@@ -104,7 +105,7 @@ export function useFocusWeb() {
             // 2) 파이프라인 (동적 import → measure 시작 시에만 로드)
             const { FocusPipeline } = await import('./focus/pipeline');
             const pipeline = new FocusPipeline();
-            await pipeline.init();
+            await pipeline.init(lightMode);
             pipelineRef.current = pipeline;
 
             // 3) 처리 루프

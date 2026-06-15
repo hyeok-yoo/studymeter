@@ -1207,7 +1207,7 @@ interface FocusEngine {
     gazeY: number | null
     roiColors: { forehead?: string; rightCheek?: string; leftCheek?: string } | null
     trainingState: { session_count: number; is_calibrated: boolean } | null
-    start: () => void | Promise<void>
+    start: (opts?: { lightMode?: boolean }) => void | Promise<void>
     stop: () => void | Promise<void>
     startCalibration: (scenario?: 'book' | 'monitor') => Promise<boolean | void>
     setDebugMode: (enabled: boolean) => void | Promise<void>
@@ -1263,9 +1263,12 @@ function LocalFocusPanel({ engine, available, supportsCalibration, label, switch
     const sessionMeanRef = useRef<number[]>([])
     const [showRating, setShowRating] = useState(false)
     const [ratingHover, setRatingHover] = useState(0)
+    // 측정 모드 선택: false=집중도+졸음(풀), true=졸음만(라이트). 측정 중에는 변경 불가.
+    const [lightMode, setLightMode] = useState(false)
 
     useEffect(() => {
-        if (score === null) return
+        // 라이트 모드(점수 없음) 또는 NaN 점수는 집중도 이력/평점 산정에서 제외
+        if (score === null || !Number.isFinite(score)) return
         sessionMeanRef.current.push(score)
         setScoreHistory(prev => {
             const t = (Date.now() - tStartRef.current) / 1000
@@ -1317,11 +1320,38 @@ function LocalFocusPanel({ engine, available, supportsCalibration, label, switch
                 switchLabel={switchLabel}
             />
 
+            {/* 측정 모드 선택 (측정 시작 전에만) */}
+            {available && !running && (
+                <div style={{ display: 'flex', gap: '6px', padding: '4px', background: 'rgba(255,255,255,0.04)', borderRadius: '12px' }}>
+                    {([
+                        { v: false, label: '집중도 + 졸음', desc: '전체 측정' },
+                        { v: true, label: '졸음만 (라이트)', desc: '저전력' },
+                    ] as const).map(opt => (
+                        <button
+                            key={String(opt.v)}
+                            onClick={() => setLightMode(opt.v)}
+                            disabled={status === 'starting'}
+                            style={{
+                                flex: 1, padding: '8px 0', borderRadius: '9px', fontSize: '11px', fontWeight: 800,
+                                display: 'flex', flexDirection: 'column', gap: '2px', alignItems: 'center',
+                                background: lightMode === opt.v ? 'rgba(129,140,248,0.22)' : 'transparent',
+                                color: lightMode === opt.v ? '#a5b4fc' : 'rgba(255,255,255,0.4)',
+                                border: lightMode === opt.v ? '1px solid rgba(129,140,248,0.35)' : '1px solid transparent',
+                                cursor: status === 'starting' ? 'not-allowed' : 'pointer', transition: 'all 0.2s ease',
+                            }}
+                        >
+                            <span>{opt.label}</span>
+                            <span style={{ fontSize: '8px', opacity: 0.6, fontWeight: 700 }}>{opt.desc}</span>
+                        </button>
+                    ))}
+                </div>
+            )}
+
             {/* Start/Stop + Calibration controls */}
             {available && (
                 <div style={{ display: 'flex', gap: '8px' }}>
                     <button
-                        onClick={running ? stop : start}
+                        onClick={running ? stop : () => start({ lightMode })}
                         disabled={status === 'starting' || status === 'unavailable'}
                         style={{
                             flex: 1, padding: '10px 0', borderRadius: '10px', fontSize: '12px', fontWeight: 800,
@@ -1333,7 +1363,7 @@ function LocalFocusPanel({ engine, available, supportsCalibration, label, switch
                             transition: 'all 0.2s ease',
                         }}
                     >
-                        {status === 'starting' ? '시작 중...' : running ? '측정 중지' : '측정 시작'}
+                        {status === 'starting' ? '시작 중...' : running ? '측정 중지' : lightMode ? '졸음 감지 시작' : '측정 시작'}
                     </button>
                     {supportsCalibration && (
                         <button
@@ -1432,16 +1462,23 @@ function LocalFocusPanel({ engine, available, supportsCalibration, label, switch
                 </div>
             )}
 
-            <FocusTabBar activeTab={activeTab} setActiveTab={setActiveTab} />
-            <AnimatePresence mode="wait">
-                <motion.div key={activeTab} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.18 }}>
-                    {activeTab === '집중도' && <FocusTab score={score} etaS={etaS} scoreHistory={scoreHistory} />}
-                    {activeTab === '시선' && <GazeTab features={features} gazeX={gazeX} gazeY={gazeY} />}
-                    {activeTab === '생체신호' && <BioTab features={features} roiColors={roiColors} />}
-                </motion.div>
-            </AnimatePresence>
+            {/* 라이트 모드면 졸음 전용 상태 카드, 아니면 집중도 탭들 */}
+            {lightMode ? (
+                <LightModeStatus features={features} running={running} />
+            ) : (
+                <>
+                    <FocusTabBar activeTab={activeTab} setActiveTab={setActiveTab} />
+                    <AnimatePresence mode="wait">
+                        <motion.div key={activeTab} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.18 }}>
+                            {activeTab === '집중도' && <FocusTab score={score} etaS={etaS} scoreHistory={scoreHistory} />}
+                            {activeTab === '시선' && <GazeTab features={features} gazeX={gazeX} gazeY={gazeY} />}
+                            {activeTab === '생체신호' && <BioTab features={features} roiColors={roiColors} />}
+                        </motion.div>
+                    </AnimatePresence>
+                </>
+            )}
 
-            {/* 졸음 감지 경고 — 집중도 측정 중 항상 함께 작동 */}
+            {/* 졸음 감지 경고 — 집중도 측정 중에도, 라이트 모드 단독으로도 작동 */}
             <DrowsinessAlert features={features} running={running} />
         </div>
     )
@@ -1518,6 +1555,25 @@ function DrowsinessAlert({ features, running }: { features: FocusFeatures | null
             </motion.div>
         </div>,
         document.body,
+    )
+}
+
+/** 라이트 모드(졸음 전용) 상태 카드. 집중 점수·심박 측정은 끄고 눈 상태만 감시함을 안내. */
+function LightModeStatus({ features, running }: { features: FocusFeatures | null; running: boolean }) {
+    const eyesDetected = features != null && Number.isFinite(features.mean_ear)
+    return (
+        <div style={{ padding: '18px', borderRadius: '14px', background: 'rgba(129,140,248,0.08)', border: '1px solid rgba(129,140,248,0.2)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', textAlign: 'center' }}>
+            <Icon icon="mdi:eye-check-outline" style={{ fontSize: '34px', color: running ? '#a5b4fc' : 'rgba(255,255,255,0.3)' }} />
+            <p style={{ fontSize: '14px', fontWeight: 800, color: running ? '#c7d2fe' : 'rgba(255,255,255,0.5)' }}>
+                {running ? (eyesDetected ? '눈 상태 감시 중' : '얼굴을 찾는 중…') : '졸음 감지 라이트 모드'}
+            </p>
+            <p style={{ fontSize: '11px', fontWeight: 600, color: 'rgba(255,255,255,0.4)', lineHeight: 1.5 }}>
+                {running
+                    ? '눈이 15초 넘게 감기면 알려드려요.'
+                    : '“졸음 감지 시작”을 누르면 눈 상태만 가볍게 감시합니다.'}
+                <br />집중 점수·심박(rPPG) 측정은 꺼져 <b>배터리를 절약</b>합니다.
+            </p>
+        </div>
     )
 }
 

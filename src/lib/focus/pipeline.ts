@@ -15,7 +15,7 @@ import { MLClassifier } from './mlClassifier';
 import { LocalModelRunner } from './localModel';
 import { loadActiveLocalModel } from './localData';
 import { featureVectorToRecord } from './featureNames';
-import type { FocusResult, FeatureVector, GazeSample, ScoreSource } from './types';
+import type { FocusResult, FeatureVector, GazeSample, ScoreSource, RPPGSample } from './types';
 
 const MEDIAPIPE_WASM_CDN = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm';
 
@@ -46,6 +46,12 @@ export class FocusPipeline {
     private localModelName: string | null = null;
     private lastFrameTs = 0;
 
+    /**
+     * 라이트 모드 — 졸음 감지만 필요한 경우. FaceLandmarker→EAR(졸음 지표)는 유지하고
+     * rPPG(ROI 샘플링 + HRV FFT)와 ML 분류기(ONNX/로컬) 추론을 건너뛰어 CPU/배터리를 절감한다.
+     */
+    lightMode = false;
+
     // rPPG 샘플링용 오프스크린 캔버스 (다운스케일)
     private procCanvas: HTMLCanvasElement;
     private procCtx: CanvasRenderingContext2D;
@@ -73,9 +79,13 @@ export class FocusPipeline {
         this.debugCtx = this.debugCanvas.getContext('2d')!;
     }
 
-    async init(): Promise<boolean> {
-        await this.reloadLocalModel(); // 적용된 온디바이스 모델 (없으면 null)
-        await this.classifier.load(); // 실패해도 휴리스틱 폴백
+    async init(lightMode = false): Promise<boolean> {
+        this.lightMode = lightMode;
+        // 라이트 모드에서는 점수 산출용 모델(로컬/ONNX)을 아예 로드하지 않는다 (초기화 비용 절감).
+        if (!lightMode) {
+            await this.reloadLocalModel(); // 적용된 온디바이스 모델 (없으면 null)
+            await this.classifier.load(); // 실패해도 휴리스틱 폴백
+        }
         try {
             const fileset = await FilesetResolver.forVisionTasks(MEDIAPIPE_WASM_CDN);
             this.landmarker = await FaceLandmarker.createFromOptions(fileset, {
@@ -120,11 +130,14 @@ export class FocusPipeline {
         const gazeSample = this.gazeTracker.processWithLandmarks(lmFlat, nowMs);
         this.featureExtractor.pushGaze(gazeSample, nowMs);
 
-        // rPPG: 비디오 → 다운스케일 캔버스 → ImageData
-        this.procCtx.drawImage(video, 0, 0, this.procCanvas.width, this.procCanvas.height);
-        const imgData = this.procCtx.getImageData(0, 0, this.procCanvas.width, this.procCanvas.height);
-        const rppgSample = this.rppg.processWithImageData(imgData, lmFlat, nowMs);
-        this.featureExtractor.pushRppg(rppgSample);
+        // rPPG: 비디오 → 다운스케일 캔버스 → ImageData. 라이트 모드에서는 건너뛴다(HRV 불필요).
+        let rppgSample: RPPGSample | null = null;
+        if (!this.lightMode) {
+            this.procCtx.drawImage(video, 0, 0, this.procCanvas.width, this.procCanvas.height);
+            const imgData = this.procCtx.getImageData(0, 0, this.procCanvas.width, this.procCanvas.height);
+            rppgSample = this.rppg.processWithImageData(imgData, lmFlat, nowMs);
+            this.featureExtractor.pushRppg(rppgSample);
+        }
 
         if (this.debugEnabled) {
             this.debugFrameCounter++;
@@ -135,6 +148,24 @@ export class FocusPipeline {
 
         const feat = this.featureExtractor.maybeEmit();
         if (!feat) return null;
+
+        // 라이트 모드: 점수 산출(ML/휴리스틱)·예측을 건너뛴다. 졸음 지표(mean_ear)는 feat 에 포함됨.
+        if (this.lightMode) {
+            return {
+                score: NaN,
+                etaS: null,
+                features: feat,
+                isHeuristicMode: false,
+                scoreSource: 'heuristic',
+                localModelName: null,
+                gazeScreenX: gazeSample?.screenX ?? null,
+                gazeScreenY: gazeSample?.screenY ?? null,
+                roiForehead: null,
+                roiRightCheek: null,
+                roiLeftCheek: null,
+                landmarksFlat: lmFlat,
+            };
+        }
 
         // 점수 산출 우선순위: 로컬 학습 모델 > ONNX > 휴리스틱
         let score: number;
@@ -161,9 +192,9 @@ export class FocusPipeline {
             localModelName: scoreSource === 'local' ? this.localModelName : null,
             gazeScreenX: gazeSample?.screenX ?? null,
             gazeScreenY: gazeSample?.screenY ?? null,
-            roiForehead: rppgSample.foreheadRGB,
-            roiRightCheek: rppgSample.rightCheekRGB,
-            roiLeftCheek: rppgSample.leftCheekRGB,
+            roiForehead: rppgSample?.foreheadRGB ?? null,
+            roiRightCheek: rppgSample?.rightCheekRGB ?? null,
+            roiLeftCheek: rppgSample?.leftCheekRGB ?? null,
             landmarksFlat: lmFlat,
         };
     }

@@ -64,9 +64,16 @@ class FocusPipeline(private val context: Context) {
     var screenWidth: Int = 1080
     var screenHeight: Int = 1920
 
-    fun init(): Boolean {
-        // 1. ONNX 모델
-        if (!classifier.load()) {
+    /**
+     * 라이트 모드 — 졸음 감지만 필요한 경우. FaceLandmarker→EAR 은 유지하고
+     * rPPG(ROI/HRV)와 ML 분류기 추론을 건너뛰어 CPU/배터리를 절감한다.
+     */
+    @Volatile var lightMode: Boolean = false
+
+    fun init(lightMode: Boolean = false): Boolean {
+        this.lightMode = lightMode
+        // 1. ONNX 모델 — 라이트 모드에서는 로드하지 않는다 (점수 산출 불필요).
+        if (!lightMode && !classifier.load()) {
             Log.w(TAG, "ONNX 모델 없음 — 휴리스틱 폴백 사용")
         }
         // 2. 캘리브레이션 로드
@@ -134,10 +141,13 @@ class FocusPipeline(private val context: Context) {
             lastGazeScreenY = gazeSample.screenY
         }
 
-        // RPPGExtractor
-        val rppgSample: RPPGSample = rppgExtractor.processWithLandmarks(bitmap, lmFlat)
-        featureExtractor.pushRppg(rppgSample)
-        lastRppgSample = rppgSample
+        // RPPGExtractor — 라이트 모드에서는 건너뛴다 (HRV 불필요).
+        var rppgSample: RPPGSample? = null
+        if (!lightMode) {
+            rppgSample = rppgExtractor.processWithLandmarks(bitmap, lmFlat)
+            featureExtractor.pushRppg(rppgSample)
+            lastRppgSample = rppgSample
+        }
         lastLandmarksFlat = lmFlat
 
         // Debug frame at ~2fps — only when preview is open
@@ -150,6 +160,22 @@ class FocusPipeline(private val context: Context) {
 
         // Feature emit
         val feat = featureExtractor.maybeEmit() ?: return null
+
+        // 라이트 모드: 점수 산출(ML/휴리스틱)·예측 생략. 졸음 지표(mean_ear)는 feat 에 포함.
+        if (lightMode) {
+            return FocusResult(
+                score = Float.NaN,
+                etaS = null,
+                features = feat,
+                isHeuristicMode = false,
+                gazeScreenX = lastGazeScreenX,
+                gazeScreenY = lastGazeScreenY,
+                roiForehead = null,
+                roiRightCheek = null,
+                roiLeftCheek = null,
+                landmarksFlat = lmFlat
+            )
+        }
 
         // 집중도 스코어
         val isHeuristic: Boolean
@@ -172,9 +198,9 @@ class FocusPipeline(private val context: Context) {
             isHeuristicMode = isHeuristic,
             gazeScreenX = lastGazeScreenX,
             gazeScreenY = lastGazeScreenY,
-            roiForehead = rppgSample.foreheadRGB,
-            roiRightCheek = rppgSample.rightCheekRGB,
-            roiLeftCheek = rppgSample.leftCheekRGB,
+            roiForehead = rppgSample?.foreheadRGB,
+            roiRightCheek = rppgSample?.rightCheekRGB,
+            roiLeftCheek = rppgSample?.leftCheekRGB,
             landmarksFlat = lmFlat
         )
     }

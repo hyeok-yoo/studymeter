@@ -51,14 +51,16 @@ class FocusPlugin : Plugin() {
     fun startPipeline(call: PluginCall) {
         if (isRunning) { call.resolve(); return }
         isRunning = true
+        // 라이트 모드(졸음만): rPPG/ML 추론을 건너뛰어 자원 절감.
+        val lightMode = call.getBoolean("lightMode", false) ?: false
         // 측정 시작 시점에 한 번만 무거운 모델을 초기화한다. (executor 단일 스레드에서
         // analyzer 콜백보다 먼저 큐에 들어가므로, 첫 프레임 처리 전에 init이 완료된다.)
         executor.submit {
             if (!pipelineReady) {
                 OpenCVLoader.initDebug()
-                val ok = pipeline.init()
+                val ok = pipeline.init(lightMode)
                 pipelineReady = ok
-                Log.i(TAG, "Pipeline lazy init: $ok")
+                Log.i(TAG, "Pipeline lazy init: $ok (lightMode=$lightMode)")
             }
         }
         startCamera()
