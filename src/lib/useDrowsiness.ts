@@ -19,9 +19,21 @@ import type { FocusFeatures } from './focusSync';
 
 const CLOSE_RATIO = 0.65;    // mean_ear < 0.65×baseline → 눈 감김/게슴츠레
 const REOPEN_RATIO = 0.8;    // mean_ear ≥ 0.80×baseline → 눈 뜸 (히스테리시스)
-const SUSTAINED_MS = 12_000; // 누적 임계 (윈도우 지연 보정 시 실제 ≈15초)
 const BASELINE_MIN_SAMPLES = 8;
 const MAX_BUFFER = 180;      // 약 3분치 (1Hz)
+/**
+ * mean_ear 가 10초 트레일링 평균이라 눈을 감은 뒤 임계 교차까지 ~3–4초 지연이 있다.
+ * 사용자가 설정한 "지속 시간"이 실제 연속 눈 감김에 대응하도록 이만큼 보정(차감)한다.
+ */
+const WINDOW_LAG_MS = 3_500;
+const MIN_SUSTAINED_MS = 1_500;
+const DEFAULT_THRESHOLD_SEC = 15;
+
+/** 사용자 설정(초)을 내부 누적 임계(ms)로 변환 — 윈도우 지연 보정 포함. */
+function sustainedMsFromSec(sec: number): number {
+    const s = Number.isFinite(sec) && sec > 0 ? sec : DEFAULT_THRESHOLD_SEC;
+    return Math.max(MIN_SUSTAINED_MS, s * 1000 - WINDOW_LAG_MS);
+}
 
 function percentile(sorted: number[], p: number): number {
     if (sorted.length === 0) return NaN;
@@ -41,7 +53,7 @@ function emptyTracker(): Tracker {
 }
 
 /** 트래커를 갱신하고 현재 졸음 여부를 반환. (순수 로직) */
-function step(t: Tracker, ear: number, now: number): boolean {
+function step(t: Tracker, ear: number, now: number, sustainedMs: number): boolean {
     // 얼굴/눈 미검출(NaN) → 졸음 확정 불가. 진행 중이던 감김도 리셋(자리 비움 등).
     if (!Number.isFinite(ear)) {
         t.closureStart = null;
@@ -50,21 +62,21 @@ function step(t: Tracker, ear: number, now: number): boolean {
     t.buf.push(ear);
     if (t.buf.length > MAX_BUFFER) t.buf.shift();
     if (t.buf.length < BASELINE_MIN_SAMPLES) {
-        return t.closureStart !== null && now - t.closureStart >= SUSTAINED_MS;
+        return t.closureStart !== null && now - t.closureStart >= sustainedMs;
     }
     const baseline = percentile([...t.buf].sort((a, b) => a - b), 0.9);
     if (!Number.isFinite(baseline) || baseline <= 0) return false;
 
     if (ear < CLOSE_RATIO * baseline) {
         if (t.closureStart === null) t.closureStart = now;
-        return now - t.closureStart >= SUSTAINED_MS;
+        return now - t.closureStart >= sustainedMs;
     }
     if (ear >= REOPEN_RATIO * baseline) {
         t.closureStart = null;
         return false;
     }
     // 히스테리시스 밴드 — 현재 상태 유지
-    return t.closureStart !== null && now - t.closureStart >= SUSTAINED_MS;
+    return t.closureStart !== null && now - t.closureStart >= sustainedMs;
 }
 
 export interface DrowsinessState {
@@ -76,9 +88,11 @@ export function useDrowsiness(
     features: FocusFeatures | null,
     running: boolean,
     enabled = true,
+    thresholdSec = DEFAULT_THRESHOLD_SEC,
 ): DrowsinessState {
     const [drowsy, setDrowsy] = useState(false);
     const trackerRef = useRef<Tracker>(emptyTracker());
+    const sustainedMs = sustainedMsFromSec(thresholdSec);
 
     // 측정이 멈추면(또는 비활성) 추적 리셋
     useEffect(() => {
@@ -95,12 +109,12 @@ export function useDrowsiness(
         const t = trackerRef.current;
         if (features === t.lastFeatures) return;
         t.lastFeatures = features;
-        const next = step(t, features.mean_ear, Date.now());
+        const next = step(t, features.mean_ear, Date.now(), sustainedMs);
         if (next !== t.drowsy) {
             t.drowsy = next;
             setDrowsy(next);
         }
-    }, [features, running, enabled]);
+    }, [features, running, enabled, sustainedMs]);
 
     return { drowsy };
 }

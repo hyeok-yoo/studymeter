@@ -51,6 +51,9 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
     const [dailyGoalHours, setDailyGoalHours] = useState(
         settings.dailyGoalMs ? String(settings.dailyGoalMs / 3600000) : ''
     )
+    const [drowsinessSec, setDrowsinessSec] = useState(
+        String(settings.drowsinessThresholdSec ?? 15)
+    )
     const [saved, setSaved] = useState(false)
     const [geminiModels, setGeminiModels] = useState<GeminiModel[]>([])
     const [loadingModels, setLoadingModels] = useState(false)
@@ -225,6 +228,7 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
 
     const handleSave = async () => {
         const goalHours = parseFloat(dailyGoalHours)
+        const drowsySec = parseInt(drowsinessSec, 10)
         const newSettings: Settings = {
             ...settings,
             userName,
@@ -234,7 +238,8 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
             geminiModel: geminiModel || undefined,
             theme,
             profilePicture: profilePicture || undefined,
-            dailyGoalMs: (!isNaN(goalHours) && goalHours > 0) ? Math.round(goalHours * 3600000) : undefined
+            dailyGoalMs: (!isNaN(goalHours) && goalHours > 0) ? Math.round(goalHours * 3600000) : undefined,
+            drowsinessThresholdSec: (!isNaN(drowsySec) && drowsySec > 0) ? Math.min(120, Math.max(3, drowsySec)) : 15
         }
 
         await db.settings.update(settings.id!, newSettings as any)
@@ -387,6 +392,32 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                                 = {parseFloat(dailyGoalHours) * 60}분 목표
                             </span>
                         )}
+                    </div>
+                </div>
+
+                {/* Drowsiness threshold */}
+                <div className="glass-card p-6">
+                    <div className="flex items-center gap-2 mb-1">
+                        <label className="block text-sm font-medium">졸음 감지 기준</label>
+                        <HelpButton title="졸음 감지 기준" items={[
+                            { description: '집중도 측정 중 눈이 감기거나 게슴츠레한 상태가 설정한 시간 이상 지속되면 졸음으로 판단해 알립니다.' },
+                            { title: '알림 방식', description: '디바이스가 소리 모드면 소리, 진동 모드면 진동, 무음이면 화면 팝업으로 알립니다. 눈을 다시 뜨면 자동으로 사라집니다.' },
+                            { title: '권장', description: '기본 15초. 너무 짧으면 잠깐 눈 감는 것에도 울릴 수 있어요.' },
+                        ]} />
+                    </div>
+                    <p className="text-xs text-[var(--color-text-secondary)] mb-3">눈 감김이 몇 초 이상 지속되면 졸음으로 판단할지 설정합니다. (3~120초)</p>
+                    <div className="flex items-center gap-3">
+                        <input
+                            type="number"
+                            min="3"
+                            max="120"
+                            step="1"
+                            value={drowsinessSec}
+                            onChange={(e) => setDrowsinessSec(e.target.value)}
+                            placeholder="15"
+                            className="w-28 px-4 py-3 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)] text-center text-lg font-bold"
+                        />
+                        <span className="text-[var(--color-text-secondary)] font-medium">초 이상 지속 시</span>
                     </div>
                 </div>
 

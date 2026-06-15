@@ -51,6 +51,7 @@ export interface Settings {
     profilePicture?: string; // Base64 encoded image for offline storage
     isManualModel?: boolean; // Whether to use manual model name input
     dailyGoalMs?: number; // 일일 목표 공부 시간 (ms)
+    drowsinessThresholdSec?: number; // 졸음 판단 기준: 눈 감김 지속 시간(초). 기본 15
 }
 
 // 세션 중 주차된 생각 인터페이스
@@ -126,7 +127,8 @@ export async function initializeSettings(): Promise<Settings> {
             { name: '기타' }
         ],
         types: ['자습', '수업', '테스트', '과제'],
-        theme: 'system'
+        theme: 'system',
+        drowsinessThresholdSec: 15
     };
 
     await db.settings.add(defaultSettings);

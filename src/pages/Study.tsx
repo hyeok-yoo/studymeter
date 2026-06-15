@@ -631,7 +631,7 @@ export default function Study({ settings }: StudyProps) {
                 })()}
 
                 {/* Focus Panel */}
-                <FocusPanel />
+                <FocusPanel drowsinessThresholdSec={settings.drowsinessThresholdSec ?? 15} />
 
                 {/* Controls Area */}
                 <div className="mt-16 flex items-center justify-center gap-10">
@@ -1141,7 +1141,7 @@ type FocusTabName = typeof FOCUS_TABS[number]
 
 type MeasureMode = 'pc' | 'native' | 'web'
 
-function FocusPanel() {
+function FocusPanel({ drowsinessThresholdSec }: { drowsinessThresholdSec: number }) {
     const isApp = NativeBridge.isNative()
     const localMode: MeasureMode = isApp ? 'native' : 'web'
     const [mode, setMode] = useState<MeasureMode>(() => {
@@ -1152,8 +1152,8 @@ function FocusPanel() {
 
     if (mode === 'pc') return <FocusPanelPC onSwitchMode={() => saveMode(localMode)} />
     return isApp
-        ? <FocusPanelNative onSwitchMode={() => saveMode('pc')} />
-        : <FocusPanelWeb onSwitchMode={() => saveMode('pc')} />
+        ? <FocusPanelNative onSwitchMode={() => saveMode('pc')} drowsinessThresholdSec={drowsinessThresholdSec} />
+        : <FocusPanelWeb onSwitchMode={() => saveMode('pc')} drowsinessThresholdSec={drowsinessThresholdSec} />
 }
 
 function FocusPanelPC({ onSwitchMode }: { onSwitchMode: () => void }) {
@@ -1214,7 +1214,7 @@ interface FocusEngine {
     addSessionRating: (mean: number, rating: number) => void | Promise<void>
 }
 
-function FocusPanelNative({ onSwitchMode }: { onSwitchMode: () => void }) {
+function FocusPanelNative({ onSwitchMode, drowsinessThresholdSec }: { onSwitchMode: () => void; drowsinessThresholdSec: number }) {
     const engine = useFocusNative()
     return (
         <LocalFocusPanel
@@ -1225,11 +1225,12 @@ function FocusPanelNative({ onSwitchMode }: { onSwitchMode: () => void }) {
             switchLabel="PC 연결로"
             unavailableMsg="태블릿 자체 측정은 Android 앱에서만 사용 가능합니다"
             onSwitchMode={onSwitchMode}
+            drowsinessThresholdSec={drowsinessThresholdSec}
         />
     )
 }
 
-function FocusPanelWeb({ onSwitchMode }: { onSwitchMode: () => void }) {
+function FocusPanelWeb({ onSwitchMode, drowsinessThresholdSec }: { onSwitchMode: () => void; drowsinessThresholdSec: number }) {
     const engine = useFocusWeb()
     return (
         <LocalFocusPanel
@@ -1239,11 +1240,12 @@ function FocusPanelWeb({ onSwitchMode }: { onSwitchMode: () => void }) {
             label="브라우저 자체 측정"
             switchLabel="PC 연결로"
             onSwitchMode={onSwitchMode}
+            drowsinessThresholdSec={drowsinessThresholdSec}
         />
     )
 }
 
-function LocalFocusPanel({ engine, available, supportsCalibration, label, switchLabel, unavailableMsg, onSwitchMode }: {
+function LocalFocusPanel({ engine, available, supportsCalibration, label, switchLabel, unavailableMsg, onSwitchMode, drowsinessThresholdSec }: {
     engine: FocusEngine
     available: boolean
     supportsCalibration: boolean
@@ -1251,6 +1253,7 @@ function LocalFocusPanel({ engine, available, supportsCalibration, label, switch
     switchLabel: string
     unavailableMsg?: string
     onSwitchMode: () => void
+    drowsinessThresholdSec: number
 }) {
     const { score, etaS, features, running, status,
             cameraJpeg, gazeX, gazeY, roiColors,
@@ -1464,7 +1467,7 @@ function LocalFocusPanel({ engine, available, supportsCalibration, label, switch
 
             {/* 라이트 모드면 졸음 전용 상태 카드, 아니면 집중도 탭들 */}
             {lightMode ? (
-                <LightModeStatus features={features} running={running} />
+                <LightModeStatus features={features} running={running} thresholdSec={drowsinessThresholdSec} />
             ) : (
                 <>
                     <FocusTabBar activeTab={activeTab} setActiveTab={setActiveTab} />
@@ -1479,7 +1482,7 @@ function LocalFocusPanel({ engine, available, supportsCalibration, label, switch
             )}
 
             {/* 졸음 감지 경고 — 집중도 측정 중에도, 라이트 모드 단독으로도 작동 */}
-            <DrowsinessAlert features={features} running={running} />
+            <DrowsinessAlert features={features} running={running} thresholdSec={drowsinessThresholdSec} />
         </div>
     )
 }
@@ -1489,8 +1492,8 @@ function LocalFocusPanel({ engine, available, supportsCalibration, label, switch
  * 임계(≈15초)를 넘으면 디바이스 벨소리 모드에 따라 소리/진동으로 알리며(무음이면 화면만),
  * 눈을 다시 뜰 때까지 전체화면 팝업을 띄운다.
  */
-function DrowsinessAlert({ features, running }: { features: FocusFeatures | null; running: boolean }) {
-    const { drowsy } = useDrowsiness(features, running)
+function DrowsinessAlert({ features, running, thresholdSec }: { features: FocusFeatures | null; running: boolean; thresholdSec: number }) {
+    const { drowsy } = useDrowsiness(features, running, true, thresholdSec)
     const [ringerMode, setRingerMode] = useState<RingerMode>('normal')
     const stopAlarmRef = useRef<(() => void) | null>(null)
 
@@ -1542,7 +1545,7 @@ function DrowsinessAlert({ features, running }: { features: FocusFeatures | null
                 <Icon icon="mdi:sleep" className="text-7xl text-red-400" />
                 <h3 className="text-3xl font-black tracking-tight">졸음이 감지됐어요!</h3>
                 <p className="font-bold opacity-70 leading-relaxed">
-                    눈이 15초 넘게 감겨 있었어요.<br />눈을 크게 뜨고 잠을 깨워주세요.
+                    눈이 {thresholdSec}초 넘게 감겨 있었어요.<br />눈을 크게 뜨고 잠을 깨워주세요.
                 </p>
                 <p className="text-[11px] font-bold uppercase tracking-widest text-red-300/80">{modeLabel}</p>
                 <button
@@ -1559,7 +1562,7 @@ function DrowsinessAlert({ features, running }: { features: FocusFeatures | null
 }
 
 /** 라이트 모드(졸음 전용) 상태 카드. 집중 점수·심박 측정은 끄고 눈 상태만 감시함을 안내. */
-function LightModeStatus({ features, running }: { features: FocusFeatures | null; running: boolean }) {
+function LightModeStatus({ features, running, thresholdSec }: { features: FocusFeatures | null; running: boolean; thresholdSec: number }) {
     const eyesDetected = features != null && Number.isFinite(features.mean_ear)
     return (
         <div style={{ padding: '18px', borderRadius: '14px', background: 'rgba(129,140,248,0.08)', border: '1px solid rgba(129,140,248,0.2)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', textAlign: 'center' }}>
@@ -1569,7 +1572,7 @@ function LightModeStatus({ features, running }: { features: FocusFeatures | null
             </p>
             <p style={{ fontSize: '11px', fontWeight: 600, color: 'rgba(255,255,255,0.4)', lineHeight: 1.5 }}>
                 {running
-                    ? '눈이 15초 넘게 감기면 알려드려요.'
+                    ? `눈이 ${thresholdSec}초 넘게 감기면 알려드려요.`
                     : '“졸음 감지 시작”을 누르면 눈 상태만 가볍게 감시합니다.'}
                 <br />집중 점수·심박(rPPG) 측정은 꺼져 <b>배터리를 절약</b>합니다.
             </p>
