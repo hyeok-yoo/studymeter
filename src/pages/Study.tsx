@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts'
 import { useFocusSync } from '../lib/focusSync'
 import type { FocusFeatures } from '../lib/focusSync'
@@ -25,7 +26,10 @@ import TestTimerModal from '../components/TestTimerModal'
 import SessionEvalModal from '../components/SessionEvalModal'
 import { TabletCamera } from '../components/TabletCamera'
 import { NativeBridge } from '../lib/NativeBridge'
+import type { RingerMode } from '../lib/NativeBridge'
 import { HelpButton } from '../components/HelpButton'
+import { useDrowsiness } from '../lib/useDrowsiness'
+import { playTimerEndSound, startDrowsyAlarm, type AlarmModality } from '../lib/alarm'
 
 interface StudyProps {
     settings: Settings
@@ -181,6 +185,9 @@ export default function Study({ settings }: StudyProps) {
                 // Countdown check
                 if (countdownDuration && elapsed >= countdownDuration && !showNotification) {
                     setShowNotification(true)
+                    // 테스트 타이머 종료음 — 미디어 볼륨(STREAM_MUSIC)으로 재생되어
+                    // 벨소리/진동 모드와 무관하게 들리고, 이어폰 연결 시 이어폰으로 라우팅된다.
+                    playTimerEndSound()
                 }
             }, 100)
         } else if (intervalRef.current) {
@@ -1433,7 +1440,84 @@ function LocalFocusPanel({ engine, available, supportsCalibration, label, switch
                     {activeTab === '생체신호' && <BioTab features={features} roiColors={roiColors} />}
                 </motion.div>
             </AnimatePresence>
+
+            {/* 졸음 감지 경고 — 집중도 측정 중 항상 함께 작동 */}
+            <DrowsinessAlert features={features} running={running} />
         </div>
+    )
+}
+
+/**
+ * 졸음 감지 경고. 집중도 측정 중 features.mean_ear 스트림으로 눈 감김 지속을 추적하고,
+ * 임계(≈15초)를 넘으면 디바이스 벨소리 모드에 따라 소리/진동으로 알리며(무음이면 화면만),
+ * 눈을 다시 뜰 때까지 전체화면 팝업을 띄운다.
+ */
+function DrowsinessAlert({ features, running }: { features: FocusFeatures | null; running: boolean }) {
+    const { drowsy } = useDrowsiness(features, running)
+    const [ringerMode, setRingerMode] = useState<RingerMode>('normal')
+    const stopAlarmRef = useRef<(() => void) | null>(null)
+
+    // 알람(소리/진동)은 외부 시스템 → effect 로 동기화. 눈을 다시 뜨면(drowsy=false) 정지.
+    useEffect(() => {
+        if (!drowsy) {
+            stopAlarmRef.current?.()
+            stopAlarmRef.current = null
+            return
+        }
+        let cancelled = false
+        ;(async () => {
+            const mode = await NativeBridge.getRingerMode()
+            if (cancelled) return
+            setRingerMode(mode) // 비동기 콜백 내 setState (허용)
+            const modality: AlarmModality = mode === 'silent' ? 'silent' : mode === 'vibrate' ? 'vibrate' : 'sound'
+            stopAlarmRef.current = startDrowsyAlarm(modality)
+        })()
+        return () => {
+            cancelled = true
+            stopAlarmRef.current?.()
+            stopAlarmRef.current = null
+        }
+    }, [drowsy])
+
+    if (!drowsy) return null
+
+    // "확인": 현재 알람만 즉시 끔(팝업은 눈을 다시 뜰 때까지 유지). 상태 불필요 — ref 로 정지.
+    const silence = () => { stopAlarmRef.current?.(); stopAlarmRef.current = null }
+
+    const modeLabel = ringerMode === 'silent'
+        ? '무음 모드 — 소리·진동 없이 화면으로만 알립니다'
+        : ringerMode === 'vibrate'
+            ? '진동으로 알리는 중'
+            : '소리로 알리는 중'
+
+    return createPortal(
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-6">
+            <motion.div
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                className="absolute inset-0 bg-red-950/60 backdrop-blur-md"
+            />
+            <motion.div
+                initial={{ scale: 0.85, opacity: 0 }}
+                animate={{ scale: [1, 1.03, 1], opacity: 1 }}
+                transition={{ scale: { repeat: Infinity, duration: 1.1 } }}
+                className="relative liquid-modal p-10 flex flex-col items-center gap-5 max-w-sm w-full text-center shadow-2xl border border-red-500/40"
+            >
+                <Icon icon="mdi:sleep" className="text-7xl text-red-400" />
+                <h3 className="text-3xl font-black tracking-tight">졸음이 감지됐어요!</h3>
+                <p className="font-bold opacity-70 leading-relaxed">
+                    눈이 15초 넘게 감겨 있었어요.<br />눈을 크게 뜨고 잠을 깨워주세요.
+                </p>
+                <p className="text-[11px] font-bold uppercase tracking-widest text-red-300/80">{modeLabel}</p>
+                <button
+                    onClick={silence}
+                    className="w-full py-4 bg-red-500 hover:bg-red-400 text-white rounded-2xl font-black text-lg shadow-xl active:scale-95 transition-all"
+                >
+                    확인 (소리·진동 끄기)
+                </button>
+                <p className="text-[10px] opacity-40">눈을 다시 뜨면 자동으로 닫힙니다</p>
+            </motion.div>
+        </div>,
+        document.body,
     )
 }
 

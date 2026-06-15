@@ -13,6 +13,15 @@ interface NowBarPlugin {
 
 const NowBar = registerPlugin<NowBarPlugin>('NowBar');
 
+/** 디바이스 벨소리 모드 조회용 네이티브 플러그인. */
+interface DeviceSoundPlugin {
+    getRingerMode(): Promise<{ mode: 'normal' | 'vibrate' | 'silent' }>;
+}
+
+const DeviceSound = registerPlugin<DeviceSoundPlugin>('DeviceSound');
+
+export type RingerMode = 'normal' | 'vibrate' | 'silent';
+
 export const NativeBridge = {
     isNative: () => Capacitor.isNativePlatform(),
 
@@ -133,6 +142,24 @@ export const NativeBridge = {
         }
     },
     
+    /**
+     * 디바이스 벨소리 모드 조회.
+     * - 'normal'  : 소리 켜짐 → 졸음 경고를 소리로
+     * - 'vibrate' : 진동 모드 → 진동으로
+     * - 'silent'  : 무음 모드 → 출력 없음(팝업만)
+     * 웹/비네이티브 또는 플러그인 미탑재 시 'normal' 로 폴백한다.
+     */
+    async getRingerMode(): Promise<RingerMode> {
+        if (!this.isNative()) return 'normal';
+        try {
+            const { mode } = await DeviceSound.getRingerMode();
+            return mode ?? 'normal';
+        } catch (e) {
+            console.error('getRingerMode failed', e);
+            return 'normal';
+        }
+    },
+
     /**
      * 알림 액션 리스너 등록
      */

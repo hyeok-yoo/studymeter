@@ -17,6 +17,7 @@ public class MainActivity extends BridgeActivity {
         // Capacitor 4+: registerPlugin must come before super.onCreate()
         registerPlugin(NowBarPlugin.class);
         registerPlugin(FocusPlugin.class);
+        registerPlugin(DeviceSoundPlugin.class);
         OpenCVLoader.initDebug();
         Log.d(TAG, "NowBarPlugin registered");
 
