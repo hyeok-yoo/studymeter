@@ -75,8 +75,17 @@ class FocusPlugin : Plugin() {
     @PluginMethod
     fun stopPipeline(call: PluginCall) {
         isRunning = false
-        cameraProvider?.unbindAll()
-        cameraProvider = null
+        // CameraX unbindAll() 은 @MainThread 전용 — Capacitor 가 플러그인 메서드를 백그라운드
+        // 스레드에서 호출하므로, 여기서 직접 부르면 IllegalStateException 으로 앱이 강제 종료된다.
+        // 반드시 메인 스레드에서 해제한다.
+        activity.runOnUiThread {
+            try {
+                cameraProvider?.unbindAll()
+            } catch (e: Exception) {
+                Log.e(TAG, "카메라 해제 실패: ${e.message}")
+            }
+            cameraProvider = null
+        }
         // 카메라와 더불어 CV 모델(FaceLandmarker/ONNX)도 해제하여 대기 상태에서
         // 메모리/자원을 점유하지 않도록 한다. 다음 startPipeline()에서 다시 초기화된다.
         executor.submit {
