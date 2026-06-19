@@ -130,3 +130,48 @@ export async function getAllUsers(): Promise<TelemetryUser[]> {
 export async function setUserBlocked(deviceId: string, blocked: boolean): Promise<void> {
   await updateDoc(doc(getDb(), 'users', deviceId), { blocked })
 }
+
+// ── 관리자 비밀번호 (Firestore 저장, JS 번들에 노출 없음) ──────────────────
+
+const SALT = 'studymeter_admin_v1'
+
+async function hashPassword(password: string): Promise<string> {
+  const encoder = new TextEncoder()
+  const data = encoder.encode(SALT + password)
+  const buf = await crypto.subtle.digest('SHA-256', data)
+  return Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
+}
+
+export async function isAdminPasswordSet(): Promise<boolean> {
+  try {
+    const snap = await getDoc(doc(getDb(), 'admin', 'config'))
+    return snap.exists() && !!snap.data().passwordHash
+  } catch {
+    return false
+  }
+}
+
+export async function verifyAdminPassword(password: string): Promise<boolean> {
+  try {
+    const snap = await getDoc(doc(getDb(), 'admin', 'config'))
+    if (!snap.exists()) return false
+    const stored = snap.data().passwordHash as string
+    const input = await hashPassword(password)
+    return stored === input
+  } catch {
+    return false
+  }
+}
+
+export async function setAdminPassword(newPassword: string, currentPassword?: string): Promise<void> {
+  const alreadySet = await isAdminPasswordSet()
+  if (alreadySet) {
+    if (!currentPassword) throw new Error('현재 비밀번호가 필요합니다.')
+    const valid = await verifyAdminPassword(currentPassword)
+    if (!valid) throw new Error('현재 비밀번호가 올바르지 않습니다.')
+  }
+  const hash = await hashPassword(newPassword)
+  await setDoc(doc(getDb(), 'admin', 'config'), { passwordHash: hash })
+}
