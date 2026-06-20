@@ -1,6 +1,7 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { Icon } from '@iconify/react'
 import type { Settings } from '../lib/db'
+import { isDevAdminDevice } from '../lib/telemetry'
 
 interface LayoutProps {
     settings: Settings
@@ -8,6 +9,7 @@ interface LayoutProps {
 }
 
 export default function Layout({ settings }: LayoutProps) {
+    const founder = isDevAdminDevice()
     const navItems = [
         { path: '/', icon: 'mdi:home-outline', label: '홈' },
         { path: '/records', icon: 'mdi:chart-bar', label: '기록' },
@@ -22,11 +24,17 @@ export default function Layout({ settings }: LayoutProps) {
             <aside className="hidden md:flex w-72 h-screen fixed left-0 top-0 z-50 flex-col p-6">
                 <div className="glass-card h-full flex flex-col p-6 overflow-hidden text-[var(--color-text)]">
                     {/* Logo */}
-                    <div className="mb-10 px-2 flex items-center gap-3">
+                    <div className="mb-2 px-2 flex items-center gap-3">
                         <img src={`${import.meta.env.BASE_URL}logo_chart.svg`} alt="StudyMeter Logo" className="w-10 h-10 drop-shadow-lg logo-float" />
                         <h1 className="text-2xl font-black tracking-tight gradient-text">StudyMeter</h1>
                     </div>
-                    <div className="-mt-8 mb-8 px-2">
+                    <div className="mb-8 px-2 flex flex-col gap-1.5">
+                        {founder && (
+                            <span className="founder-badge self-start inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black tracking-[0.25em] uppercase text-white bg-gradient-to-r from-blue-600 via-blue-500 to-cyan-400 ring-1 ring-blue-300/50">
+                                <Icon icon="mdi:crown" className="text-[11px]" />
+                                Founder
+                            </span>
+                        )}
                         <p className="text-[10px] font-medium text-[var(--color-text-secondary)] tracking-widest uppercase opacity-70">
                             Made by SeungHyeok
                         </p>
