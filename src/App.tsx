@@ -12,7 +12,7 @@ import DeveloperPage from './pages/Developer'
 import AdminPage from './pages/Admin'
 import { NativeBridge } from './lib/NativeBridge'
 import NameRegistrationModal from './components/NameRegistrationModal'
-import { isRegistered, checkBlocked, updateLastSeen } from './lib/telemetry'
+import { isRegistered, checkBlocked, updateLastSeen, syncTodaySessions } from './lib/telemetry'
 
 function App() {
   const [settings, setSettings] = useState<Settings | null>(null)
@@ -52,6 +52,8 @@ function App() {
           setIsBlocked(true);
         } else {
           updateLastSeen();
+          // 오늘 공부한 세션을 관리자 열람용으로 백필 동기화
+          syncTodaySessions();
         }
       }
 
@@ -72,6 +74,7 @@ function App() {
       setIsBlocked(true);
     } else {
       updateLastSeen();
+      syncTodaySessions();
     }
   }
 

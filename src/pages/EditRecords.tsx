@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { db, deleteStudySession, updateStudySession, formatDuration, getTodayDate, formatTimeHHMM, findOverlappingSession, adjustOverlappingSession, getLatestEndTime } from '../lib/db'
 import { useModal } from '../lib/ModalContext'
+import { syncSession, deleteSyncedSession } from '../lib/telemetry'
 import type { Settings, StudySession, DailyRecord } from '../lib/db'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Icon } from '@iconify/react'
@@ -245,6 +246,8 @@ export default function EditRecords({ settings }: EditRecordsProps) {
                 duration,
                 evaluation
             })
+            const updated = await db.sessions.get(editingSessionId)
+            if (updated) syncSession(updated)
         } else {
             const session: StudySession = {
                 date: selectedDate,
@@ -256,7 +259,8 @@ export default function EditRecords({ settings }: EditRecordsProps) {
                 duration,
                 evaluation
             }
-            await db.sessions.add(session)
+            const id = await db.sessions.add(session)
+            syncSession({ ...session, id: id as number })
         }
 
         handleResetForm()
@@ -285,6 +289,7 @@ export default function EditRecords({ settings }: EditRecordsProps) {
         const confirmed = await showConfirm('기록 삭제', '정말 이 학습 기록을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.')
         if (!confirmed) return
         await deleteStudySession(id)
+        deleteSyncedSession(id)
         if (editingSessionId === id) handleResetForm()
         loadData()
     }

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { Icon } from '@iconify/react'
 import type { Settings, SubjectItem } from '../lib/db'
 import { db } from '../lib/db'
@@ -10,6 +10,8 @@ import { useFocusSync } from '../lib/focusSync'
 import { useFocusNative } from '../lib/useFocusNative'
 import { TabletCamera } from '../components/TabletCamera'
 import { HelpButton } from '../components/HelpButton'
+import DevAccessModal from '../components/DevAccessModal'
+import { isDevAdminDevice } from '../lib/telemetry'
 
 interface SettingsPageProps {
     settings: Settings
@@ -61,6 +63,23 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
     const backupInputRef = useRef<HTMLInputElement>(null)
     const [exporting, setExporting] = useState(false)
     const [importing, setImporting] = useState(false)
+
+    // 숨겨진 개발자 진입: 버전명 5회 탭
+    const [showDevAccess, setShowDevAccess] = useState(false)
+    const [devAdmin, setDevAdmin] = useState(isDevAdminDevice())
+    const versionTapCount = useRef(0)
+    const versionTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+    const handleVersionTap = () => {
+        versionTapCount.current += 1
+        if (versionTapTimer.current) clearTimeout(versionTapTimer.current)
+        versionTapTimer.current = setTimeout(() => { versionTapCount.current = 0 }, 1500)
+        if (versionTapCount.current >= 5) {
+            versionTapCount.current = 0
+            if (versionTapTimer.current) clearTimeout(versionTapTimer.current)
+            setShowDevAccess(true)
+        }
+    }
 
     // PC Focus 연결 설정 상태
     const [serverUrlInput, setServerUrlInput] = useState(() => localStorage.getItem('focus_server_url') || '')
@@ -905,8 +924,26 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                         </motion.span>
                     </button>
 
+                    {devAdmin && (
+                        <button
+                            onClick={() => navigate('/admin')}
+                            className="w-full flex items-center justify-between px-5 py-3.5 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all group"
+                        >
+                            <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-white flex-shrink-0">
+                                    <Icon icon="mdi:shield-crown" className="text-base" />
+                                </div>
+                                <p className="text-sm font-bold text-left">관리자 페이지</p>
+                            </div>
+                            <Icon icon="mdi:chevron-right" className="text-xl text-[var(--color-text-secondary)] opacity-50 group-hover:opacity-100 transition-all" />
+                        </button>
+                    )}
+
                     <div className="text-center flex flex-col items-center gap-0.5">
-                        <p className="text-[10px] text-[var(--color-text-secondary)] font-mono opacity-50">
+                        <p
+                            onClick={handleVersionTap}
+                            className="text-[10px] text-[var(--color-text-secondary)] font-mono opacity-50 cursor-default select-none"
+                        >
                             StudyMeter v{__APP_VERSION__}
                         </p>
                         <p className="text-[10px] text-[var(--color-text-secondary)] font-mono opacity-30">
@@ -918,6 +955,19 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                     </div>
                 </div>
             </div>
+
+            <AnimatePresence>
+                {showDevAccess && (
+                    <DevAccessModal
+                        onClose={() => setShowDevAccess(false)}
+                        onAuthed={() => {
+                            setDevAdmin(true)
+                            setShowDevAccess(false)
+                            navigate('/admin')
+                        }}
+                    />
+                )}
+            </AnimatePresence>
         </div>
     )
 }
