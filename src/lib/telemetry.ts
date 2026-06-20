@@ -264,62 +264,18 @@ export async function getUserSessions(deviceId: string): Promise<AdminSession[]>
   return out
 }
 
-// ── 관리자 비밀번호 (Firestore 저장, JS 번들에 노출 없음) ──────────────────
-
-const SALT = 'studymeter_admin_v1'
-
-async function hashPassword(password: string): Promise<string> {
-  const encoder = new TextEncoder()
-  const data = encoder.encode(SALT + password)
-  const buf = await crypto.subtle.digest('SHA-256', data)
-  return Array.from(new Uint8Array(buf))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('')
-}
-
-export async function isAdminPasswordSet(): Promise<boolean> {
-  try {
-    const snap = await getDoc(doc(getDb(), 'admin', 'config'))
-    return snap.exists() && !!snap.data().passwordHash
-  } catch {
-    return false
-  }
-}
-
-export async function verifyAdminPassword(password: string): Promise<boolean> {
-  try {
-    const snap = await getDoc(doc(getDb(), 'admin', 'config'))
-    if (!snap.exists()) return false
-    const stored = snap.data().passwordHash as string
-    const input = await hashPassword(password)
-    return stored === input
-  } catch {
-    return false
-  }
-}
-
-export async function setAdminPassword(newPassword: string, currentPassword?: string): Promise<void> {
-  const alreadySet = await isAdminPasswordSet()
-  if (alreadySet) {
-    if (!currentPassword) throw new Error('현재 비밀번호가 필요합니다.')
-    const valid = await verifyAdminPassword(currentPassword)
-    if (!valid) throw new Error('현재 비밀번호가 올바르지 않습니다.')
-  }
-  const hash = await hashPassword(newPassword)
-  await setDoc(doc(getDb(), 'admin', 'config'), { passwordHash: hash })
-}
-
-// ── 개발자(소유자) 마스터 비밀번호 ───────────────────────────────────────────
+// ── 관리자/소유자 비밀번호 (Firestore 저장, 단일 자격증명) ───────────────────
 //
-// 앱 제작자 전용. 숨겨진 진입점(버전명 5회 탭)에서 이 비밀번호를 입력하면
-// 해당 기기가 관리자로 등록되고, 앱 내에서 관리자 페이지에 접근할 수 있다.
+// 관리자 페이지 로그인과 숨겨진 개발자(소유자) 진입이 "동일한" 비밀번호를 공유한다.
+// admin/config 문서 하나로 통합되어 동일 해시값으로 동기화된다. (한쪽에서 바꾸면 둘 다 적용)
 //
-// 보안: 평문/해시를 로컬에 절대 저장하지 않는다. (기기엔 "관리자임" 플래그만)
-// 비밀번호를 여러 사이트에서 재사용하는 경우를 대비해 단순 SHA-256 대신
-// PBKDF2(SHA-256, 임의 솔트, 고반복)로 해싱하여 오프라인 무차별 대입을 어렵게 한다.
+// 비밀번호를 여러 사이트에서 재사용하는 경우를 대비해 PBKDF2(SHA-256, 임의 솔트,
+// 고반복)로 해싱한다. 과거 단순 SHA-256으로 저장된 값은 검증 시 자동 폴백 처리한다.
+// 평문/해시는 기기에 저장하지 않는다. (기기엔 "관리자임" 플래그만)
 
+const LEGACY_SALT = 'studymeter_admin_v1'
+const PBKDF2_ITERATIONS = 210000
 const DEV_ADMIN_FLAG = 'studymeter_dev_admin'
-const DEV_PBKDF2_ITERATIONS = 210000
 
 function bytesToHex(buf: ArrayBuffer): string {
   return Array.from(new Uint8Array(buf))
@@ -345,46 +301,58 @@ async function pbkdf2Hash(password: string, saltHex: string, iterations: number)
   return bytesToHex(bits)
 }
 
-export async function isDevPasswordSet(): Promise<boolean> {
+// 구버전 호환: SHA-256(salt + password)
+async function legacySha256(password: string): Promise<string> {
+  const data = new TextEncoder().encode(LEGACY_SALT + password)
+  const buf = await crypto.subtle.digest('SHA-256', data)
+  return bytesToHex(buf)
+}
+
+function constantTimeEq(a: string, b: string): boolean {
+  if (a.length !== b.length) return false
+  let diff = 0
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i)
+  return diff === 0
+}
+
+export async function isAdminPasswordSet(): Promise<boolean> {
   try {
-    const snap = await getDoc(doc(getDb(), 'admin', 'dev'))
-    return snap.exists() && !!snap.data().hash
+    const snap = await getDoc(doc(getDb(), 'admin', 'config'))
+    return snap.exists() && !!snap.data().passwordHash
   } catch {
     return false
   }
 }
 
-export async function verifyDevPassword(password: string): Promise<boolean> {
+export async function verifyAdminPassword(password: string): Promise<boolean> {
   try {
-    const snap = await getDoc(doc(getDb(), 'admin', 'dev'))
+    const snap = await getDoc(doc(getDb(), 'admin', 'config'))
     if (!snap.exists()) return false
-    const data = snap.data() as { hash?: string; salt?: string; iterations?: number }
-    if (!data.hash || !data.salt) return false
-    const input = await pbkdf2Hash(password, data.salt, data.iterations || DEV_PBKDF2_ITERATIONS)
-    // 길이 비교 후 상수시간 비교
-    if (input.length !== data.hash.length) return false
-    let diff = 0
-    for (let i = 0; i < input.length; i++) diff |= input.charCodeAt(i) ^ data.hash.charCodeAt(i)
-    return diff === 0
+    const data = snap.data() as { passwordHash?: string; salt?: string; iterations?: number }
+    if (!data.passwordHash) return false
+    const input = data.salt
+      ? await pbkdf2Hash(password, data.salt, data.iterations || PBKDF2_ITERATIONS)
+      : await legacySha256(password) // 구버전 폴백
+    return constantTimeEq(input, data.passwordHash)
   } catch {
     return false
   }
 }
 
-export async function setDevPassword(newPassword: string, currentPassword?: string): Promise<void> {
+export async function setAdminPassword(newPassword: string, currentPassword?: string): Promise<void> {
   if (newPassword.length < 6) throw new Error('비밀번호는 6자 이상이어야 합니다.')
-  const alreadySet = await isDevPasswordSet()
+  const alreadySet = await isAdminPasswordSet()
   if (alreadySet) {
     if (!currentPassword) throw new Error('현재 비밀번호가 필요합니다.')
-    const ok = await verifyDevPassword(currentPassword)
-    if (!ok) throw new Error('현재 비밀번호가 올바르지 않습니다.')
+    const valid = await verifyAdminPassword(currentPassword)
+    if (!valid) throw new Error('현재 비밀번호가 올바르지 않습니다.')
   }
   const saltHex = bytesToHex(crypto.getRandomValues(new Uint8Array(16)).buffer)
-  const hash = await pbkdf2Hash(newPassword, saltHex, DEV_PBKDF2_ITERATIONS)
-  await setDoc(doc(getDb(), 'admin', 'dev'), {
-    hash,
+  const passwordHash = await pbkdf2Hash(newPassword, saltHex, PBKDF2_ITERATIONS)
+  await setDoc(doc(getDb(), 'admin', 'config'), {
+    passwordHash,
     salt: saltHex,
-    iterations: DEV_PBKDF2_ITERATIONS,
+    iterations: PBKDF2_ITERATIONS,
   })
 }
 

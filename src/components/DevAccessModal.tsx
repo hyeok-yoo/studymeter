@@ -2,9 +2,9 @@ import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { Icon } from '@iconify/react'
 import {
-  isDevPasswordSet,
-  verifyDevPassword,
-  setDevPassword,
+  isAdminPasswordSet,
+  verifyAdminPassword,
+  setAdminPassword,
   registerDeviceAsAdmin,
   isTelemetryConfigured,
 } from '../lib/telemetry'
@@ -31,7 +31,7 @@ export default function DevAccessModal({ onClose, onAuthed }: DevAccessModalProp
       setMode('enter')
       return
     }
-    isDevPasswordSet().then((set) => setMode(set ? 'enter' : 'setup'))
+    isAdminPasswordSet().then((set) => setMode(set ? 'enter' : 'setup'))
   }, [])
 
   function resetFields() {
@@ -44,7 +44,7 @@ export default function DevAccessModal({ onClose, onAuthed }: DevAccessModalProp
     if (pw !== pw2) { setError('비밀번호가 일치하지 않습니다.'); return }
     setLoading(true); setError('')
     try {
-      await setDevPassword(pw)
+      await setAdminPassword(pw)
       await registerDeviceAsAdmin()
       onAuthed()
     } catch (err) {
@@ -57,7 +57,7 @@ export default function DevAccessModal({ onClose, onAuthed }: DevAccessModalProp
     e.preventDefault()
     setLoading(true); setError('')
     try {
-      const ok = await verifyDevPassword(pw)
+      const ok = await verifyAdminPassword(pw)
       if (!ok) {
         setError('비밀번호가 올바르지 않습니다.')
         setLoading(false)
@@ -77,7 +77,7 @@ export default function DevAccessModal({ onClose, onAuthed }: DevAccessModalProp
     if (pw !== pw2) { setError('새 비밀번호가 일치하지 않습니다.'); return }
     setLoading(true); setError('')
     try {
-      await setDevPassword(pw, current)
+      await setAdminPassword(pw, current)
       setMode('done')
     } catch (err) {
       setError(err instanceof Error ? err.message : '오류가 발생했습니다.')
@@ -100,11 +100,11 @@ export default function DevAccessModal({ onClose, onAuthed }: DevAccessModalProp
           </div>
           <div className="flex-1 min-w-0">
             <h1 className="text-lg font-black gradient-text">
-              {mode === 'change' ? '개발자 비밀번호 변경'
-                : mode === 'setup' ? '개발자 비밀번호 설정'
-                : '개발자 인증'}
+              {mode === 'change' ? '관리자 비밀번호 변경'
+                : mode === 'setup' ? '관리자 비밀번호 설정'
+                : '관리자 인증'}
             </h1>
-            <p className="text-xs text-[var(--color-text-secondary)] opacity-60">소유자 전용</p>
+            <p className="text-xs text-[var(--color-text-secondary)] opacity-60">소유자 전용 · 관리자 페이지와 동일한 비밀번호</p>
           </div>
           <button onClick={onClose} className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-white/10 transition-all flex-shrink-0">
             <Icon icon="mdi:close" className="text-lg" />
@@ -120,7 +120,8 @@ export default function DevAccessModal({ onClose, onAuthed }: DevAccessModalProp
         {mode === 'setup' && (
           <form onSubmit={handleSetup} className="flex flex-col gap-3">
             <p className="text-xs text-yellow-400/80 bg-yellow-500/10 rounded-xl px-3 py-2">
-              이 기기를 관리자로 등록할 마스터 비밀번호를 설정합니다. 안전하게 보관하세요.
+              아직 관리자 비밀번호가 없습니다. 지금 설정하는 비밀번호가 관리자 페이지 로그인과
+              공통으로 사용됩니다. 가장 먼저 본인이 설정해 두세요.
             </p>
             <PwInput value={pw} onChange={setPw} placeholder="새 비밀번호 (6자 이상)" autoFocus />
             <PwInput value={pw2} onChange={setPw2} placeholder="비밀번호 확인" />
