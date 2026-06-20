@@ -28,6 +28,7 @@ import { TabletCamera } from '../components/TabletCamera'
 import { NativeBridge } from '../lib/NativeBridge'
 import type { RingerMode } from '../lib/NativeBridge'
 import { HelpButton } from '../components/HelpButton'
+import { syncSession } from '../lib/telemetry'
 import { useDrowsiness } from '../lib/useDrowsiness'
 import { playTimerEndSound, startDrowsyAlarm, type AlarmModality } from '../lib/alarm'
 
@@ -353,6 +354,7 @@ export default function Study({ settings }: StudyProps) {
             }
             const id = await db.sessions.add(session)
             localStorage.removeItem(STORAGE_KEY)
+            syncSession({ ...session, id: id as number })
 
             if (showEval) {
                 setLastSessionId(id as number)
@@ -459,6 +461,8 @@ export default function Study({ settings }: StudyProps) {
     const handleEvalSave = async (evaluation: SessionEvaluation) => {
         if (lastSessionId) {
             await db.sessions.update(lastSessionId, { evaluation })
+            const updated = await db.sessions.get(lastSessionId)
+            if (updated) syncSession(updated)
         }
         setShowEvalModal(false)
         navigate('/')
