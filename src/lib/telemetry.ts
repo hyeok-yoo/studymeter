@@ -12,7 +12,7 @@ import {
   type Firestore,
   type Timestamp,
 } from 'firebase/firestore'
-import { db, getTodayDate, type StudySession, type SessionEvaluation } from './db'
+import { db, getTodayDate, type SessionEvaluation } from './db'
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -140,21 +140,24 @@ export async function setUserBlocked(deviceId: string, blocked: boolean): Promis
 }
 
 export async function deleteUser(deviceId: string): Promise<void> {
-  // 하위 세션 컬렉션 먼저 삭제 (Firestore는 문서 삭제 시 하위 컬렉션을 자동 삭제하지 않음)
+  // 하위 일별 기록 컬렉션 먼저 삭제 (Firestore는 문서 삭제 시 하위 컬렉션을 자동 삭제하지 않음)
   try {
-    const snap = await getDocs(collection(getDb(), 'users', deviceId, 'sessions'))
+    const snap = await getDocs(collection(getDb(), 'users', deviceId, 'days'))
     await Promise.all(snap.docs.map((d) => deleteDoc(d.ref)))
   } catch {
-    // 세션이 없거나 권한 문제여도 사용자 문서 삭제는 진행
+    // 기록이 없거나 권한 문제여도 사용자 문서 삭제는 진행
   }
   await deleteDoc(doc(getDb(), 'users', deviceId))
 }
 
-// ── 공부 세션 동기화 (관리자 열람용) ─────────────────────────────────────────
+// ── 공부 기록 동기화 (관리자 열람용) ─────────────────────────────────────────
 //
 // 공부 기록은 기본적으로 각 기기의 IndexedDB(로컬)에만 저장된다.
-// 관리자 페이지에서 사용자별 공부 내역을 보려면 세션을 Firestore에 미러링해야 한다.
-// 구조: users/{deviceId}/sessions/{localSessionId}
+// 관리자 페이지에서 사용자별 공부 내역을 보려면 Firestore에 미러링해야 한다.
+//
+// Firebase 요청 절약을 위해 "하루 단위 스냅샷" 1문서로 저장한다.
+//   구조: users/{deviceId}/days/{YYYY-MM-DD} = { date, updatedAt, sessions: [...] }
+// 세션마다 쓰지 않고, 하루 최대 2~3회만 오늘 기록 전체를 1번의 쓰기로 갱신한다.
 
 export interface AdminSession {
   id: string
@@ -168,73 +171,97 @@ export interface AdminSession {
   evaluation?: SessionEvaluation
 }
 
-function sessionToDoc(session: StudySession): Record<string, unknown> {
-  // Firestore는 undefined 값을 허용하지 않으므로 정의된 필드만 담는다.
-  const data: Record<string, unknown> = {
-    date: session.date,
-    subject: session.subject,
-    type: session.type,
-    startTime: session.startTime,
-    endTime: session.endTime,
-    duration: session.duration,
-  }
-  if (session.subItem !== undefined) data.subItem = session.subItem
-  if (session.evaluation !== undefined) data.evaluation = session.evaluation
-  return data
-}
+// 동기화 빈도 제한 (사용자당 하루 2~3회)
+const SYNC_STATE_KEY = 'studymeter_sync_state'
+const MAX_SYNCS_PER_DAY = 3
+const MIN_SYNC_INTERVAL_MS = 7 * 60 * 60 * 1000 // 약 7시간 → 하루 최대 3회 수준
 
-export async function syncSession(session: StudySession): Promise<void> {
-  if (!isConfigured() || !isRegistered() || session.id === undefined) return
-  const deviceId = getDeviceId()
+interface SyncState { date: string; count: number; lastTs: number }
+
+function readSyncState(): SyncState {
   try {
-    await setDoc(
-      doc(getDb(), 'users', deviceId, 'sessions', String(session.id)),
-      sessionToDoc(session),
-      { merge: true }
-    )
-  } catch {
-    // 오프라인 등 → 조용히 무시
-  }
-}
-
-export async function deleteSyncedSession(sessionId: number): Promise<void> {
-  if (!isConfigured() || !isRegistered()) return
-  const deviceId = getDeviceId()
-  try {
-    await deleteDoc(doc(getDb(), 'users', deviceId, 'sessions', String(sessionId)))
-  } catch {
-    // 조용히 무시
-  }
-}
-
-// 앱 시작 시 오늘 공부한 세션을 일괄 업로드 (이전에 만든 기록 백필용)
-export async function syncTodaySessions(): Promise<void> {
-  if (!isConfigured() || !isRegistered()) return
-  try {
-    const today = getTodayDate()
-    const sessions = await db.sessions.where('date').equals(today).toArray()
-    await Promise.all(sessions.map((s) => syncSession(s)))
-  } catch {
-    // 조용히 무시
-  }
-}
-
-export async function getUserSessions(deviceId: string): Promise<AdminSession[]> {
-  const snap = await getDocs(collection(getDb(), 'users', deviceId, 'sessions'))
-  return snap.docs.map((d) => {
-    const data = d.data()
-    return {
-      id: d.id,
-      date: data.date ?? '',
-      subject: data.subject ?? '',
-      subItem: data.subItem,
-      type: data.type ?? '',
-      startTime: data.startTime ?? 0,
-      endTime: data.endTime ?? 0,
-      duration: data.duration ?? 0,
-      evaluation: data.evaluation,
+    const raw = localStorage.getItem(SYNC_STATE_KEY)
+    if (raw) {
+      const s = JSON.parse(raw) as SyncState
+      if (s && typeof s.date === 'string') return s
     }
+  } catch { /* ignore */ }
+  return { date: '', count: 0, lastTs: 0 }
+}
+
+function writeSyncState(s: SyncState): void {
+  try { localStorage.setItem(SYNC_STATE_KEY, JSON.stringify(s)) } catch { /* ignore */ }
+}
+
+// 오늘 기록 스냅샷을 Firestore에 1회 쓰기로 업로드 (실제 동기화)
+async function uploadTodaySnapshot(): Promise<void> {
+  const today = getTodayDate()
+  const sessions = await db.sessions.where('date').equals(today).toArray()
+  // Firestore는 undefined를 허용하지 않으므로 JSON 왕복으로 정리
+  const plain = JSON.parse(JSON.stringify(
+    sessions.map((s) => ({
+      id: s.id,
+      date: s.date,
+      subject: s.subject,
+      subItem: s.subItem,
+      type: s.type,
+      startTime: s.startTime,
+      endTime: s.endTime,
+      duration: s.duration,
+      evaluation: s.evaluation,
+    }))
+  ))
+  await setDoc(doc(getDb(), 'users', getDeviceId(), 'days', today), {
+    date: today,
+    updatedAt: serverTimestamp(),
+    sessions: plain,
   })
+}
+
+// 빈도 제한이 적용된 동기화. 평소엔 이 함수만 호출한다.
+// force=true면 제한을 무시하고 즉시 동기화한다.
+export async function maybeSyncToday(force = false): Promise<void> {
+  if (!isConfigured() || !isRegistered()) return
+  const today = getTodayDate()
+  const now = Date.now()
+  let state = readSyncState()
+  if (state.date !== today) state = { date: today, count: 0, lastTs: 0 }
+
+  if (!force) {
+    if (state.count >= MAX_SYNCS_PER_DAY) return
+    if (now - state.lastTs < MIN_SYNC_INTERVAL_MS) return
+  }
+
+  try {
+    await uploadTodaySnapshot()
+    writeSyncState({ date: today, count: state.count + 1, lastTs: now })
+  } catch {
+    // 오프라인 등 → 카운트 증가시키지 않음 (다음 기회에 재시도)
+  }
+}
+
+// 관리자: 사용자의 모든 일별 스냅샷을 읽어 세션 목록으로 펼친다.
+export async function getUserSessions(deviceId: string): Promise<AdminSession[]> {
+  const snap = await getDocs(collection(getDb(), 'users', deviceId, 'days'))
+  const out: AdminSession[] = []
+  snap.docs.forEach((d) => {
+    const arr = d.data().sessions
+    if (!Array.isArray(arr)) return
+    arr.forEach((s: Record<string, unknown>) => {
+      out.push({
+        id: String(s.id ?? `${d.id}-${s.startTime}`),
+        date: (s.date as string) ?? d.id,
+        subject: (s.subject as string) ?? '',
+        subItem: s.subItem as string | undefined,
+        type: (s.type as string) ?? '',
+        startTime: (s.startTime as number) ?? 0,
+        endTime: (s.endTime as number) ?? 0,
+        duration: (s.duration as number) ?? 0,
+        evaluation: s.evaluation as SessionEvaluation | undefined,
+      })
+    })
+  })
+  return out
 }
 
 // ── 관리자 비밀번호 (Firestore 저장, JS 번들에 노출 없음) ──────────────────
