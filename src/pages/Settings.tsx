@@ -12,6 +12,7 @@ import { TabletCamera } from '../components/TabletCamera'
 import { HelpButton } from '../components/HelpButton'
 import DevAccessModal from '../components/DevAccessModal'
 import { isDevAdminDevice } from '../lib/telemetry'
+import { fetchGeminiModels, type GeminiModel } from '../lib/gemini'
 
 interface SettingsPageProps {
     settings: Settings
@@ -34,20 +35,6 @@ function normalizeWsUrl(raw: string): string {
     }
 }
 
-interface GeminiModel {
-    name: string
-    displayName: string
-    description: string
-}
-
-// Gemini ListModels API 응답의 개별 모델 형태 (필요한 필드만)
-interface GeminiApiModel {
-    name: string
-    displayName: string
-    description?: string
-    supportedGenerationMethods?: string[]
-}
-
 export default function SettingsPage({ settings, onSettingsChange }: SettingsPageProps) {
     const navigate = useNavigate()
     const { showAlert, showConfirm, showPrompt } = useModal()
@@ -55,7 +42,7 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
     const [localSubjects, setLocalSubjects] = useState<SubjectItem[]>(settings.subjects)
     const [types, setTypes] = useState(settings.types.join(', '))
     const [geminiApiKey, setGeminiApiKey] = useState(settings.geminiApiKey || '')
-    const [geminiModel, setGeminiModel] = useState(settings.geminiModel || 'gemini-2.0-flash')
+    const [geminiModel, setGeminiModel] = useState(settings.geminiModel || '')
     const [theme, setTheme] = useState(settings.theme)
     const [profilePicture, setProfilePicture] = useState(settings.profilePicture || '')
     const [dailyGoalHours, setDailyGoalHours] = useState(
@@ -67,6 +54,7 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
     const [saved, setSaved] = useState(false)
     const [geminiModels, setGeminiModels] = useState<GeminiModel[]>([])
     const [loadingModels, setLoadingModels] = useState(false)
+    const [modelsError, setModelsError] = useState<string | null>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
     const backupInputRef = useRef<HTMLInputElement>(null)
     const [exporting, setExporting] = useState(false)
@@ -147,46 +135,39 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
         })
     }
 
-    // Fetch available Gemini models when API key is set
+    // API 키가 입력되면 사용 가능한 Gemini 모델 목록을 API 에서 동적으로 가져온다.
+    // (모델명을 앱에 하드코딩하지 않는다 — 키마다 실제 사용 가능한 모델만 노출)
     useEffect(() => {
-        async function fetchModels() {
-            if (!geminiApiKey || geminiApiKey.length < 10) {
-                // Use default models if no API key
-                setGeminiModels([
-                    { name: 'gemini-2.0-flash', displayName: 'Gemini 2.0 Flash', description: '빠름' },
-                    { name: 'gemini-2.0-flash-lite', displayName: 'Gemini 2.0 Flash Lite', description: '더 빠름' },
-                    { name: 'gemini-2.5-flash-preview-05-20', displayName: 'Gemini 2.5 Flash', description: '최신' },
-                    { name: 'gemini-2.5-pro-preview-05-06', displayName: 'Gemini 2.5 Pro', description: '고성능' },
-                ])
-                return
-            }
-
-            setLoadingModels(true)
-            try {
-                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${geminiApiKey}`)
-                if (response.ok) {
-                    const data = await response.json()
-                    const chatModels = (data.models as GeminiApiModel[] | undefined)
-                        ?.filter((m) => m.supportedGenerationMethods?.includes('generateContent'))
-                        ?.map((m) => ({
-                            name: m.name.replace('models/', ''),
-                            displayName: m.displayName,
-                            description: m.description?.substring(0, 30) || ''
-                        }))
-                        ?.slice(0, 10) || []
-
-                    if (chatModels.length > 0) {
-                        setGeminiModels(chatModels)
-                    }
-                }
-            } catch (error) {
-                console.error('Failed to fetch models:', error)
-            } finally {
-                setLoadingModels(false)
-            }
+        if (!geminiApiKey || geminiApiKey.length < 10) {
+            setGeminiModels([])
+            setModelsError(null)
+            return
         }
-        fetchModels()
+        let cancelled = false
+        setLoadingModels(true)
+        setModelsError(null)
+        fetchGeminiModels(geminiApiKey)
+            .then((models) => {
+                if (cancelled) return
+                setGeminiModels(models)
+                if (models.length === 0) setModelsError('사용 가능한 모델이 없습니다. 키를 확인하세요.')
+            })
+            .catch((err) => {
+                if (cancelled) return
+                setGeminiModels([])
+                setModelsError(err instanceof Error ? err.message : '모델 목록을 불러오지 못했습니다.')
+            })
+            .finally(() => { if (!cancelled) setLoadingModels(false) })
+        return () => { cancelled = true }
     }, [geminiApiKey])
+
+    // 목록이 로드되면, 선택된 모델이 목록에 없을 때 첫 모델로 자동 보정한다.
+    useEffect(() => {
+        if (geminiModels.length === 0) return
+        if (!geminiModels.some((m) => m.name === geminiModel)) {
+            setGeminiModel(geminiModels[0].name)
+        }
+    }, [geminiModels, geminiModel])
 
     // Handle profile picture upload
     const handleProfilePictureChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -599,14 +580,29 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                     <select
                         value={geminiModel}
                         onChange={(e) => setGeminiModel(e.target.value)}
-                        className="w-full px-4 py-3 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)]"
+                        disabled={geminiModels.length === 0}
+                        className="w-full px-4 py-3 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)] disabled:opacity-50"
                     >
-                        {geminiModels.map((model) => (
-                            <option key={model.name} value={model.name}>
-                                {model.displayName} ({model.description})
+                        {geminiModels.length === 0 ? (
+                            <option value="">
+                                {loadingModels ? '모델 목록 불러오는 중…' : 'API 키를 입력하면 모델 목록이 표시됩니다'}
                             </option>
-                        ))}
+                        ) : (
+                            geminiModels.map((model) => (
+                                <option key={model.name} value={model.name}>
+                                    {model.displayName}{model.description ? ` — ${model.description}` : ''}
+                                </option>
+                            ))
+                        )}
                     </select>
+                    {modelsError && (
+                        <p className="text-xs text-red-400 mt-2">{modelsError}</p>
+                    )}
+                    {geminiModels.length > 0 && (
+                        <p className="text-[10px] text-[var(--color-text-secondary)] opacity-50 mt-2">
+                            API 에서 불러온 {geminiModels.length}개 모델 · 키마다 사용 가능 목록이 다를 수 있습니다
+                        </p>
+                    )}
                 </div>
 
                 {/* 태블릿 자체 측정 설정 */}

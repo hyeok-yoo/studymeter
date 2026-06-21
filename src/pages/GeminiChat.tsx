@@ -2,6 +2,7 @@ import { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import type { Settings } from '../lib/db'
 import { db, formatDuration, getTodayDate } from '../lib/db'
+import { generateContent, fetchGeminiModels } from '../lib/gemini'
 
 interface GeminiChatProps {
     settings: Settings
@@ -91,51 +92,26 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
         setShareData('none') // Reset after sending
 
         try {
-            let modelName = settings.geminiModel || 'gemini-2.0-flash'
-            let isFallback = false
-
-            const callApi = async (model: string) => {
-                return await fetch(
-                    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${settings.geminiApiKey}`,
-                    {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            contents: [{ parts: [{ text: fullPrompt }] }]
-                        })
-                    }
-                )
+            // 선택된 모델이 없으면 API 에서 사용 가능한 첫 모델을 사용 (모델명 하드코딩 없음)
+            let modelName = settings.geminiModel
+            if (!modelName) {
+                const models = await fetchGeminiModels(settings.geminiApiKey).catch(() => [])
+                modelName = models[0]?.name ?? ''
             }
-
-            let response = await callApi(modelName)
-
-            // If Quota Exceeded (429) and we are not already using Flash
-            if (response.status === 429 && !modelName.includes('flash')) {
-                modelName = 'gemini-2.0-flash'
-                isFallback = true
-                response = await callApi(modelName)
-            }
-
-            const data = await response.json()
-
-            if (data.error) {
-                const errorMessage = data.error.code === 429
-                    ? `❌ 일일 사용량이 초과되었습니다.\n내일 다시 시도하거나, 설정에서 'Pay-as-you-go'가 활성화된 프로젝트의 API 키를 사용해주세요.`
-                    : `❌ API 오류: ${data.error.message}\n\n모델: ${modelName}`
-
-                setMessages(prev => [...prev, { role: 'assistant', content: errorMessage }])
+            if (!modelName) {
+                setMessages(prev => [...prev, { role: 'assistant', content: '❌ 사용 가능한 모델이 없습니다. 설정에서 API 키와 모델을 확인해주세요.' }])
                 return
             }
 
-            let reply = data.candidates?.[0]?.content?.parts?.[0]?.text || '응답을 받지 못했습니다. (candidates가 없음)'
-
-            if (isFallback) {
-                reply += '\n\n💡 **Tip:** 선택하신 모델의 할당량이 초과되어 **Flash 모델**로 자동 전환하여 답변했습니다.'
-            }
+            const { text, fellBack } = await generateContent(settings.geminiApiKey, modelName, fullPrompt)
+            const reply = fellBack
+                ? text + '\n\n💡 **Tip:** 선택한 모델의 할당량이 초과되어 더 가벼운 모델로 자동 전환해 답변했습니다.'
+                : text
 
             setMessages(prev => [...prev, { role: 'assistant', content: reply }])
-        } catch {
-            setMessages(prev => [...prev, { role: 'assistant', content: '오류가 발생했습니다. API 키를 확인해주세요.' }])
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : '오류가 발생했습니다. API 키를 확인해주세요.'
+            setMessages(prev => [...prev, { role: 'assistant', content: `❌ ${msg}` }])
         } finally {
             setLoading(false)
         }
