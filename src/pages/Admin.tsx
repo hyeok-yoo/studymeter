@@ -6,16 +6,17 @@ import {
   setUserBlocked,
   deleteUser,
   getUserSessions,
-  isAdminPasswordSet,
-  verifyAdminPassword,
-  setAdminPassword,
-  isDevAdminDevice,
+  isOwner,
+  ensureSignedIn,
+  signInAsOwner,
+  signOutToAnonymous,
+  changeOwnerPassword,
   type TelemetryUser,
   type AdminSession,
 } from '../lib/telemetry'
 import { formatDuration, formatDurationHourMinute, formatTimeHHMM, getTodayDate } from '../lib/db'
 
-type Screen = 'loading' | 'setup' | 'login' | 'dashboard'
+type Screen = 'loading' | 'login' | 'dashboard'
 
 export default function Admin() {
   const [screen, setScreen] = useState<Screen>('loading')
@@ -29,14 +30,10 @@ export default function Admin() {
   const [detailUser, setDetailUser] = useState<TelemetryUser | null>(null)
 
   useEffect(() => {
-    // 개발자(소유자) 기기는 비밀번호 없이 바로 대시보드 접근
-    if (isDevAdminDevice() || sessionStorage.getItem('studymeter_admin') === '1') {
-      setScreen('dashboard')
-      return
-    }
-    isAdminPasswordSet().then((set) => {
-      setScreen(set ? 'login' : 'setup')
-    })
+    // 로그인 보장 후, 소유자 계정이면 바로 대시보드 / 아니면 로그인 화면
+    ensureSignedIn()
+      .then(() => setScreen(isOwner() ? 'dashboard' : 'login'))
+      .catch(() => setScreen('login'))
   }, [])
 
   const loadUsers = useCallback(async () => {
@@ -116,19 +113,8 @@ export default function Admin() {
     )
   }
 
-  if (screen === 'setup') {
-    return <SetupScreen onDone={() => setScreen('dashboard')} />
-  }
-
   if (screen === 'login') {
-    return (
-      <LoginScreen
-        onSuccess={() => {
-          sessionStorage.setItem('studymeter_admin', '1')
-          setScreen('dashboard')
-        }}
-      />
-    )
+    return <LoginScreen onSuccess={() => setScreen('dashboard')} />
   }
 
   const active = users.filter((u) => !u.blocked).length
@@ -162,7 +148,7 @@ export default function Admin() {
               새로고침
             </button>
             <button
-              onClick={() => { sessionStorage.removeItem('studymeter_admin'); setScreen('login') }}
+              onClick={async () => { await signOutToAnonymous(); setScreen('login') }}
               className="btn btn-glass px-3 py-2 text-sm text-red-400"
             >
               로그아웃
@@ -605,77 +591,33 @@ function UserDetailModal({ user, onClose }: { user: TelemetryUser; onClose: () =
   )
 }
 
-// ── 초기 비밀번호 설정 화면 ─────────────────────────────────────────────────
-
-function SetupScreen({ onDone }: { onDone: () => void }) {
-  const [pw, setPw] = useState('')
-  const [pw2, setPw2] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-
-  async function handleSetup(e: React.FormEvent) {
-    e.preventDefault()
-    if (pw.length < 6) { setError('비밀번호는 6자 이상이어야 합니다.'); return }
-    if (pw !== pw2) { setError('비밀번호가 일치하지 않습니다.'); return }
-    setLoading(true)
-    try {
-      await setAdminPassword(pw)
-      sessionStorage.setItem('studymeter_admin', '1')
-      onDone()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '오류가 발생했습니다.')
-      setLoading(false)
-    }
-  }
-
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-[var(--color-bg)]">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="glass-card p-8 max-w-sm w-full mx-4"
-      >
-        <div className="flex items-center gap-3 mb-2">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
-            <Icon icon="mdi:shield-lock" className="text-white text-xl" />
-          </div>
-          <div>
-            <h1 className="text-xl font-black gradient-text">관리자 설정</h1>
-            <p className="text-xs text-[var(--color-text-secondary)] opacity-60">최초 1회 비밀번호 설정</p>
-          </div>
-        </div>
-        <p className="text-xs text-yellow-400/80 bg-yellow-500/10 rounded-xl px-3 py-2 mb-6">
-          비밀번호는 암호화되어 서버에 저장됩니다. 분실 시 재설정 방법이 없으니 안전한 곳에 보관하세요.
-        </p>
-        <form onSubmit={handleSetup} className="flex flex-col gap-3">
-          <PasswordInput value={pw} onChange={setPw} placeholder="새 비밀번호 (6자 이상)" />
-          <PasswordInput value={pw2} onChange={setPw2} placeholder="비밀번호 확인" />
-          {error && <p className="text-red-400 text-sm text-center">{error}</p>}
-          <button type="submit" disabled={loading || !pw || !pw2} className="btn btn-primary py-3 font-bold disabled:opacity-40">
-            {loading ? '설정 중...' : '비밀번호 설정 및 시작'}
-          </button>
-        </form>
-      </motion.div>
-    </div>
-  )
-}
-
-// ── 로그인 화면 ─────────────────────────────────────────────────────────────
+// ── 로그인 화면 (소유자 이메일/비밀번호) ───────────────────────────────────
 
 function LoginScreen({ onSuccess }: { onSuccess: () => void }) {
+  const [email, setEmail] = useState('')
   const [pw, setPw] = useState('')
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(false)
+  const [error, setError] = useState('')
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
-    setError(false)
-    const ok = await verifyAdminPassword(pw)
-    if (ok) {
-      onSuccess()
-    } else {
-      setError(true)
+    setError('')
+    try {
+      const ok = await signInAsOwner(email.trim(), pw)
+      if (ok) {
+        onSuccess()
+      } else {
+        setError('관리자 계정이 아닙니다.')
+        setLoading(false)
+      }
+    } catch (err) {
+      const code = (err as { code?: string })?.code ?? ''
+      setError(
+        code === 'auth/too-many-requests'
+          ? '시도가 너무 많습니다. 잠시 후 다시 시도하세요.'
+          : '이메일 또는 비밀번호가 올바르지 않습니다.'
+      )
       setLoading(false)
     }
   }
@@ -697,15 +639,23 @@ function LoginScreen({ onSuccess }: { onSuccess: () => void }) {
           </div>
         </div>
         <form onSubmit={handleLogin} className="flex flex-col gap-4">
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => { setEmail(e.target.value); setError('') }}
+            placeholder="관리자 이메일"
+            autoComplete="username"
+            autoFocus
+            className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-[var(--color-text)] placeholder-[var(--color-text-secondary)]/50 focus:outline-none focus:border-[var(--color-primary)]"
+          />
           <PasswordInput
             value={pw}
-            onChange={(v) => { setPw(v); setError(false) }}
+            onChange={(v) => { setPw(v); setError('') }}
             placeholder="비밀번호"
-            error={error}
-            autoFocus
+            error={!!error}
           />
-          {error && <p className="text-red-400 text-sm text-center">비밀번호가 올바르지 않습니다.</p>}
-          <button type="submit" disabled={loading || !pw} className="btn btn-primary py-3 font-bold disabled:opacity-40">
+          {error && <p className="text-red-400 text-sm text-center">{error}</p>}
+          <button type="submit" disabled={loading || !email || !pw} className="btn btn-primary py-3 font-bold disabled:opacity-40">
             {loading ? '확인 중...' : '로그인'}
           </button>
         </form>
@@ -717,7 +667,6 @@ function LoginScreen({ onSuccess }: { onSuccess: () => void }) {
 // ── 비밀번호 변경 모달 ───────────────────────────────────────────────────────
 
 function ChangePasswordModal({ onClose }: { onClose: () => void }) {
-  const [current, setCurrent] = useState('')
   const [next, setNext] = useState('')
   const [next2, setNext2] = useState('')
   const [loading, setLoading] = useState(false)
@@ -731,10 +680,15 @@ function ChangePasswordModal({ onClose }: { onClose: () => void }) {
     setLoading(true)
     setError('')
     try {
-      await setAdminPassword(next, current)
+      await changeOwnerPassword(next)
       setDone(true)
     } catch (err) {
-      setError(err instanceof Error ? err.message : '오류가 발생했습니다.')
+      const code = (err as { code?: string })?.code ?? ''
+      setError(
+        code === 'auth/requires-recent-login'
+          ? '보안을 위해 로그아웃 후 다시 로그인한 뒤 변경해주세요.'
+          : err instanceof Error ? err.message : '오류가 발생했습니다.'
+      )
       setLoading(false)
     }
   }
@@ -757,13 +711,12 @@ function ChangePasswordModal({ onClose }: { onClose: () => void }) {
           <>
             <h2 className="text-xl font-black mb-6 gradient-text">비밀번호 변경</h2>
             <form onSubmit={handleChange} className="flex flex-col gap-3">
-              <PasswordInput value={current} onChange={setCurrent} placeholder="현재 비밀번호" />
               <PasswordInput value={next} onChange={setNext} placeholder="새 비밀번호 (6자 이상)" />
               <PasswordInput value={next2} onChange={setNext2} placeholder="새 비밀번호 확인" />
               {error && <p className="text-red-400 text-sm text-center">{error}</p>}
               <div className="flex gap-3 mt-2">
                 <button type="button" onClick={onClose} className="btn btn-glass flex-1 py-3 font-bold">취소</button>
-                <button type="submit" disabled={loading || !current || !next || !next2} className="btn btn-primary flex-1 py-3 font-bold disabled:opacity-40">
+                <button type="submit" disabled={loading || !next || !next2} className="btn btn-primary flex-1 py-3 font-bold disabled:opacity-40">
                   {loading ? '변경 중...' : '변경'}
                 </button>
               </div>

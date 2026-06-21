@@ -11,7 +11,7 @@ import { useFocusNative } from '../lib/useFocusNative'
 import { TabletCamera } from '../components/TabletCamera'
 import { HelpButton } from '../components/HelpButton'
 import DevAccessModal from '../components/DevAccessModal'
-import { isDevAdminDevice } from '../lib/telemetry'
+import { isOwner } from '../lib/telemetry'
 import { fetchGeminiModels, type GeminiModel } from '../lib/gemini'
 
 interface SettingsPageProps {
@@ -62,7 +62,7 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
 
     // 숨겨진 개발자 진입: 버전명 5회 탭
     const [showDevAccess, setShowDevAccess] = useState(false)
-    const [devAdmin, setDevAdmin] = useState(isDevAdminDevice())
+    const [devAdmin, setDevAdmin] = useState(isOwner())
     const versionTapCount = useRef(0)
     const versionTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 

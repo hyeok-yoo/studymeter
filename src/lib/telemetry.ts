@@ -12,6 +12,16 @@ import {
   type Firestore,
   type Timestamp,
 } from 'firebase/firestore'
+import {
+  getAuth,
+  onAuthStateChanged,
+  signInAnonymously,
+  signInWithEmailAndPassword,
+  signOut,
+  updatePassword,
+  type Auth,
+  type User,
+} from 'firebase/auth'
 import { db, getTodayDate, type SessionEvaluation } from './db'
 
 const firebaseConfig = {
@@ -23,28 +33,110 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 }
 
+// 소유자(관리자) 계정의 uid. 이 uid 로 로그인한 사용자만 전체 데이터를 열람·관리할 수 있다.
+// firestore.rules 의 isOwner() 와 반드시 동일한 값이어야 한다.
+const OWNER_UID = import.meta.env.VITE_OWNER_UID as string | undefined
+
 let _app: FirebaseApp | null = null
 let _db: Firestore | null = null
+let _auth: Auth | null = null
 
 function isConfigured(): boolean {
   return !!firebaseConfig.projectId
 }
 
+function getApp(): FirebaseApp {
+  if (!_app) _app = initializeApp(firebaseConfig)
+  return _app
+}
+
 function getDb(): Firestore {
-  if (!_db) {
-    _app = initializeApp(firebaseConfig)
-    _db = getFirestore(_app)
-  }
+  if (!_db) _db = getFirestore(getApp())
   return _db
 }
 
+function getAuthInstance(): Auth {
+  if (!_auth) _auth = getAuth(getApp())
+  return _auth
+}
+
+// ── 인증 ─────────────────────────────────────────────────────────────────────
+//
+// 모든 클라이언트는 Firebase Authentication 으로 로그인한다.
+//   • 일반 사용자 → 익명 인증(signInAnonymously). uid 가 곧 기기 식별자(deviceId).
+//   • 소유자(관리자) → 이메일/비밀번호 계정(uid == OWNER_UID).
+// 인증된 신원(request.auth.uid)이 있어야 firestore.rules 가 "본인 것만 / 소유자만"
+// 같은 신원 기반 제약을 적용할 수 있다.
+
+let _authReady: Promise<User> | null = null
+
+// 앱 시작 시 1회 호출: 로그인 상태를 보장한다.
+// 저장된 세션(익명/소유자)이 있으면 그대로 복원하고, 없으면 익명 로그인한다.
+export function ensureSignedIn(): Promise<User> {
+  if (!isConfigured()) return Promise.reject(new Error('Firebase 미설정'))
+  if (_authReady) return _authReady
+  const auth = getAuthInstance()
+  _authReady = new Promise<User>((resolve, reject) => {
+    let kicked = false
+    const unsub = onAuthStateChanged(
+      auth,
+      (user) => {
+        if (user) {
+          unsub()
+          resolve(user)
+        } else if (!kicked) {
+          // 복원할 세션이 없음 → 익명 로그인 (성공 시 위 콜백이 다시 호출됨)
+          kicked = true
+          signInAnonymously(auth).catch((e) => {
+            unsub()
+            reject(e)
+          })
+        }
+      },
+      (e) => {
+        unsub()
+        reject(e)
+      },
+    )
+  })
+  return _authReady
+}
+
+// 현재 로그인한 사용자의 uid = 기기 식별자. (ensureSignedIn 이후에 호출해야 함)
 export function getDeviceId(): string {
-  let id = localStorage.getItem('studymeter_device_id')
-  if (!id) {
-    id = crypto.randomUUID()
-    localStorage.setItem('studymeter_device_id', id)
+  return getAuthInstance().currentUser?.uid ?? ''
+}
+
+// 현재 로그인 계정이 소유자(관리자)인가?
+export function isOwner(): boolean {
+  const uid = getAuthInstance().currentUser?.uid
+  return !!uid && !!OWNER_UID && uid === OWNER_UID
+}
+
+// 소유자 이메일/비밀번호 로그인. 성공 시 true.
+// (소유자 계정이 아니면 다시 익명으로 되돌리고 false 반환)
+export async function signInAsOwner(email: string, password: string): Promise<boolean> {
+  const cred = await signInWithEmailAndPassword(getAuthInstance(), email, password)
+  if (OWNER_UID && cred.user.uid !== OWNER_UID) {
+    await signOutToAnonymous()
+    return false
   }
-  return id
+  return true
+}
+
+// 소유자 로그아웃 → 일반 사용자(익명)로 복귀
+export async function signOutToAnonymous(): Promise<void> {
+  const auth = getAuthInstance()
+  await signOut(auth)
+  await signInAnonymously(auth)
+}
+
+// 소유자 비밀번호 변경 (현재 로그인 세션 기준)
+export async function changeOwnerPassword(newPassword: string): Promise<void> {
+  if (newPassword.length < 6) throw new Error('비밀번호는 6자 이상이어야 합니다.')
+  const user = getAuthInstance().currentUser
+  if (!user) throw new Error('로그인이 필요합니다.')
+  await updatePassword(user, newPassword)
 }
 
 async function fetchIp(): Promise<string> {
@@ -97,12 +189,16 @@ export async function checkBlocked(): Promise<boolean> {
 export async function updateLastSeen(): Promise<void> {
   if (!isConfigured() || !isRegistered()) return
   const deviceId = getDeviceId()
+  if (!deviceId) return
   try {
     const ip = await fetchIp()
-    await updateDoc(doc(getDb(), 'users', deviceId), {
-      lastSeen: serverTimestamp(),
-      ip,
-    })
+    // upsert: 인증 uid 가 바뀐 기존 사용자도 문서를 새로 만들어 주도록 setDoc(merge) 사용.
+    // (updateDoc 은 문서가 없으면 실패한다)
+    await setDoc(
+      doc(getDb(), 'users', deviceId),
+      { name: getRegisteredName(), lastSeen: serverTimestamp(), ip },
+      { merge: true },
+    )
   } catch {
     // silent
   }
@@ -262,135 +358,4 @@ export async function getUserSessions(deviceId: string): Promise<AdminSession[]>
     })
   })
   return out
-}
-
-// ── 관리자/소유자 비밀번호 (Firestore 저장, 단일 자격증명) ───────────────────
-//
-// 관리자 페이지 로그인과 숨겨진 개발자(소유자) 진입이 "동일한" 비밀번호를 공유한다.
-// admin/config 문서 하나로 통합되어 동일 해시값으로 동기화된다. (한쪽에서 바꾸면 둘 다 적용)
-//
-// 비밀번호를 여러 사이트에서 재사용하는 경우를 대비해 PBKDF2(SHA-256, 임의 솔트,
-// 고반복)로 해싱한다. 과거 단순 SHA-256으로 저장된 값은 검증 시 자동 폴백 처리한다.
-// 평문/해시는 기기에 저장하지 않는다. (기기엔 "관리자임" 플래그만)
-
-const LEGACY_SALT = 'studymeter_admin_v1'
-const PBKDF2_ITERATIONS = 210000
-const DEV_ADMIN_FLAG = 'studymeter_dev_admin'
-
-function bytesToHex(buf: ArrayBuffer): string {
-  return Array.from(new Uint8Array(buf))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('')
-}
-
-function hexToBytes(hex: string): Uint8Array {
-  const matches = hex.match(/.{2}/g) ?? []
-  return Uint8Array.from(matches.map((h) => parseInt(h, 16)))
-}
-
-async function pbkdf2Hash(password: string, saltHex: string, iterations: number): Promise<string> {
-  const enc = new TextEncoder()
-  const keyMaterial = await crypto.subtle.importKey(
-    'raw', enc.encode(password), 'PBKDF2', false, ['deriveBits']
-  )
-  const bits = await crypto.subtle.deriveBits(
-    { name: 'PBKDF2', salt: hexToBytes(saltHex) as BufferSource, iterations, hash: 'SHA-256' },
-    keyMaterial,
-    256
-  )
-  return bytesToHex(bits)
-}
-
-// 구버전 호환: SHA-256(salt + password)
-async function legacySha256(password: string): Promise<string> {
-  const data = new TextEncoder().encode(LEGACY_SALT + password)
-  const buf = await crypto.subtle.digest('SHA-256', data)
-  return bytesToHex(buf)
-}
-
-function constantTimeEq(a: string, b: string): boolean {
-  if (a.length !== b.length) return false
-  let diff = 0
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i)
-  return diff === 0
-}
-
-export async function isAdminPasswordSet(): Promise<boolean> {
-  try {
-    const snap = await getDoc(doc(getDb(), 'admin', 'config'))
-    return snap.exists() && !!snap.data().passwordHash
-  } catch {
-    return false
-  }
-}
-
-export async function verifyAdminPassword(password: string): Promise<boolean> {
-  try {
-    const snap = await getDoc(doc(getDb(), 'admin', 'config'))
-    if (!snap.exists()) return false
-    const data = snap.data() as { passwordHash?: string; salt?: string; iterations?: number }
-    if (!data.passwordHash) return false
-    const input = data.salt
-      ? await pbkdf2Hash(password, data.salt, data.iterations || PBKDF2_ITERATIONS)
-      : await legacySha256(password) // 구버전 폴백
-    return constantTimeEq(input, data.passwordHash)
-  } catch {
-    return false
-  }
-}
-
-export async function setAdminPassword(newPassword: string, currentPassword?: string): Promise<void> {
-  if (newPassword.length < 6) throw new Error('비밀번호는 6자 이상이어야 합니다.')
-  const alreadySet = await isAdminPasswordSet()
-  if (alreadySet) {
-    if (!currentPassword) throw new Error('현재 비밀번호가 필요합니다.')
-    const valid = await verifyAdminPassword(currentPassword)
-    if (!valid) throw new Error('현재 비밀번호가 올바르지 않습니다.')
-  }
-  const saltHex = bytesToHex(crypto.getRandomValues(new Uint8Array(16)).buffer)
-  const passwordHash = await pbkdf2Hash(newPassword, saltHex, PBKDF2_ITERATIONS)
-  await setDoc(doc(getDb(), 'admin', 'config'), {
-    passwordHash,
-    salt: saltHex,
-    iterations: PBKDF2_ITERATIONS,
-  })
-}
-
-// 이 기기가 개발자(관리자) 기기로 등록되었는지 (로컬 플래그)
-export function isDevAdminDevice(): boolean {
-  return localStorage.getItem(DEV_ADMIN_FLAG) === '1'
-}
-
-// 현재 기기를 관리자로 등록 (dev 비밀번호 검증 후 호출)
-export async function registerDeviceAsAdmin(): Promise<void> {
-  // 로컬 플래그는 항상 설정 (앱 내 관리자 진입 + /admin 자동 인증용)
-  localStorage.setItem(DEV_ADMIN_FLAG, '1')
-
-  if (!isConfigured()) return
-  const deviceId = getDeviceId()
-  const ip = await fetchIp()
-  const ref = doc(getDb(), 'users', deviceId)
-  const payload: Record<string, unknown> = {
-    isAdmin: true,
-    ip,
-    lastSeen: serverTimestamp(),
-    blocked: false,
-  }
-  try {
-    const snap = await getDoc(ref)
-    const existingName = getRegisteredName()
-    if (!snap.exists()) {
-      payload.name = existingName || '관리자'
-      payload.registeredAt = serverTimestamp()
-    } else if (!snap.data().name) {
-      payload.name = existingName || '관리자'
-    }
-    await setDoc(ref, payload, { merge: true })
-    // 이름 미등록 상태면 로컬에도 채워 이름 등록 모달이 뜨지 않도록
-    if (payload.name && !isRegistered()) {
-      localStorage.setItem('studymeter_telemetry_name', String(payload.name))
-    }
-  } catch {
-    // 오프라인이어도 로컬 플래그는 유지
-  }
 }

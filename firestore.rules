@@ -1,31 +1,29 @@
 rules_version = '2';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// StudyMeter Firestore 보안 규칙
+// StudyMeter Firestore 보안 규칙 (Firebase Authentication 기반)
 //
-// ⚠️ 보안 모델 안내 (반드시 읽어주세요)
-//   이 앱은 현재 Firebase Authentication 을 사용하지 않습니다. 따라서 규칙에서
-//   요청자의 신원(request.auth)을 알 수 없어, "본인 문서만" 또는 "관리자만"
-//   같은 신원 기반 제약을 표현할 수 없습니다.
+//   • 일반 사용자 → 익명 인증. request.auth.uid 가 곧 문서 키(deviceId).
+//                   본인 문서/공부기록만 읽고 쓸 수 있다.
+//   • 소유자(관리자) → 이메일/비밀번호 계정 (uid == OWNER_UID).
+//                   전체 사용자/공부기록을 읽고, 차단·삭제·관리할 수 있다.
 //
-//   아래 규칙은 그 제약 안에서 할 수 있는 최선의 "방어 심층화"입니다:
-//     • 알 수 없는 컬렉션/필드로의 쓰기를 차단 (스키마 강제)
-//     • 문서/배열 크기 상한으로 저장소 남용(스토리지 폭탄) 차단
-//     • 필드 타입 검증으로 관리자 화면이 읽는 데이터의 무결성 보호
+//   ⚠️ 아래 OWNER_UID 값은 src/lib/telemetry.ts 의 VITE_OWNER_UID 와 반드시 동일해야 한다.
 //
-//   그러나 "읽기"는 신원을 구분할 수 없어 공개로 둘 수밖에 없습니다.
-//   (관리자 페이지가 전체 사용자 목록을 list 로 읽어야 하기 때문)
-//
-//   ▶ 완전한 보안(타인의 공부기록/IP 열람 차단, 비밀번호 해시 보호)을 위해서는
-//     Firebase Authentication 도입이 필요합니다. 권장 목표 상태는 파일 하단의
-//     주석(=== 목표 상태 ===)을 참고하세요.
-//
-//   ▶ 이 파일은 CI 로 자동 배포되지 않습니다. 적용하려면 직접 배포하세요:
-//       firebase deploy --only firestore:rules
+//   ▶ 배포: firebase deploy --only firestore:rules
 // ─────────────────────────────────────────────────────────────────────────────
 
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // ── 신원 헬퍼 ────────────────────────────────────────────────────────────
+    function isOwner() {
+      return request.auth != null
+        && request.auth.uid == 'PZ2xJQlvgzLr1rzyJRlLvAUqj2D2';
+    }
+    function isSelf(deviceId) {
+      return request.auth != null && request.auth.uid == deviceId;
+    }
 
     // ── 검증 헬퍼 ────────────────────────────────────────────────────────────
     function isOptString(data, field, maxLen) {
@@ -38,8 +36,7 @@ service cloud.firestore {
       return !(field in data) || data[field] is timestamp;
     }
 
-    // 사용자 텔레메트리 문서 (deviceId = 클라이언트가 생성한 랜덤 UUID)
-    // 클라이언트가 쓰는 필드: name, ip, registeredAt, lastSeen, blocked, isAdmin
+    // 사용자 텔레메트리 문서. 클라이언트가 쓰는 필드: name, ip, registeredAt, lastSeen, blocked, isAdmin
     function isValidUser(data) {
       return data.keys().hasOnly(['name', 'ip', 'registeredAt', 'lastSeen', 'blocked', 'isAdmin'])
         && isOptString(data, 'name', 200)
@@ -59,37 +56,26 @@ service cloud.firestore {
         && data.sessions.size() <= 2000; // 하루 세션 수 상한 (남용 방지)
     }
 
-    // 관리자/소유자 공용 자격증명 (PBKDF2 해시)
-    function isValidAdminConfig(data) {
-      return data.keys().hasOnly(['passwordHash', 'salt', 'iterations'])
-        && data.passwordHash is string && data.passwordHash.size() <= 256
-        && data.salt is string && data.salt.size() <= 128
-        && data.iterations is int && data.iterations > 0 && data.iterations <= 5000000;
-    }
-
     // ── 사용자 문서 ──────────────────────────────────────────────────────────
     match /users/{deviceId} {
-      // 읽기: 신원 구분 불가 → 공개 (Auth 도입 전까지의 한계)
-      allow read: if true;
-      // 쓰기: 스키마/크기 검증 통과 시에만
-      allow create, update: if isValidUser(request.resource.data);
-      // 삭제: 관리자 사용자 삭제 기능 (신원 제약 불가)
-      allow delete: if true;
+      // 읽기: 본인 또는 소유자만
+      allow read: if isOwner() || isSelf(deviceId);
+      // 쓰기: 본인이 스키마를 지켜 쓰거나, 소유자(관리자 작업)
+      allow create, update: if (isSelf(deviceId) && isValidUser(request.resource.data)) || isOwner();
+      // 삭제: 소유자만 (관리자 사용자 삭제 기능)
+      allow delete: if isOwner();
 
       // 일별 공부기록 스냅샷 하위 컬렉션
       match /days/{date} {
-        allow read: if true;
-        allow create, update: if isValidDay(request.resource.data);
-        allow delete: if true;
+        allow read: if isOwner() || isSelf(deviceId);
+        allow create, update: if (isSelf(deviceId) && isValidDay(request.resource.data)) || isOwner();
+        allow delete: if isOwner();
       }
     }
 
-    // ── 관리자 설정 ──────────────────────────────────────────────────────────
+    // ── 관리자 설정 (소유자 전용) ────────────────────────────────────────────
     match /admin/{document} {
-      // 클라이언트가 비밀번호 해시를 읽어 로컬 검증하므로 read 필요
-      allow read: if true;
-      allow create, update: if isValidAdminConfig(request.resource.data);
-      allow delete: if false; // 자격증명 문서 삭제 금지
+      allow read, write: if isOwner();
     }
 
     // 그 외 모든 경로는 기본 거부 (명시적 차단)
@@ -98,28 +84,3 @@ service cloud.firestore {
     }
   }
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// === 목표 상태 (Firebase Authentication 도입 후 권장 규칙) ===
-//
-// 익명 인증(또는 소유자 전용 계정)을 도입하면 아래처럼 신원 기반으로 잠글 수
-// 있습니다. deviceId 를 request.auth.uid 로 사용하고, 소유자 uid 를 지정합니다.
-//
-//   function isOwner() { return request.auth != null
-//       && request.auth.uid == 'OWNER_UID_여기에'; }
-//
-//   match /users/{deviceId} {
-//     // 본인 문서만 읽기·쓰기, 소유자는 전체 열람/관리 가능
-//     allow read:  if isOwner() || request.auth.uid == deviceId;
-//     allow write: if (request.auth.uid == deviceId && isValidUser(request.resource.data))
-//                     || isOwner();
-//     match /days/{date} {
-//       allow read:  if isOwner() || request.auth.uid == deviceId;
-//       allow write: if request.auth.uid == deviceId && isValidDay(request.resource.data);
-//       allow delete: if isOwner() || request.auth.uid == deviceId;
-//     }
-//   }
-//   match /admin/{document} {
-//     allow read, write: if isOwner();
-//   }
-// ─────────────────────────────────────────────────────────────────────────────

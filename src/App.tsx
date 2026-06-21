@@ -12,7 +12,7 @@ import DeveloperPage from './pages/Developer'
 import AdminPage from './pages/Admin'
 import { NativeBridge } from './lib/NativeBridge'
 import NameRegistrationModal from './components/NameRegistrationModal'
-import { isRegistered, checkBlocked, updateLastSeen, maybeSyncToday } from './lib/telemetry'
+import { isRegistered, checkBlocked, updateLastSeen, maybeSyncToday, ensureSignedIn } from './lib/telemetry'
 
 function App() {
   const [settings, setSettings] = useState<Settings | null>(null)
@@ -38,6 +38,13 @@ function App() {
 
     initializeSettings().then(async (s) => {
       setSettings(s);
+
+      // Firebase 로그인 보장(익명 또는 소유자). 이후 모든 Firestore 접근의 전제.
+      try {
+        await ensureSignedIn();
+      } catch {
+        // Firebase 미설정 / 오프라인 → 로컬 전용 동작
+      }
 
       // 어드민 페이지에서는 텔레메트리 모달 스킵
       if (location.pathname === '/admin') {
