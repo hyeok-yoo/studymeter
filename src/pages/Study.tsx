@@ -218,8 +218,6 @@ export default function Study({ settings }: StudyProps) {
         const chronometerBase = Date.now() - calculateElapsed();
 
         const syncNotification = async () => {
-            const { getTodayTotalStudyTime, getTodayStudyTimeBySubject } = await import('../lib/db');
-            
             // 완료된 이전 세션들의 누적 시간 조회
             const pastTotal = await getTodayTotalStudyTime();
             const subjectMap = await getTodayStudyTimeBySubject();
@@ -249,7 +247,7 @@ export default function Study({ settings }: StudyProps) {
         NativeBridge.hideStatusBar();
 
         // 네이티브 타이머 액션(알림 버튼) 리스너 등록
-        let listenerHandle: any = null;
+        let listenerHandle: Awaited<ReturnType<typeof NativeBridge.addTimerActionListener>> = null;
         const setupNativeListener = async () => {
             listenerHandle = await NativeBridge.addTimerActionListener((action) => {
                 if (action === 'pause') {

@@ -94,8 +94,6 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
             let modelName = settings.geminiModel || 'gemini-2.0-flash'
             let isFallback = false
 
-            console.log('Using model:', modelName)
-
             const callApi = async (model: string) => {
                 return await fetch(
                     `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${settings.geminiApiKey}`,
@@ -113,14 +111,12 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
 
             // If Quota Exceeded (429) and we are not already using Flash
             if (response.status === 429 && !modelName.includes('flash')) {
-                console.log('Quota exceeded for', modelName, 'switching to fallback...')
                 modelName = 'gemini-2.0-flash'
                 isFallback = true
                 response = await callApi(modelName)
             }
 
             const data = await response.json()
-            console.log('API Response:', data)
 
             if (data.error) {
                 const errorMessage = data.error.code === 429
@@ -138,7 +134,7 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
             }
 
             setMessages(prev => [...prev, { role: 'assistant', content: reply }])
-        } catch (error) {
+        } catch {
             setMessages(prev => [...prev, { role: 'assistant', content: '오류가 발생했습니다. API 키를 확인해주세요.' }])
         } finally {
             setLoading(false)

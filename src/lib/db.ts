@@ -98,17 +98,14 @@ export async function initializeSettings(): Promise<Settings> {
 
     if (existingSettings) {
         // 마이그레이션: 기존 string[] 형식을 SubjectItem[] 형식으로 변환
-        const migratedSubjects = existingSettings.subjects.map((s: any) => {
-            // 이미 SubjectItem 형태인 경우
-            if (typeof s === 'object' && s.name) {
-                return s as SubjectItem;
-            }
-            // 기존 string 형태인 경우 변환
-            return { name: String(s) } as SubjectItem;
-        });
+        // (런타임상 레거시 데이터는 (SubjectItem | string)[] 일 수 있음)
+        const legacySubjects = existingSettings.subjects as Array<SubjectItem | string>;
+        const migratedSubjects: SubjectItem[] = legacySubjects.map((s) =>
+            typeof s === 'string' ? { name: s } : s
+        );
 
         // 마이그레이션 필요한 경우 업데이트
-        if (existingSettings.subjects.some((s: any) => typeof s === 'string')) {
+        if (legacySubjects.some((s) => typeof s === 'string')) {
             existingSettings.subjects = migratedSubjects;
             await db.settings.update(existingSettings.id!, { subjects: migratedSubjects });
         }

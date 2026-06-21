@@ -40,6 +40,14 @@ interface GeminiModel {
     description: string
 }
 
+// Gemini ListModels API 응답의 개별 모델 형태 (필요한 필드만)
+interface GeminiApiModel {
+    name: string
+    displayName: string
+    description?: string
+    supportedGenerationMethods?: string[]
+}
+
 export default function SettingsPage({ settings, onSettingsChange }: SettingsPageProps) {
     const navigate = useNavigate()
     const { showAlert, showConfirm, showPrompt } = useModal()
@@ -158,9 +166,9 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                 const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${geminiApiKey}`)
                 if (response.ok) {
                     const data = await response.json()
-                    const chatModels = data.models
-                        ?.filter((m: any) => m.supportedGenerationMethods?.includes('generateContent'))
-                        ?.map((m: any) => ({
+                    const chatModels = (data.models as GeminiApiModel[] | undefined)
+                        ?.filter((m) => m.supportedGenerationMethods?.includes('generateContent'))
+                        ?.map((m) => ({
                             name: m.name.replace('models/', ''),
                             displayName: m.displayName,
                             description: m.description?.substring(0, 30) || ''

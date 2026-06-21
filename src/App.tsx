@@ -1,5 +1,5 @@
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { initializeSettings, type Settings, db } from './lib/db'
 import Layout from './components/Layout'
 import Home from './pages/Home'
@@ -21,20 +21,23 @@ function App() {
   const [isBlocked, setIsBlocked] = useState(false)
   const navigate = useNavigate()
   const location = useLocation()
+  const didInitRef = useRef(false)
 
+  // 진행 중인 세션(실행/일시정지)이 있으면 공부 화면으로 자동 이동.
+  // 네비게이션마다 확인해 세션 중에는 공부 화면에 머무르게 한다.
   useEffect(() => {
-    // 1. 초기 설정 로드 (한 번만 실행)
+    if (localStorage.getItem('studymeter_active_session') && location.pathname !== '/study') {
+      navigate('/study', { replace: true });
+    }
+  }, [location.pathname, navigate]);
+
+  // 초기 설정 로드 + 텔레메트리 (앱 시작 시 1회만 실행)
+  useEffect(() => {
+    if (didInitRef.current) return;
+    didInitRef.current = true;
+
     initializeSettings().then(async (s) => {
       setSettings(s);
-
-      // 진행 중인 세션 확인 후 자동 리다이렉트
-      const saved = localStorage.getItem('studymeter_active_session');
-      if (saved) {
-        // Redirect if there is an active session (running or paused) AND we are not already on the study page
-        if (location.pathname !== '/study') {
-          navigate('/study', { replace: true });
-        }
-      }
 
       // 어드민 페이지에서는 텔레메트리 모달 스킵
       if (location.pathname === '/admin') {
@@ -59,7 +62,9 @@ function App() {
 
       setLoading(false);
     });
-  }, [location.pathname, navigate]); // Add location.pathname and navigate to dependencies to ensure correct behavior
+    // 마운트 시 1회만 실행 (location.pathname 은 최초 값만 사용)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // 등록 완료 후 settings.userName 동기화 + 차단 확인
   async function handleRegistrationDone(name: string) {
