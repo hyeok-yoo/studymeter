@@ -28,6 +28,7 @@ import { TabletCamera } from '../components/TabletCamera'
 import { NativeBridge } from '../lib/NativeBridge'
 import type { RingerMode } from '../lib/NativeBridge'
 import { HelpButton } from '../components/HelpButton'
+import { maybeSyncToday } from '../lib/telemetry'
 import { useDrowsiness } from '../lib/useDrowsiness'
 import { playTimerEndSound, startDrowsyAlarm, type AlarmModality } from '../lib/alarm'
 
@@ -217,8 +218,6 @@ export default function Study({ settings }: StudyProps) {
         const chronometerBase = Date.now() - calculateElapsed();
 
         const syncNotification = async () => {
-            const { getTodayTotalStudyTime, getTodayStudyTimeBySubject } = await import('../lib/db');
-            
             // 완료된 이전 세션들의 누적 시간 조회
             const pastTotal = await getTodayTotalStudyTime();
             const subjectMap = await getTodayStudyTimeBySubject();
@@ -248,7 +247,7 @@ export default function Study({ settings }: StudyProps) {
         NativeBridge.hideStatusBar();
 
         // 네이티브 타이머 액션(알림 버튼) 리스너 등록
-        let listenerHandle: any = null;
+        let listenerHandle: Awaited<ReturnType<typeof NativeBridge.addTimerActionListener>> = null;
         const setupNativeListener = async () => {
             listenerHandle = await NativeBridge.addTimerActionListener((action) => {
                 if (action === 'pause') {
@@ -353,6 +352,8 @@ export default function Study({ settings }: StudyProps) {
             }
             const id = await db.sessions.add(session)
             localStorage.removeItem(STORAGE_KEY)
+            // 세션 저장 후 throttle 기준으로 동기화 (평가 저장 시 force sync가 따로 실행됨)
+            if (!showEval) maybeSyncToday(false)
 
             if (showEval) {
                 setLastSessionId(id as number)
@@ -459,12 +460,14 @@ export default function Study({ settings }: StudyProps) {
     const handleEvalSave = async (evaluation: SessionEvaluation) => {
         if (lastSessionId) {
             await db.sessions.update(lastSessionId, { evaluation })
+            maybeSyncToday(true)
         }
         setShowEvalModal(false)
         navigate('/')
     }
 
     const handleEvalSkip = () => {
+        maybeSyncToday(true) // 평가 스킵 시에도 세션 기록 동기화
         setShowEvalModal(false)
         navigate('/')
     }

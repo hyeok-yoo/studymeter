@@ -1,11 +1,94 @@
 rules_version = '2';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// StudyMeter Firestore 보안 규칙 (Firebase Authentication 기반)
+//
+//   • 일반 사용자 → 익명 인증. request.auth.uid 가 곧 문서 키(deviceId).
+//                   본인 문서/공부기록만 읽고 쓸 수 있다.
+//   • 소유자(관리자) → 이메일/비밀번호 계정 (uid == OWNER_UID).
+//                   전체 사용자/공부기록을 읽고, 차단·삭제·관리할 수 있다.
+//
+//   ⚠️ 아래 OWNER_UID 값은 src/lib/telemetry.ts 의 VITE_OWNER_UID 와 반드시 동일해야 한다.
+//
+//   ▶ 배포: firebase deploy --only firestore:rules
+// ─────────────────────────────────────────────────────────────────────────────
+
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /users/{deviceId} {
-      allow read, write: if true;
+
+    // ── 신원 헬퍼 ────────────────────────────────────────────────────────────
+    function isOwner() {
+      return request.auth != null
+        && request.auth.uid == 'PZ2xJQlvgzLr1rzyJRlLvAUqj2D2';
     }
-    match /admin/config {
-      allow read, write: if true;
+    function isSelf(deviceId) {
+      return request.auth != null && request.auth.uid == deviceId;
+    }
+
+    // ── 검증 헬퍼 ────────────────────────────────────────────────────────────
+    function isOptString(data, field, maxLen) {
+      return !(field in data) || (data[field] is string && data[field].size() <= maxLen);
+    }
+    function isOptBool(data, field) {
+      return !(field in data) || data[field] is bool;
+    }
+    function isOptTimestamp(data, field) {
+      return !(field in data) || data[field] is timestamp;
+    }
+
+    // 사용자 텔레메트리 문서. 클라이언트가 쓰는 필드: name, ip, registeredAt, lastSeen, blocked, isAdmin
+    function isValidUser(data) {
+      return data.keys().hasOnly(['name', 'ip', 'registeredAt', 'lastSeen', 'blocked', 'isAdmin'])
+        && isOptString(data, 'name', 200)
+        && isOptString(data, 'ip', 64)
+        && isOptBool(data, 'blocked')
+        // isAdmin 은 일반 사용자가 스스로 true 로 올릴 수 없다(가짜 관리자 배지 방지).
+        // 소유자는 아래 규칙의 isOwner() 분기로 우회해 자기 문서에 isAdmin 을 단다.
+        && (!('isAdmin' in data) || data.isAdmin == false)
+        && isOptTimestamp(data, 'registeredAt')
+        && isOptTimestamp(data, 'lastSeen');
+    }
+
+    // 하루치 공부기록 스냅샷
+    function isValidDay(data) {
+      return data.keys().hasOnly(['date', 'updatedAt', 'sessions'])
+        && data.date is string && data.date.size() <= 16
+        && isOptTimestamp(data, 'updatedAt')
+        && data.sessions is list
+        && data.sessions.size() <= 2000; // 하루 세션 수 상한 (남용 방지)
+    }
+
+    // ── 사용자 문서 ──────────────────────────────────────────────────────────
+    match /users/{deviceId} {
+      // 읽기: 본인 또는 소유자만
+      allow read: if isOwner() || isSelf(deviceId);
+      // 생성: 본인은 스키마 준수 + blocked 는 false 로만 시작 가능. / 소유자: 전권.
+      allow create: if isOwner()
+        || (isSelf(deviceId) && isValidUser(request.resource.data)
+            && request.resource.data.get('blocked', false) == false);
+      // 수정: 본인은 스키마 준수 + blocked 를 스스로 바꿀 수 없음(자가 차단해제 방지). / 소유자: 전권.
+      allow update: if isOwner()
+        || (isSelf(deviceId) && isValidUser(request.resource.data)
+            && request.resource.data.get('blocked', false) == resource.data.get('blocked', false));
+      // 삭제: 소유자만 (관리자 사용자 삭제 기능)
+      allow delete: if isOwner();
+
+      // 일별 공부기록 스냅샷 하위 컬렉션
+      match /days/{date} {
+        allow read: if isOwner() || isSelf(deviceId);
+        allow create, update: if (isSelf(deviceId) && isValidDay(request.resource.data)) || isOwner();
+        allow delete: if isOwner();
+      }
+    }
+
+    // ── 관리자 설정 (소유자 전용) ────────────────────────────────────────────
+    match /admin/{document} {
+      allow read, write: if isOwner();
+    }
+
+    // 그 외 모든 경로는 기본 거부 (명시적 차단)
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

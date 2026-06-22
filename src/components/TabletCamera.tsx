@@ -63,7 +63,7 @@ export function TabletCamera({ sendVideoFrame, connected, fps = 10, autoStart = 
                 }
                 setCameraReady(true);
                 intervalRef.current = window.setInterval(captureAndSend, 1000 / fps);
-            } catch (e) {
+            } catch {
                 if (!cancelled) setError('카메라 접근 실패. 권한을 확인하세요.');
             }
         })();

@@ -21,9 +21,11 @@ export function getCapturedPrompt() { return _deferredPrompt }
 export function clearCapturedPrompt() { _deferredPrompt = null }
 
 export function isStandaloneMode(): boolean {
+    // `standalone` 은 iOS Safari 전용 비표준 속성 (표준 Navigator 타입에 없음)
+    const nav = window.navigator as Navigator & { standalone?: boolean }
     return (
         window.matchMedia('(display-mode: standalone)').matches ||
-        (window.navigator as any).standalone === true
+        nav.standalone === true
     )
 }
 

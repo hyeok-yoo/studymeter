@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { db, deleteStudySession, updateStudySession, formatDuration, getTodayDate, formatTimeHHMM, findOverlappingSession, adjustOverlappingSession, getLatestEndTime } from '../lib/db'
 import { useModal } from '../lib/ModalContext'
+import { maybeSyncToday } from '../lib/telemetry'
 import type { Settings, StudySession, DailyRecord } from '../lib/db'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Icon } from '@iconify/react'
@@ -72,10 +73,6 @@ export default function EditRecords({ settings }: EditRecordsProps) {
 
     const isToday = selectedDate === getTodayDate()
 
-    useEffect(() => {
-        loadData()
-    }, [selectedDate])
-
     async function loadData() {
         const record = await db.dailyRecords.get(selectedDate)
         setDailyRecord(record || { date: selectedDate, firstVisitCompleted: false })
@@ -88,6 +85,11 @@ export default function EditRecords({ settings }: EditRecordsProps) {
         sessions.sort((a, b) => b.startTime - a.startTime)
         setRecentSessions(sessions)
     }
+
+    useEffect(() => {
+        loadData()
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedDate])
 
     const handleUpdateDaily = async (field: keyof DailyRecord, value: string) => {
         const existing = await db.dailyRecords.get(selectedDate)
@@ -258,6 +260,7 @@ export default function EditRecords({ settings }: EditRecordsProps) {
             }
             await db.sessions.add(session)
         }
+        maybeSyncToday(false) // throttle 적용 — 수동 편집마다 강제 동기화 불필요
 
         handleResetForm()
         loadData()
@@ -285,6 +288,7 @@ export default function EditRecords({ settings }: EditRecordsProps) {
         const confirmed = await showConfirm('기록 삭제', '정말 이 학습 기록을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.')
         if (!confirmed) return
         await deleteStudySession(id)
+        maybeSyncToday(false) // throttle 적용
         if (editingSessionId === id) handleResetForm()
         loadData()
     }
@@ -343,20 +347,20 @@ export default function EditRecords({ settings }: EditRecordsProps) {
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
-                            {[
+                            {([
                                 { label: '기상 시간', field: 'wakeUpTime', icon: 'mdi:weather-sunset-up', color: 'text-orange-400' },
                                 { label: '전날 취침 시간', field: 'bedTime', icon: 'mdi:weather-night', color: 'text-indigo-400' },
-                                ((dailyRecord as any)?.arrivalTime ? { label: '등원 시간', field: 'arrivalTime', icon: 'mdi:school-outline', color: 'text-blue-400' } : null),
-                                ((dailyRecord as any)?.leaveTime ? { label: '하원 시간', field: 'leaveTime', icon: 'mdi:door-open', color: 'text-green-400' } : null)
-                            ].filter(Boolean).map((item: any) => (
+                                ...(dailyRecord?.arrivalTime ? [{ label: '등원 시간', field: 'arrivalTime', icon: 'mdi:school-outline', color: 'text-blue-400' }] : []),
+                                ...(dailyRecord?.leaveTime ? [{ label: '하원 시간', field: 'leaveTime', icon: 'mdi:door-open', color: 'text-green-400' }] : []),
+                            ] as { label: string; field: 'wakeUpTime' | 'bedTime' | 'arrivalTime' | 'leaveTime'; icon: string; color: string }[]).map((item) => (
                                 <div key={item.field} className="flex flex-col gap-2">
                                     <label className="text-xs font-bold opacity-60 flex items-center gap-1">
                                         <Icon icon={item.icon} className={`text-lg ${item.color}`} /> {item.label}
                                     </label>
                                     <input
                                         type="time"
-                                        value={(dailyRecord as any)?.[item.field] || ''}
-                                        onChange={(e) => handleUpdateDaily(item.field as any, e.target.value)}
+                                        value={dailyRecord?.[item.field] || ''}
+                                        onChange={(e) => handleUpdateDaily(item.field, e.target.value)}
                                         className="px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                                     />
                                 </div>

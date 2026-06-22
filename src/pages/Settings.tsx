@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { Icon } from '@iconify/react'
 import type { Settings, SubjectItem } from '../lib/db'
 import { db } from '../lib/db'
@@ -10,6 +10,9 @@ import { useFocusSync } from '../lib/focusSync'
 import { useFocusNative } from '../lib/useFocusNative'
 import { TabletCamera } from '../components/TabletCamera'
 import { HelpButton } from '../components/HelpButton'
+import DevAccessModal from '../components/DevAccessModal'
+import { isOwner } from '../lib/telemetry'
+import { fetchGeminiModels, type GeminiModel } from '../lib/gemini'
 
 interface SettingsPageProps {
     settings: Settings
@@ -32,12 +35,6 @@ function normalizeWsUrl(raw: string): string {
     }
 }
 
-interface GeminiModel {
-    name: string
-    displayName: string
-    description: string
-}
-
 export default function SettingsPage({ settings, onSettingsChange }: SettingsPageProps) {
     const navigate = useNavigate()
     const { showAlert, showConfirm, showPrompt } = useModal()
@@ -45,7 +42,7 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
     const [localSubjects, setLocalSubjects] = useState<SubjectItem[]>(settings.subjects)
     const [types, setTypes] = useState(settings.types.join(', '))
     const [geminiApiKey, setGeminiApiKey] = useState(settings.geminiApiKey || '')
-    const [geminiModel, setGeminiModel] = useState(settings.geminiModel || 'gemini-2.0-flash')
+    const [geminiModel, setGeminiModel] = useState(settings.geminiModel || '')
     const [theme, setTheme] = useState(settings.theme)
     const [profilePicture, setProfilePicture] = useState(settings.profilePicture || '')
     const [dailyGoalHours, setDailyGoalHours] = useState(
@@ -57,10 +54,28 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
     const [saved, setSaved] = useState(false)
     const [geminiModels, setGeminiModels] = useState<GeminiModel[]>([])
     const [loadingModels, setLoadingModels] = useState(false)
+    const [modelsError, setModelsError] = useState<string | null>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
     const backupInputRef = useRef<HTMLInputElement>(null)
     const [exporting, setExporting] = useState(false)
     const [importing, setImporting] = useState(false)
+
+    // 숨겨진 개발자 진입: 버전명 5회 탭
+    const [showDevAccess, setShowDevAccess] = useState(false)
+    const [devAdmin, setDevAdmin] = useState(isOwner())
+    const versionTapCount = useRef(0)
+    const versionTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+    const handleVersionTap = () => {
+        versionTapCount.current += 1
+        if (versionTapTimer.current) clearTimeout(versionTapTimer.current)
+        versionTapTimer.current = setTimeout(() => { versionTapCount.current = 0 }, 1500)
+        if (versionTapCount.current >= 5) {
+            versionTapCount.current = 0
+            if (versionTapTimer.current) clearTimeout(versionTapTimer.current)
+            setShowDevAccess(true)
+        }
+    }
 
     // PC Focus 연결 설정 상태
     const [serverUrlInput, setServerUrlInput] = useState(() => localStorage.getItem('focus_server_url') || '')
@@ -120,46 +135,39 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
         })
     }
 
-    // Fetch available Gemini models when API key is set
+    // API 키가 입력되면 사용 가능한 Gemini 모델 목록을 API 에서 동적으로 가져온다.
+    // (모델명을 앱에 하드코딩하지 않는다 — 키마다 실제 사용 가능한 모델만 노출)
     useEffect(() => {
-        async function fetchModels() {
-            if (!geminiApiKey || geminiApiKey.length < 10) {
-                // Use default models if no API key
-                setGeminiModels([
-                    { name: 'gemini-2.0-flash', displayName: 'Gemini 2.0 Flash', description: '빠름' },
-                    { name: 'gemini-2.0-flash-lite', displayName: 'Gemini 2.0 Flash Lite', description: '더 빠름' },
-                    { name: 'gemini-2.5-flash-preview-05-20', displayName: 'Gemini 2.5 Flash', description: '최신' },
-                    { name: 'gemini-2.5-pro-preview-05-06', displayName: 'Gemini 2.5 Pro', description: '고성능' },
-                ])
-                return
-            }
-
-            setLoadingModels(true)
-            try {
-                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${geminiApiKey}`)
-                if (response.ok) {
-                    const data = await response.json()
-                    const chatModels = data.models
-                        ?.filter((m: any) => m.supportedGenerationMethods?.includes('generateContent'))
-                        ?.map((m: any) => ({
-                            name: m.name.replace('models/', ''),
-                            displayName: m.displayName,
-                            description: m.description?.substring(0, 30) || ''
-                        }))
-                        ?.slice(0, 10) || []
-
-                    if (chatModels.length > 0) {
-                        setGeminiModels(chatModels)
-                    }
-                }
-            } catch (error) {
-                console.error('Failed to fetch models:', error)
-            } finally {
-                setLoadingModels(false)
-            }
+        if (!geminiApiKey || geminiApiKey.length < 10) {
+            setGeminiModels([])
+            setModelsError(null)
+            return
         }
-        fetchModels()
+        let cancelled = false
+        setLoadingModels(true)
+        setModelsError(null)
+        fetchGeminiModels(geminiApiKey)
+            .then((models) => {
+                if (cancelled) return
+                setGeminiModels(models)
+                if (models.length === 0) setModelsError('사용 가능한 모델이 없습니다. 키를 확인하세요.')
+            })
+            .catch((err) => {
+                if (cancelled) return
+                setGeminiModels([])
+                setModelsError(err instanceof Error ? err.message : '모델 목록을 불러오지 못했습니다.')
+            })
+            .finally(() => { if (!cancelled) setLoadingModels(false) })
+        return () => { cancelled = true }
     }, [geminiApiKey])
+
+    // 목록이 로드되면, 선택된 모델이 목록에 없을 때 첫 모델로 자동 보정한다.
+    useEffect(() => {
+        if (geminiModels.length === 0) return
+        if (!geminiModels.some((m) => m.name === geminiModel)) {
+            setGeminiModel(geminiModels[0].name)
+        }
+    }, [geminiModels, geminiModel])
 
     // Handle profile picture upload
     const handleProfilePictureChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -572,14 +580,72 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                     <select
                         value={geminiModel}
                         onChange={(e) => setGeminiModel(e.target.value)}
-                        className="w-full px-4 py-3 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)]"
+                        disabled={geminiModels.length === 0}
+                        className="w-full px-4 py-3 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)] disabled:opacity-50"
                     >
-                        {geminiModels.map((model) => (
-                            <option key={model.name} value={model.name}>
-                                {model.displayName} ({model.description})
+                        {geminiModels.length === 0 ? (
+                            <option value="">
+                                {loadingModels ? '모델 목록 불러오는 중…' : 'API 키를 입력하면 모델 목록이 표시됩니다'}
                             </option>
-                        ))}
+                        ) : (
+                            geminiModels.map((model) => (
+                                <option key={model.name} value={model.name}>
+                                    {model.displayName}{model.description ? ` — ${model.description}` : ''}
+                                </option>
+                            ))
+                        )}
                     </select>
+                    {modelsError && (
+                        <p className="text-xs text-red-400 mt-2">{modelsError}</p>
+                    )}
+                    {geminiModels.length > 0 && (
+                        <p className="text-[10px] text-[var(--color-text-secondary)] opacity-50 mt-2">
+                            API 에서 불러온 {geminiModels.length}개 모델 · 키마다 사용 가능 목록이 다를 수 있습니다
+                        </p>
+                    )}
+
+                    {/* 선택한 모델의 능력치 (API 제공 + 추정) */}
+                    {(() => {
+                        const m = geminiModels.find((x) => x.name === geminiModel)
+                        if (!m) return null
+                        return (
+                            <div className="mt-3 pt-3 border-t border-[var(--color-border)] space-y-2">
+                                <div className="flex flex-wrap gap-1.5">
+                                    {m.supportsThinking && (
+                                        <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-purple-500/15 text-purple-400 border border-purple-400/20 flex items-center gap-1">
+                                            <Icon icon="mdi:brain" className="text-xs" /> 단계적 추론 (Thinking)
+                                        </span>
+                                    )}
+                                    {m.supportsGrounding && (
+                                        <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-cyan-500/15 text-cyan-400 border border-cyan-400/20 flex items-center gap-1">
+                                            <Icon icon="mdi:google" className="text-xs" /> Google 검색 그라운딩
+                                        </span>
+                                    )}
+                                    {m.version && (
+                                        <span className="text-[10px] font-medium px-2 py-1 rounded-full bg-white/5 text-[var(--color-text-secondary)]">
+                                            v{m.version}
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-[var(--color-text-secondary)] opacity-70">
+                                    {m.inputTokenLimit != null && (
+                                        <span>입력 한도: {m.inputTokenLimit.toLocaleString()} 토큰</span>
+                                    )}
+                                    {m.outputTokenLimit != null && (
+                                        <span>출력 한도: {m.outputTokenLimit.toLocaleString()} 토큰</span>
+                                    )}
+                                    {m.temperature != null && (
+                                        <span>기본 온도: {m.temperature}{m.maxTemperature != null ? ` (최대 ${m.maxTemperature})` : ''}</span>
+                                    )}
+                                </div>
+                                {m.description && (
+                                    <p className="text-[10px] text-[var(--color-text-secondary)] opacity-60 leading-relaxed">
+                                        {m.description}
+                                    </p>
+                                )}
+                            </div>
+                        )
+                    })()}
                 </div>
 
                 {/* 태블릿 자체 측정 설정 */}
@@ -905,8 +971,26 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                         </motion.span>
                     </button>
 
+                    {devAdmin && (
+                        <button
+                            onClick={() => navigate('/admin')}
+                            className="w-full flex items-center justify-between px-5 py-3.5 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all group"
+                        >
+                            <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-white flex-shrink-0">
+                                    <Icon icon="mdi:shield-crown" className="text-base" />
+                                </div>
+                                <p className="text-sm font-bold text-left">관리자 페이지</p>
+                            </div>
+                            <Icon icon="mdi:chevron-right" className="text-xl text-[var(--color-text-secondary)] opacity-50 group-hover:opacity-100 transition-all" />
+                        </button>
+                    )}
+
                     <div className="text-center flex flex-col items-center gap-0.5">
-                        <p className="text-[10px] text-[var(--color-text-secondary)] font-mono opacity-50">
+                        <p
+                            onClick={handleVersionTap}
+                            className="text-[10px] text-[var(--color-text-secondary)] font-mono opacity-50 cursor-default select-none"
+                        >
                             StudyMeter v{__APP_VERSION__}
                         </p>
                         <p className="text-[10px] text-[var(--color-text-secondary)] font-mono opacity-30">
@@ -918,6 +1002,19 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                     </div>
                 </div>
             </div>
+
+            <AnimatePresence>
+                {showDevAccess && (
+                    <DevAccessModal
+                        onClose={() => setShowDevAccess(false)}
+                        onAuthed={() => {
+                            setDevAdmin(true)
+                            setShowDevAccess(false)
+                            navigate('/admin')
+                        }}
+                    />
+                )}
+            </AnimatePresence>
         </div>
     )
 }
