@@ -260,7 +260,7 @@ export default function EditRecords({ settings }: EditRecordsProps) {
             }
             await db.sessions.add(session)
         }
-        maybeSyncToday(true)
+        maybeSyncToday(false) // throttle 적용 — 수동 편집마다 강제 동기화 불필요
 
         handleResetForm()
         loadData()
@@ -288,7 +288,7 @@ export default function EditRecords({ settings }: EditRecordsProps) {
         const confirmed = await showConfirm('기록 삭제', '정말 이 학습 기록을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.')
         if (!confirmed) return
         await deleteStudySession(id)
-        maybeSyncToday(true)
+        maybeSyncToday(false) // throttle 적용
         if (editingSessionId === id) handleResetForm()
         loadData()
     }

@@ -139,11 +139,23 @@ export async function changeOwnerPassword(newPassword: string): Promise<void> {
   await updatePassword(user, newPassword)
 }
 
+const IP_CACHE_KEY = 'studymeter_ip_cache'
+const IP_CACHE_TTL = 24 * 60 * 60 * 1000 // 24시간 캐시
+
 async function fetchIp(): Promise<string> {
+  try {
+    const raw = localStorage.getItem(IP_CACHE_KEY)
+    if (raw) {
+      const { ip, ts } = JSON.parse(raw) as { ip: string; ts: number }
+      if (Date.now() - ts < IP_CACHE_TTL) return ip
+    }
+  } catch { /* ignore */ }
   try {
     const res = await fetch('https://api.ipify.org?format=json', { signal: AbortSignal.timeout(5000) })
     const data = await res.json()
-    return data.ip as string
+    const ip = data.ip as string
+    localStorage.setItem(IP_CACHE_KEY, JSON.stringify({ ip, ts: Date.now() }))
+    return ip
   } catch {
     return 'unknown'
   }
@@ -176,20 +188,39 @@ export async function registerUser(name: string): Promise<void> {
   localStorage.setItem('studymeter_telemetry_name', name)
 }
 
+const BLOCKED_CACHE_KEY = 'studymeter_blocked_cache'
+const BLOCKED_CACHE_TTL = 30 * 60 * 1000 // 30분 캐시
+
 export async function checkBlocked(): Promise<boolean> {
   if (!isConfigured()) return false
+  // 캐시가 유효하면 Firestore 읽기 없이 반환
+  try {
+    const raw = localStorage.getItem(BLOCKED_CACHE_KEY)
+    if (raw) {
+      const { blocked, ts } = JSON.parse(raw) as { blocked: boolean; ts: number }
+      if (Date.now() - ts < BLOCKED_CACHE_TTL) return blocked
+    }
+  } catch { /* ignore */ }
   const deviceId = getDeviceId()
+  let result = false
   try {
     const snap = await getDoc(doc(getDb(), 'users', deviceId))
-    if (snap.exists()) return snap.data().blocked === true
+    if (snap.exists()) result = snap.data().blocked === true
   } catch {
     // offline → don't block
   }
-  return false
+  localStorage.setItem(BLOCKED_CACHE_KEY, JSON.stringify({ blocked: result, ts: Date.now() }))
+  return result
 }
+
+const LAST_SEEN_THROTTLE_KEY = 'studymeter_last_seen_ts'
+const LAST_SEEN_MIN_INTERVAL = 4 * 60 * 60 * 1000 // 4시간에 1회만 Firestore 쓰기
 
 export async function updateLastSeen(): Promise<void> {
   if (!isConfigured() || !isRegistered()) return
+  // 최근 업데이트했으면 스킵 (Firestore 쓰기 절약)
+  const lastTs = parseInt(localStorage.getItem(LAST_SEEN_THROTTLE_KEY) ?? '0', 10)
+  if (Date.now() - lastTs < LAST_SEEN_MIN_INTERVAL) return
   const deviceId = getDeviceId()
   if (!deviceId) return
   const owner = isOwner()
@@ -201,10 +232,10 @@ export async function updateLastSeen(): Promise<void> {
       await setDoc(doc(getDb(), 'users', deviceId), { ...base, isAdmin: true }, { merge: true })
     } else {
       // 일반 사용자: 이미 등록된 문서만 갱신한다.
-      // (익명 인증 uid 가 바뀌어도 새 문서를 만들지 않음 → 같은 이름이 무한 증식하는 문제 방지.
-      //  문서가 없으면 updateDoc 이 실패하고 아래 catch 에서 조용히 무시된다.)
+      // (문서가 없으면 updateDoc이 실패하고 아래 catch에서 조용히 무시된다.)
       await updateDoc(doc(getDb(), 'users', deviceId), base)
     }
+    localStorage.setItem(LAST_SEEN_THROTTLE_KEY, String(Date.now()))
   } catch {
     // 문서 없음 / 오프라인 등 → 무시
   }

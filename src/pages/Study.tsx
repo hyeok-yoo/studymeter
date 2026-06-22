@@ -352,8 +352,8 @@ export default function Study({ settings }: StudyProps) {
             }
             const id = await db.sessions.add(session)
             localStorage.removeItem(STORAGE_KEY)
-            // 세션을 진짜 종료할 때(showEval)는 즉시 동기화해 관리자 기록에 바로 반영한다.
-            maybeSyncToday(showEval)
+            // 세션 저장 후 throttle 기준으로 동기화 (평가 저장 시 force sync가 따로 실행됨)
+            if (!showEval) maybeSyncToday(false)
 
             if (showEval) {
                 setLastSessionId(id as number)
@@ -467,6 +467,7 @@ export default function Study({ settings }: StudyProps) {
     }
 
     const handleEvalSkip = () => {
+        maybeSyncToday(true) // 평가 스킵 시에도 세션 기록 동기화
         setShowEvalModal(false)
         navigate('/')
     }

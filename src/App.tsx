@@ -102,7 +102,7 @@ function App() {
       const blocked = await tel.checkBlocked();
       if (blocked) setIsBlocked(true);
       else tel.updateLastSeen();
-    }, 5 * 60 * 1000);
+    }, 30 * 60 * 1000);
     return () => clearInterval(interval);
   }, [loading, showNameModal, location.pathname]);
 
