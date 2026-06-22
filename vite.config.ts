@@ -18,6 +18,21 @@ export default defineConfig({
   server: {
     host: true,
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules/firebase')) return 'vendor-firebase'
+          if (id.includes('node_modules/framer-motion')) return 'vendor-framer'
+          if (id.includes('node_modules/recharts') || id.includes('node_modules/d3-') || id.includes('node_modules/victory-')) return 'vendor-charts'
+          if (id.includes('node_modules/react-markdown') || id.includes('node_modules/remark') || id.includes('node_modules/unified') || id.includes('node_modules/hast') || id.includes('node_modules/mdast') || id.includes('node_modules/micromark')) return 'vendor-markdown'
+          if (id.includes('node_modules/dexie')) return 'vendor-dexie'
+          if (id.includes('node_modules/@iconify')) return 'vendor-iconify'
+          if (id.includes('node_modules/react-dom') || id.includes('node_modules/react/') || id.includes('node_modules/react-router')) return 'vendor-react'
+        }
+      }
+    }
+  },
   plugins: [
     react(),
     tailwindcss(),

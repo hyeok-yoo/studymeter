@@ -1,7 +1,7 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { Icon } from '@iconify/react'
+import { useEffect, useState } from 'react'
 import type { Settings } from '../lib/db'
-import { isOwner } from '../lib/telemetry'
 
 interface LayoutProps {
     settings: Settings
@@ -9,7 +9,10 @@ interface LayoutProps {
 }
 
 export default function Layout({ settings }: LayoutProps) {
-    const founder = isOwner()
+    const [founder, setFounder] = useState(false)
+    useEffect(() => {
+        import('../lib/telemetry').then(({ isOwner }) => setFounder(isOwner()))
+    }, [])
     const navItems = [
         { path: '/', icon: 'mdi:home-outline', label: '홈' },
         { path: '/records', icon: 'mdi:chart-bar', label: '기록' },

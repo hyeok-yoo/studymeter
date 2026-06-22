@@ -1,18 +1,26 @@
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
-import { useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { initializeSettings, type Settings, db } from './lib/db'
 import Layout from './components/Layout'
-import Home from './pages/Home'
-import Study from './pages/Study'
-import Records from './pages/Records'
-import GeminiChat from './pages/GeminiChat'
-import SettingsPage from './pages/Settings'
-import EditRecords from './pages/EditRecords'
-import DeveloperPage from './pages/Developer'
-import AdminPage from './pages/Admin'
 import { NativeBridge } from './lib/NativeBridge'
-import NameRegistrationModal from './components/NameRegistrationModal'
-import { isRegistered, checkBlocked, updateLastSeen, maybeSyncToday, ensureSignedIn } from './lib/telemetry'
+const NameRegistrationModal = lazy(() => import('./components/NameRegistrationModal'))
+
+// telemetry (Firebase) 모듈은 앱 렌더링을 막지 않도록 동적으로 로드
+const telemetryPromise = import('./lib/telemetry')
+
+// localStorage 접근만으로 판단하는 순수 함수 — Firebase 없이 동기로 확인
+function isRegisteredSync() {
+  return !!localStorage.getItem('studymeter_telemetry_name')
+}
+
+const Home = lazy(() => import('./pages/Home'))
+const Study = lazy(() => import('./pages/Study'))
+const Records = lazy(() => import('./pages/Records'))
+const GeminiChat = lazy(() => import('./pages/GeminiChat'))
+const SettingsPage = lazy(() => import('./pages/Settings'))
+const EditRecords = lazy(() => import('./pages/EditRecords'))
+const DeveloperPage = lazy(() => import('./pages/Developer'))
+const AdminPage = lazy(() => import('./pages/Admin'))
 
 function App() {
   const [settings, setSettings] = useState<Settings | null>(null)
@@ -38,36 +46,32 @@ function App() {
 
     initializeSettings().then(async (s) => {
       setSettings(s);
+      // 로컬 DB 읽기 완료 즉시 로딩 해제 → Firebase 네트워크 대기 없이 UI 진입
+      setLoading(false);
 
-      // Firebase 로그인 보장(익명 또는 소유자). 이후 모든 Firestore 접근의 전제.
+      // 이하 Firebase/텔레메트리는 백그라운드에서 처리 (UI 블로킹 없음)
+      let tel: Awaited<typeof telemetryPromise>
       try {
-        await ensureSignedIn();
+        tel = await telemetryPromise
+        await tel.ensureSignedIn();
       } catch {
-        // Firebase 미설정 / 오프라인 → 로컬 전용 동작
-      }
-
-      // 어드민 페이지에서는 텔레메트리 모달 스킵
-      if (location.pathname === '/admin') {
-        setLoading(false);
+        // Firebase 미설정 / 오프라인 → 로컬 전용 동작, 조용히 종료
         return;
       }
 
-      // 텔레메트리: 미등록 사용자 처리
-      if (!isRegistered()) {
+      if (location.pathname === '/admin') return;
+
+      if (!isRegisteredSync()) {
         setShowNameModal(true);
       } else {
-        // 차단 여부 확인 후 lastSeen 업데이트
-        const blocked = await checkBlocked();
+        const blocked = await tel.checkBlocked();
         if (blocked) {
           setIsBlocked(true);
         } else {
-          updateLastSeen();
-          // 오늘 기록을 관리자 열람용으로 동기화 (하루 2~3회로 제한됨)
-          maybeSyncToday();
+          tel.updateLastSeen();
+          tel.maybeSyncToday();
         }
       }
-
-      setLoading(false);
     });
     // 마운트 시 1회만 실행 (location.pathname 은 최초 값만 사용)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -76,17 +80,17 @@ function App() {
   // 등록 완료 후 settings.userName 동기화 + 차단 확인
   async function handleRegistrationDone(name: string) {
     setShowNameModal(false);
-    // 앱 내 사용자 이름 동기화
     if (settings) {
       await db.settings.update(settings.id!, { userName: name });
       setSettings({ ...settings, userName: name });
     }
-    const blocked = await checkBlocked();
+    const tel = await telemetryPromise
+    const blocked = await tel.checkBlocked();
     if (blocked) {
       setIsBlocked(true);
     } else {
-      updateLastSeen();
-      maybeSyncToday();
+      tel.updateLastSeen();
+      tel.maybeSyncToday();
     }
   }
 
@@ -94,9 +98,10 @@ function App() {
   useEffect(() => {
     if (loading || showNameModal || location.pathname === '/admin') return;
     const interval = setInterval(async () => {
-      const blocked = await checkBlocked();
+      const tel = await telemetryPromise
+      const blocked = await tel.checkBlocked();
       if (blocked) setIsBlocked(true);
-      else updateLastSeen();
+      else tel.updateLastSeen();
     }, 5 * 60 * 1000);
     return () => clearInterval(interval);
   }, [loading, showNameModal, location.pathname]);
@@ -155,27 +160,31 @@ function App() {
 
   return (
     <>
-      {showNameModal && <NameRegistrationModal onDone={handleRegistrationDone} />}
+      <Suspense fallback={null}>
+        {showNameModal && <NameRegistrationModal onDone={handleRegistrationDone} />}
+      </Suspense>
 
-      <Routes>
-        {/* 관리자 페이지 */}
-        <Route path="/admin" element={<AdminPage />} />
+      <Suspense fallback={null}>
+        <Routes>
+          {/* 관리자 페이지 */}
+          <Route path="/admin" element={<AdminPage />} />
 
-        {/* 타이머 화면은 레이아웃 없이 전체화면 */}
-        <Route path="/study" element={<Study settings={settings!} />} />
+          {/* 타이머 화면은 레이아웃 없이 전체화면 */}
+          <Route path="/study" element={<Study settings={settings!} />} />
 
-        {/* 나머지 화면은 사이드바 레이아웃 */}
-        <Route path="/" element={<Layout settings={settings!} onSettingsChange={setSettings} />}>
-          <Route index element={<Home settings={settings!} />} />
-          <Route path="records" element={<Records />} />
-          <Route path="edit-records" element={<EditRecords settings={settings!} />} />
-          <Route path="gemini" element={<GeminiChat settings={settings!} />} />
-          <Route path="settings" element={<SettingsPage settings={settings!} onSettingsChange={setSettings} />} />
-          <Route path="developer" element={<DeveloperPage />} />
-        </Route>
+          {/* 나머지 화면은 사이드바 레이아웃 */}
+          <Route path="/" element={<Layout settings={settings!} onSettingsChange={setSettings} />}>
+            <Route index element={<Home settings={settings!} />} />
+            <Route path="records" element={<Records />} />
+            <Route path="edit-records" element={<EditRecords settings={settings!} />} />
+            <Route path="gemini" element={<GeminiChat settings={settings!} />} />
+            <Route path="settings" element={<SettingsPage settings={settings!} onSettingsChange={setSettings} />} />
+            <Route path="developer" element={<DeveloperPage />} />
+          </Route>
 
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
     </>
   )
 }
