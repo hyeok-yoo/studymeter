@@ -260,7 +260,7 @@ export default function EditRecords({ settings }: EditRecordsProps) {
             }
             await db.sessions.add(session)
         }
-        maybeSyncToday()
+        maybeSyncToday(true)
 
         handleResetForm()
         loadData()
@@ -288,7 +288,7 @@ export default function EditRecords({ settings }: EditRecordsProps) {
         const confirmed = await showConfirm('기록 삭제', '정말 이 학습 기록을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.')
         if (!confirmed) return
         await deleteStudySession(id)
-        maybeSyncToday()
+        maybeSyncToday(true)
         if (editingSessionId === id) handleResetForm()
         loadData()
     }

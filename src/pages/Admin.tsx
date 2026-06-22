@@ -11,6 +11,8 @@ import {
   signInAsOwner,
   signOutToAnonymous,
   changeOwnerPassword,
+  markOwnerAdmin,
+  syncAllHistory,
   type TelemetryUser,
   type AdminSession,
 } from '../lib/telemetry'
@@ -49,8 +51,67 @@ export default function Admin() {
   }, [])
 
   useEffect(() => {
-    if (screen === 'dashboard') loadUsers()
+    if (screen === 'dashboard') {
+      // 소유자 본인 문서에 관리자 표식을 보장한 뒤 목록을 불러온다.
+      markOwnerAdmin().finally(loadUsers)
+    }
   }, [screen, loadUsers])
+
+  const [syncingHistory, setSyncingHistory] = useState(false)
+  const [historyMsg, setHistoryMsg] = useState<string | null>(null)
+
+  async function handleSyncHistory() {
+    setSyncingHistory(true)
+    setHistoryMsg(null)
+    try {
+      const n = await syncAllHistory()
+      setHistoryMsg(n > 0 ? `${n}일치 기록을 동기화했습니다.` : '동기화할 로컬 기록이 없습니다.')
+      await loadUsers()
+    } catch {
+      setHistoryMsg('동기화 중 오류가 발생했습니다.')
+    } finally {
+      setSyncingHistory(false)
+    }
+  }
+
+  // 같은 이름(또는 이름 없는 유령 문서)이 여러 개면, 가장 대표적인 1개만 남기고
+  // 나머지를 선택 상태로 만들어 삭제 흐름에 태운다. (관리자 배지 > 최근 접속 우선 보존)
+  function selectDuplicatesForCleanup() {
+    const byName = new Map<string, TelemetryUser[]>()
+    for (const u of users) {
+      const key = (u.name || '').trim()
+      if (!byName.has(key)) byName.set(key, [])
+      byName.get(key)!.push(u)
+    }
+    const next = new Set<string>()
+    for (const [key, group] of byName) {
+      if (!key) {
+        // 이름 없는 유령 문서는 전부 정리 대상
+        group.forEach((u) => next.add(u.id))
+        continue
+      }
+      if (group.length < 2) continue
+      const best = [...group].sort((a, b) => {
+        if (a.isAdmin !== b.isAdmin) return a.isAdmin ? -1 : 1
+        return (b.lastSeen?.toMillis?.() ?? 0) - (a.lastSeen?.toMillis?.() ?? 0)
+      })[0]
+      group.forEach((u) => { if (u.id !== best.id) next.add(u.id) })
+    }
+    setSelectedIds(next)
+  }
+
+  const duplicateCount = useMemo(() => {
+    const counts = new Map<string, number>()
+    let ghosts = 0
+    for (const u of users) {
+      const key = (u.name || '').trim()
+      if (!key) { ghosts++; continue }
+      counts.set(key, (counts.get(key) ?? 0) + 1)
+    }
+    let extra = 0
+    for (const c of counts.values()) if (c > 1) extra += c - 1
+    return extra + ghosts
+  }, [users])
 
   async function toggleBlock(user: TelemetryUser) {
     setTogglingId(user.id)
@@ -131,7 +192,26 @@ export default function Admin() {
               전체 {users.length}명 · 활성 {active}명 · 차단 {blocked}명
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap justify-end">
+            <button
+              onClick={handleSyncHistory}
+              disabled={syncingHistory}
+              className="btn btn-glass px-3 py-2 text-sm flex items-center gap-1"
+              title="이 기기의 모든 로컬 공부 기록을 올려 내 항목에서 볼 수 있게 합니다"
+            >
+              <Icon icon="mdi:cloud-upload-outline" className={`text-base ${syncingHistory ? 'animate-pulse' : ''}`} />
+              {syncingHistory ? '동기화 중…' : '내 기록 동기화'}
+            </button>
+            {duplicateCount > 0 && (
+              <button
+                onClick={selectDuplicatesForCleanup}
+                className="btn btn-glass px-3 py-2 text-sm flex items-center gap-1 text-amber-400"
+                title="중복·빈 항목을 골라 삭제 목록에 담습니다"
+              >
+                <Icon icon="mdi:broom" className="text-base" />
+                중복 정리 ({duplicateCount})
+              </button>
+            )}
             <button
               onClick={() => setShowChangePassword(true)}
               className="btn btn-glass px-3 py-2 text-sm flex items-center gap-1"
@@ -155,6 +235,16 @@ export default function Admin() {
             </button>
           </div>
         </div>
+
+        {historyMsg && (
+          <div className="glass-card px-4 py-2.5 mb-4 text-sm flex items-center gap-2 border border-indigo-400/20">
+            <Icon icon="mdi:information-outline" className="text-indigo-400 text-base flex-shrink-0" />
+            <span className="flex-1">{historyMsg}</span>
+            <button onClick={() => setHistoryMsg(null)} className="opacity-50 hover:opacity-100">
+              <Icon icon="mdi:close" className="text-base" />
+            </button>
+          </div>
+        )}
 
         {/* Stats */}
         <div className="grid grid-cols-3 gap-4 mb-6">

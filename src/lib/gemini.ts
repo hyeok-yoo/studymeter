@@ -3,6 +3,9 @@
  *
  * 모델 목록을 앱에 하드코딩하지 않고, ListModels API 에서 "지금 그 키로 실제 사용
  * 가능한" 모델만 동적으로 가져온다. 모델 호출(generateContent)도 여기로 일원화한다.
+ *
+ * ListModels 가 알려주는 능력치(토큰 한도·온도 범위 등)와, 모델 이름으로 추론한
+ * 부가 기능(추론/Thinking, Google 검색 그라운딩)을 함께 노출한다.
  */
 
 const API_BASE = 'https://generativelanguage.googleapis.com/v1beta'
@@ -12,13 +15,41 @@ export interface GeminiModel {
     name: string
     displayName: string
     description: string
+    version?: string
+    inputTokenLimit?: number
+    outputTokenLimit?: number
+    /** 기본 샘플링 온도 */
+    temperature?: number
+    /** 허용 최대 온도 */
+    maxTemperature?: number
+    topP?: number
+    topK?: number
+    /** 단계적 추론(Thinking) 지원 추정치 (2.5 계열) */
+    supportsThinking: boolean
+    /** Google 검색 그라운딩 지원 추정치 (2.x 계열) */
+    supportsGrounding: boolean
 }
 
 interface ApiModel {
     name: string
     displayName?: string
     description?: string
+    version?: string
+    inputTokenLimit?: number
+    outputTokenLimit?: number
+    temperature?: number
+    maxTemperature?: number
+    topP?: number
+    topK?: number
     supportedGenerationMethods?: string[]
+}
+
+function deriveThinking(id: string): boolean {
+    return /2\.5/.test(id)
+}
+function deriveGrounding(id: string): boolean {
+    // google_search 도구는 2.x 계열에서 지원. (1.5 는 별도 도구라 보수적으로 제외)
+    return /gemini-2\.\d/.test(id)
 }
 
 /**
@@ -38,22 +69,76 @@ export async function fetchGeminiModels(apiKey: string): Promise<GeminiModel[]> 
             return {
                 name: id,
                 displayName: m.displayName || id,
-                description: (m.description || '').slice(0, 60),
+                description: m.description || '',
+                version: m.version,
+                inputTokenLimit: m.inputTokenLimit,
+                outputTokenLimit: m.outputTokenLimit,
+                temperature: m.temperature,
+                maxTemperature: m.maxTemperature,
+                topP: m.topP,
+                topK: m.topK,
+                supportsThinking: deriveThinking(id),
+                supportsGrounding: deriveGrounding(id),
             }
         })
         .sort((a, b) => b.displayName.localeCompare(a.displayName))
 }
 
+export interface GroundingSource {
+    title: string
+    uri: string
+}
+
 export interface GeminiReply {
+    /** 사용자에게 보여줄 최종 답변 (마크다운) */
     text: string
+    /** 모델의 추론(Thinking) 요약. 펼침/접기로 보여줄 용도. 없으면 undefined */
+    reasoning?: string
+    /** Google 검색 그라운딩 출처들 */
+    grounding?: GroundingSource[]
     /** 실제로 응답을 생성한 모델명 (자동 전환 시 원래와 다를 수 있음) */
     usedModel: string
     /** 할당량 초과로 더 가벼운 모델로 자동 전환됐는지 */
     fellBack: boolean
 }
 
+export interface GenerateOptions {
+    /** 시스템 지시(페르소나/형식 규칙). systemInstruction 으로 전달된다. */
+    systemInstruction?: string
+    /** Google 검색 그라운딩 사용 */
+    useGrounding?: boolean
+    /** 단계적 추론(Thinking) 요약 포함 */
+    useThinking?: boolean
+    /** 429 대체 모델 후보(미리 받아둔 목록) */
+    availableModels?: GeminiModel[]
+}
+
+interface ParsedCandidate {
+    answer: string
+    reasoning: string
+    grounding: GroundingSource[]
+}
+
+function parseCandidate(data: unknown): ParsedCandidate {
+    const cand = (data as { candidates?: Array<Record<string, unknown>> })?.candidates?.[0]
+    const content = cand?.content as { parts?: Array<{ text?: string; thought?: boolean }> } | undefined
+    let answer = ''
+    let reasoning = ''
+    for (const part of content?.parts ?? []) {
+        if (typeof part.text !== 'string') continue
+        if (part.thought) reasoning += part.text
+        else answer += part.text
+    }
+    const meta = cand?.groundingMetadata as { groundingChunks?: Array<{ web?: { uri?: string; title?: string } }> } | undefined
+    const grounding: GroundingSource[] = []
+    for (const chunk of meta?.groundingChunks ?? []) {
+        if (chunk.web?.uri) grounding.push({ uri: chunk.web.uri, title: chunk.web.title || chunk.web.uri })
+    }
+    return { answer: answer.trim(), reasoning: reasoning.trim(), grounding }
+}
+
 /**
- * 프롬프트를 모델에 전송해 응답 텍스트를 받는다.
+ * 프롬프트를 모델에 전송해 응답을 받는다.
  * 429(할당량 초과)면 사용 가능한 'flash' 계열(가벼운) 모델로 1회 자동 재시도한다.
  * 전환 후보 역시 API 목록에서 동적으로 고른다(모델명 하드코딩 없음).
  */
@@ -61,13 +146,31 @@ export async function generateContent(
     apiKey: string,
     model: string,
     prompt: string,
-    availableModels?: GeminiModel[],
+    options: GenerateOptions = {},
 ): Promise<GeminiReply> {
+    const { systemInstruction, useGrounding, useThinking, availableModels } = options
+
+    const buildBody = () => {
+        const body: Record<string, unknown> = {
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        }
+        if (systemInstruction) {
+            body.systemInstruction = { parts: [{ text: systemInstruction }] }
+        }
+        if (useGrounding) {
+            body.tools = [{ google_search: {} }]
+        }
+        if (useThinking) {
+            body.generationConfig = { thinkingConfig: { includeThoughts: true } }
+        }
+        return body
+    }
+
     const call = (m: string) =>
         fetch(`${API_BASE}/models/${m}:generateContent?key=${encodeURIComponent(apiKey)}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+            body: JSON.stringify(buildBody()),
         })
 
     let usedModel = model
@@ -93,7 +196,13 @@ export async function generateContent(
         throw new Error(msg)
     }
 
-    const text: string | undefined = data.candidates?.[0]?.content?.parts?.[0]?.text
-    if (!text) throw new Error('응답을 받지 못했습니다.')
-    return { text, usedModel, fellBack }
+    const { answer, reasoning, grounding } = parseCandidate(data)
+    if (!answer) throw new Error('응답을 받지 못했습니다.')
+    return {
+        text: answer,
+        reasoning: reasoning || undefined,
+        grounding: grounding.length ? grounding : undefined,
+        usedModel,
+        fellBack,
+    }
 }

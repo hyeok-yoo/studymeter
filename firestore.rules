@@ -42,7 +42,9 @@ service cloud.firestore {
         && isOptString(data, 'name', 200)
         && isOptString(data, 'ip', 64)
         && isOptBool(data, 'blocked')
-        && isOptBool(data, 'isAdmin')
+        // isAdmin 은 일반 사용자가 스스로 true 로 올릴 수 없다(가짜 관리자 배지 방지).
+        // 소유자는 아래 규칙의 isOwner() 분기로 우회해 자기 문서에 isAdmin 을 단다.
+        && (!('isAdmin' in data) || data.isAdmin == false)
         && isOptTimestamp(data, 'registeredAt')
         && isOptTimestamp(data, 'lastSeen');
     }
@@ -60,8 +62,14 @@ service cloud.firestore {
     match /users/{deviceId} {
       // 읽기: 본인 또는 소유자만
       allow read: if isOwner() || isSelf(deviceId);
-      // 쓰기: 본인이 스키마를 지켜 쓰거나, 소유자(관리자 작업)
-      allow create, update: if (isSelf(deviceId) && isValidUser(request.resource.data)) || isOwner();
+      // 생성: 본인은 스키마 준수 + blocked 는 false 로만 시작 가능. / 소유자: 전권.
+      allow create: if isOwner()
+        || (isSelf(deviceId) && isValidUser(request.resource.data)
+            && request.resource.data.get('blocked', false) == false);
+      // 수정: 본인은 스키마 준수 + blocked 를 스스로 바꿀 수 없음(자가 차단해제 방지). / 소유자: 전권.
+      allow update: if isOwner()
+        || (isSelf(deviceId) && isValidUser(request.resource.data)
+            && request.resource.data.get('blocked', false) == resource.data.get('blocked', false));
       // 삭제: 소유자만 (관리자 사용자 삭제 기능)
       allow delete: if isOwner();
 

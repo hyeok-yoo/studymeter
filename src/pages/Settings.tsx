@@ -603,6 +603,49 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                             API 에서 불러온 {geminiModels.length}개 모델 · 키마다 사용 가능 목록이 다를 수 있습니다
                         </p>
                     )}
+
+                    {/* 선택한 모델의 능력치 (API 제공 + 추정) */}
+                    {(() => {
+                        const m = geminiModels.find((x) => x.name === geminiModel)
+                        if (!m) return null
+                        return (
+                            <div className="mt-3 pt-3 border-t border-[var(--color-border)] space-y-2">
+                                <div className="flex flex-wrap gap-1.5">
+                                    {m.supportsThinking && (
+                                        <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-purple-500/15 text-purple-400 border border-purple-400/20 flex items-center gap-1">
+                                            <Icon icon="mdi:brain" className="text-xs" /> 단계적 추론 (Thinking)
+                                        </span>
+                                    )}
+                                    {m.supportsGrounding && (
+                                        <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-cyan-500/15 text-cyan-400 border border-cyan-400/20 flex items-center gap-1">
+                                            <Icon icon="mdi:google" className="text-xs" /> Google 검색 그라운딩
+                                        </span>
+                                    )}
+                                    {m.version && (
+                                        <span className="text-[10px] font-medium px-2 py-1 rounded-full bg-white/5 text-[var(--color-text-secondary)]">
+                                            v{m.version}
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-[var(--color-text-secondary)] opacity-70">
+                                    {m.inputTokenLimit != null && (
+                                        <span>입력 한도: {m.inputTokenLimit.toLocaleString()} 토큰</span>
+                                    )}
+                                    {m.outputTokenLimit != null && (
+                                        <span>출력 한도: {m.outputTokenLimit.toLocaleString()} 토큰</span>
+                                    )}
+                                    {m.temperature != null && (
+                                        <span>기본 온도: {m.temperature}{m.maxTemperature != null ? ` (최대 ${m.maxTemperature})` : ''}</span>
+                                    )}
+                                </div>
+                                {m.description && (
+                                    <p className="text-[10px] text-[var(--color-text-secondary)] opacity-60 leading-relaxed">
+                                        {m.description}
+                                    </p>
+                                )}
+                            </div>
+                        )
+                    })()}
                 </div>
 
                 {/* 태블릿 자체 측정 설정 */}

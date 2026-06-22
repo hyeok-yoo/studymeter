@@ -1,8 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import { Icon } from '@iconify/react'
 import type { Settings } from '../lib/db'
 import { db, formatDuration, getTodayDate } from '../lib/db'
-import { generateContent, fetchGeminiModels } from '../lib/gemini'
+import { generateContent, fetchGeminiModels, type GeminiModel, type GroundingSource } from '../lib/gemini'
 
 interface GeminiChatProps {
     settings: Settings
@@ -11,6 +13,30 @@ interface GeminiChatProps {
 interface Message {
     role: 'user' | 'assistant'
     content: string
+    reasoning?: string
+    grounding?: GroundingSource[]
+}
+
+// 앱에 내장된 학습 코치 페르소나 + 출력 형식 규칙.
+const SYSTEM_INSTRUCTION = `당신은 학습 관리 앱 "StudyMeter"에 내장된 한국어 학습 코치입니다.
+역할: 공부 계획 수립, 개념 설명, 동기부여, 시간·집중 관리에 대해 학생을 돕습니다.
+
+답변 규칙:
+- 항상 한국어로, 친근하지만 군더더기 없이 간결하게 답합니다.
+- 답변은 반드시 **마크다운**으로 구조화합니다. 핵심은 굵게, 절차는 번호 목록, 나열은 글머리표, 비교는 표, 코드/수식은 코드블록을 사용합니다.
+- 사용자가 공부 기록 데이터를 함께 주면 그 수치를 근거로 구체적으로 분석하고 실천 가능한 조언을 답니다.
+- 모르면 모른다고 말하고, 추측은 추측이라고 표시합니다. 사족이나 자기소개는 생략합니다.`
+
+function deriveActiveCaps(model: GeminiModel | undefined, name: string) {
+    if (model) return model
+    // 목록을 아직 못 받았을 때 이름만으로 능력 추정
+    return {
+        name,
+        displayName: name,
+        description: '',
+        supportsThinking: /2\.5/.test(name),
+        supportsGrounding: /gemini-2\.\d/.test(name),
+    } as GeminiModel
 }
 
 export default function GeminiChat({ settings }: GeminiChatProps) {
@@ -18,6 +44,24 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
     const [input, setInput] = useState('')
     const [loading, setLoading] = useState(false)
     const [shareData, setShareData] = useState<'none' | 'day' | 'week'>('none')
+    const [models, setModels] = useState<GeminiModel[]>([])
+    const [useGrounding, setUseGrounding] = useState(false)
+    const [useThinking, setUseThinking] = useState(true)
+
+    // 사용 가능한 모델 목록을 받아 선택 모델의 능력치를 파악한다.
+    useEffect(() => {
+        if (!settings.geminiApiKey) return
+        let cancelled = false
+        fetchGeminiModels(settings.geminiApiKey)
+            .then((list) => { if (!cancelled) setModels(list) })
+            .catch(() => { /* 무시: 이름 기반 추정으로 대체 */ })
+        return () => { cancelled = true }
+    }, [settings.geminiApiKey])
+
+    const activeModel = useMemo(() => {
+        const found = models.find((m) => m.name === settings.geminiModel) ?? models[0]
+        return deriveActiveCaps(found, settings.geminiModel || found?.name || '')
+    }, [models, settings.geminiModel])
 
     const getStudyDataSummary = async () => {
         if (shareData === 'none') return ''
@@ -39,8 +83,6 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
 - 순공 시간 (자습): ${formatDuration(selfStudyTime)}
 - 세션 수: ${sessions.length}회
 - 과목별: ${Array.from(bySubject.entries()).map(([k, v]) => `${k}: ${formatDuration(v)}`).join(', ')}
-
-위 데이터를 참고해서 답변해주세요.
 
 `
         } else {
@@ -74,14 +116,12 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
 - 세션 수: ${sessions.length}회
 - 과목별: ${Array.from(bySubject.entries()).map(([k, v]) => `${k}: ${formatDuration(v)}`).join(', ')}
 
-위 데이터를 참고해서 답변해주세요.
-
 `
         }
     }
 
     const sendMessage = async () => {
-        if (!input.trim() || !settings.geminiApiKey) return
+        if (!input.trim() || !settings.geminiApiKey || loading) return
 
         setLoading(true)
         const dataSummary = await getStudyDataSummary()
@@ -95,20 +135,31 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
             // 선택된 모델이 없으면 API 에서 사용 가능한 첫 모델을 사용 (모델명 하드코딩 없음)
             let modelName = settings.geminiModel
             if (!modelName) {
-                const models = await fetchGeminiModels(settings.geminiApiKey).catch(() => [])
-                modelName = models[0]?.name ?? ''
+                const list = models.length ? models : await fetchGeminiModels(settings.geminiApiKey).catch(() => [])
+                modelName = list[0]?.name ?? ''
             }
             if (!modelName) {
                 setMessages(prev => [...prev, { role: 'assistant', content: '❌ 사용 가능한 모델이 없습니다. 설정에서 API 키와 모델을 확인해주세요.' }])
                 return
             }
 
-            const { text, fellBack } = await generateContent(settings.geminiApiKey, modelName, fullPrompt)
-            const reply = fellBack
-                ? text + '\n\n💡 **Tip:** 선택한 모델의 할당량이 초과되어 더 가벼운 모델로 자동 전환해 답변했습니다.'
-                : text
+            const reply = await generateContent(settings.geminiApiKey, modelName, fullPrompt, {
+                systemInstruction: SYSTEM_INSTRUCTION,
+                useGrounding: useGrounding && activeModel.supportsGrounding,
+                useThinking: useThinking && activeModel.supportsThinking,
+                availableModels: models,
+            })
 
-            setMessages(prev => [...prev, { role: 'assistant', content: reply }])
+            const content = reply.fellBack
+                ? reply.text + '\n\n> 💡 선택한 모델의 할당량이 초과되어 더 가벼운 모델로 자동 전환해 답변했습니다.'
+                : reply.text
+
+            setMessages(prev => [...prev, {
+                role: 'assistant',
+                content,
+                reasoning: reply.reasoning,
+                grounding: reply.grounding,
+            }])
         } catch (err) {
             const msg = err instanceof Error ? err.message : '오류가 발생했습니다. API 키를 확인해주세요.'
             setMessages(prev => [...prev, { role: 'assistant', content: `❌ ${msg}` }])
@@ -119,8 +170,30 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
 
     return (
         <div className="animate-fade-in max-w-4xl mx-auto h-[calc(100vh-8rem)] flex flex-col">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
                 <h1 className="text-3xl font-bold gradient-text">Gemini</h1>
+                {settings.geminiApiKey && activeModel.name && (
+                    <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                        <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-[var(--color-text-secondary)]">
+                            {activeModel.displayName}
+                        </span>
+                        {activeModel.supportsThinking && (
+                            <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-purple-500/15 text-purple-400 border border-purple-400/20 flex items-center gap-1">
+                                <Icon icon="mdi:brain" className="text-xs" /> 추론
+                            </span>
+                        )}
+                        {activeModel.supportsGrounding && (
+                            <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-cyan-500/15 text-cyan-400 border border-cyan-400/20 flex items-center gap-1">
+                                <Icon icon="mdi:google" className="text-xs" /> 검색 가능
+                            </span>
+                        )}
+                        {activeModel.outputTokenLimit && (
+                            <span className="text-[10px] font-medium px-2 py-1 rounded-full bg-white/5 text-[var(--color-text-secondary)] opacity-70">
+                                출력 {Math.round(activeModel.outputTokenLimit / 1000)}K
+                            </span>
+                        )}
+                    </div>
+                )}
             </div>
 
             {!settings.geminiApiKey ? (
@@ -157,9 +230,44 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
                                         }`}
                                 >
                                     {msg.role === 'assistant' ? (
-                                        <div className="prose prose-sm dark:prose-invert max-w-none">
-                                            <ReactMarkdown>{msg.content}</ReactMarkdown>
-                                        </div>
+                                        <>
+                                            {msg.reasoning && (
+                                                <details className="mb-3 rounded-xl bg-white/5 border border-white/10 overflow-hidden group">
+                                                    <summary className="cursor-pointer select-none px-3 py-2 text-xs font-bold text-[var(--color-text-secondary)] flex items-center gap-1.5 list-none">
+                                                        <Icon icon="mdi:chevron-right" className="text-base transition-transform group-open:rotate-90" />
+                                                        <Icon icon="mdi:brain" className="text-sm text-purple-400" />
+                                                        추론 과정 보기
+                                                    </summary>
+                                                    <div className="md-content text-xs opacity-80 px-3 pb-3 pt-1 border-t border-white/5">
+                                                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.reasoning}</ReactMarkdown>
+                                                    </div>
+                                                </details>
+                                            )}
+                                            <div className="md-content">
+                                                <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+                                            </div>
+                                            {msg.grounding && msg.grounding.length > 0 && (
+                                                <div className="mt-3 pt-2 border-t border-white/10">
+                                                    <p className="text-[10px] font-bold text-[var(--color-text-secondary)] opacity-60 mb-1.5 flex items-center gap-1">
+                                                        <Icon icon="mdi:google" className="text-xs" /> 검색 출처
+                                                    </p>
+                                                    <div className="flex flex-col gap-1">
+                                                        {msg.grounding.map((g, gi) => (
+                                                            <a
+                                                                key={gi}
+                                                                href={g.uri}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="text-xs text-cyan-400 hover:underline truncate flex items-center gap-1"
+                                                            >
+                                                                <Icon icon="mdi:link-variant" className="text-xs flex-shrink-0" />
+                                                                <span className="truncate">{g.title}</span>
+                                                            </a>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </>
                                     ) : (
                                         <p className="whitespace-pre-wrap">{msg.content}</p>
                                     )}
@@ -178,8 +286,8 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
 
                     {/* Data Share Toggle + Input */}
                     <div className="flex flex-col gap-2">
-                        {/* Data Share Buttons */}
-                        <div className="flex items-center gap-2">
+                        {/* Options row */}
+                        <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-xs text-[var(--color-text-secondary)]">📊 기록 공유:</span>
                             <button
                                 onClick={() => setShareData(shareData === 'day' ? 'none' : 'day')}
@@ -199,12 +307,37 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
                             >
                                 이번 주
                             </button>
-                            {shareData !== 'none' && (
-                                <span className="text-[10px] text-green-500 font-medium animate-pulse">
-                                    ✓ {shareData === 'day' ? '오늘' : '이번 주'} 기록이 다음 메시지에 포함됩니다
-                                </span>
+
+                            {activeModel.supportsGrounding && (
+                                <button
+                                    onClick={() => setUseGrounding((v) => !v)}
+                                    className={`ml-auto px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1 ${useGrounding
+                                        ? 'bg-cyan-500/80 text-white'
+                                        : 'bg-[var(--color-surface)] text-[var(--color-text-secondary)] border border-[var(--color-border)]'
+                                        }`}
+                                    title="Google 검색으로 최신 정보를 근거 삼아 답합니다"
+                                >
+                                    <Icon icon="mdi:google" className="text-xs" /> 검색
+                                </button>
+                            )}
+                            {activeModel.supportsThinking && (
+                                <button
+                                    onClick={() => setUseThinking((v) => !v)}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1 ${useThinking
+                                        ? 'bg-purple-500/80 text-white'
+                                        : 'bg-[var(--color-surface)] text-[var(--color-text-secondary)] border border-[var(--color-border)]'
+                                        } ${activeModel.supportsGrounding ? '' : 'ml-auto'}`}
+                                    title="모델의 추론 과정을 함께 받아 펼쳐 볼 수 있습니다"
+                                >
+                                    <Icon icon="mdi:brain" className="text-xs" /> 추론
+                                </button>
                             )}
                         </div>
+                        {shareData !== 'none' && (
+                            <span className="text-[10px] text-green-500 font-medium">
+                                ✓ {shareData === 'day' ? '오늘' : '이번 주'} 기록이 다음 메시지에 포함됩니다
+                            </span>
+                        )}
 
                         {/* Input */}
                         <div className="flex gap-3">

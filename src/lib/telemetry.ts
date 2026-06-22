@@ -170,6 +170,8 @@ export async function registerUser(name: string): Promise<void> {
     registeredAt: serverTimestamp(),
     lastSeen: serverTimestamp(),
     blocked: false,
+    // 소유자 본인이 일반 사용자로도 쓰는 경우, 자기 문서에 관리자 표식을 단다.
+    ...(isOwner() ? { isAdmin: true } : {}),
   })
   localStorage.setItem('studymeter_telemetry_name', name)
 }
@@ -190,17 +192,43 @@ export async function updateLastSeen(): Promise<void> {
   if (!isConfigured() || !isRegistered()) return
   const deviceId = getDeviceId()
   if (!deviceId) return
+  const owner = isOwner()
   try {
     const ip = await fetchIp()
-    // upsert: 인증 uid 가 바뀐 기존 사용자도 문서를 새로 만들어 주도록 setDoc(merge) 사용.
-    // (updateDoc 은 문서가 없으면 실패한다)
+    const base = { name: getRegisteredName(), lastSeen: serverTimestamp(), ip }
+    if (owner) {
+      // 소유자: 본인 문서를 보장 생성하고 관리자 표식을 유지한다.
+      await setDoc(doc(getDb(), 'users', deviceId), { ...base, isAdmin: true }, { merge: true })
+    } else {
+      // 일반 사용자: 이미 등록된 문서만 갱신한다.
+      // (익명 인증 uid 가 바뀌어도 새 문서를 만들지 않음 → 같은 이름이 무한 증식하는 문제 방지.
+      //  문서가 없으면 updateDoc 이 실패하고 아래 catch 에서 조용히 무시된다.)
+      await updateDoc(doc(getDb(), 'users', deviceId), base)
+    }
+  } catch {
+    // 문서 없음 / 오프라인 등 → 무시
+  }
+}
+
+// 소유자(관리자) 본인의 텔레메트리 문서를 보장 생성하고 isAdmin 표식을 단다.
+// 관리자 페이지 진입 시 호출해, 일반 앱을 익명으로만 쓰던 소유자도 자기 항목에
+// 관리자 배지가 뜨도록 한다.
+export async function markOwnerAdmin(name?: string): Promise<void> {
+  if (!isConfigured() || !isOwner()) return
+  const deviceId = getDeviceId()
+  if (!deviceId) return
+  try {
     await setDoc(
       doc(getDb(), 'users', deviceId),
-      { name: getRegisteredName(), lastSeen: serverTimestamp(), ip },
+      {
+        name: name || getRegisteredName() || '관리자',
+        isAdmin: true,
+        lastSeen: serverTimestamp(),
+      },
       { merge: true },
     )
   } catch {
-    // silent
+    // 무시
   }
 }
 
@@ -334,6 +362,52 @@ export async function maybeSyncToday(force = false): Promise<void> {
   } catch {
     // 오프라인 등 → 카운트 증가시키지 않음 (다음 기회에 재시도)
   }
+}
+
+// 이 기기의 모든 로컬 공부 기록을 날짜별로 묶어 Firestore 에 일괄 업로드한다.
+// (소유자가 관리자 페이지에서 자기 과거 기록을 한 번에 올려 볼 때 사용)
+// 반환값: 업로드한 날짜(문서) 수.
+export async function syncAllHistory(): Promise<number> {
+  if (!isConfigured() || !isRegistered()) return 0
+  const deviceId = getDeviceId()
+  if (!deviceId) return 0
+
+  const all = await db.sessions.toArray()
+  const byDate = new Map<string, typeof all>()
+  for (const s of all) {
+    if (!s.date) continue
+    const list = byDate.get(s.date) ?? []
+    list.push(s)
+    byDate.set(s.date, list)
+  }
+
+  let uploaded = 0
+  for (const [date, sessions] of byDate) {
+    const plain = JSON.parse(JSON.stringify(
+      sessions.map((s) => ({
+        id: s.id,
+        date: s.date,
+        subject: s.subject,
+        subItem: s.subItem,
+        type: s.type,
+        startTime: s.startTime,
+        endTime: s.endTime,
+        duration: s.duration,
+        evaluation: s.evaluation,
+      }))
+    ))
+    try {
+      await setDoc(doc(getDb(), 'users', deviceId, 'days', date), {
+        date,
+        updatedAt: serverTimestamp(),
+        sessions: plain,
+      })
+      uploaded++
+    } catch {
+      // 개별 날짜 실패는 건너뛴다
+    }
+  }
+  return uploaded
 }
 
 // 관리자: 사용자의 모든 일별 스냅샷을 읽어 세션 목록으로 펼친다.
