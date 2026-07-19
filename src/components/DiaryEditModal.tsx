@@ -10,7 +10,7 @@ import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Icon } from '@iconify/react'
 import type { DiaryEntry, DiaryStats, Settings, EvalTag } from '../lib/db'
-import { suggestDiaryScore, saveDiaryEntry, formatDurationHourMinute } from '../lib/db'
+import { suggestDiaryScore, saveDiaryEntry, formatDurationHourMinute, computeDiaryStats, getDiaryEntry } from '../lib/db'
 import { getTopTags, getTagsForScope, recordTagUsage, TAG_CATEGORY_LABELS } from '../lib/tags'
 import { isAmbientAiEnabled, generateDiaryReply } from '../lib/ai/aiService'
 import AiMarkdown from './AiMarkdown'
@@ -146,6 +146,16 @@ export function DiaryEditor({
 
     useEffect(() => () => { try { recognitionRef.current?.stop() } catch { /* ignore */ } }, [])
 
+    // AI 초안이 폼 마운트 이후 늦게 도착한 경우: 사용자가 아직 아무것도 입력/수정하지
+    // 않았을 때(빈 값 + source 'ai')만 초안을 채워 넣는다. 입력 중 덮어쓰기 방지.
+    useEffect(() => {
+        if (!initialDraft) return
+        // 비동기 도착한 초안을 미입력 상태에서만 1회 채움 — cascading 없음. (의도적 예외)
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setOneLiner(prev => (prev === '' && source === 'ai' && !editingText ? initialDraft : prev))
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [initialDraft])
+
     const toggleTag = (name: string) => {
         setSelectedTags(prev => prev.includes(name) ? prev.filter(t => t !== name) : [...prev, name])
     }
@@ -198,6 +208,8 @@ export function DiaryEditor({
         setSaving(true)
         const trimmed = oneLiner.trim()
         const now = Date.now()
+        // 확정 시점 기준으로 통계를 재계산 (카드 마운트 이후 세션이 추가됐을 수 있음)
+        const freshStats = await computeDiaryStats(date, settings.dailyGoalMs).catch(() => stats)
         const entry: DiaryEntry = {
             date,
             score,
@@ -206,7 +218,7 @@ export function DiaryEditor({
             oneLinerSource: trimmed ? source : undefined,
             aiReply: existing?.aiReply,
             auto: false,
-            stats,
+            stats: freshStats,
             createdAt: existing?.createdAt ?? now,
             updatedAt: now,
         }
@@ -217,10 +229,13 @@ export function DiaryEditor({
         // 확정 직후 AI 답장 비동기 생성 (없을 때만)
         if (isAmbientAiEnabled(settings) && !entry.aiReply) {
             generateDiaryReply(settings, entry).then(async reply => {
-                if (reply) {
-                    await saveDiaryEntry({ ...entry, aiReply: reply, updatedAt: Date.now() })
-                    await onSaved()
-                }
+                if (!reply) return
+                // 답장 도착 시점의 최신 일기에 aiReply 만 병합 —
+                // 그 사이 사용자가 재수정했어도 내용을 되돌리지 않는다.
+                const current = await getDiaryEntry(date)
+                if (!current) return
+                await saveDiaryEntry({ ...current, aiReply: reply, updatedAt: Date.now() })
+                await onSaved()
             }).catch(() => { /* ignore */ })
         }
     }
