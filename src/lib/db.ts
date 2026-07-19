@@ -552,6 +552,25 @@ export async function autoFinalizeMissedDiaries(dailyGoalMs?: number): Promise<n
     return finalized;
 }
 
+/**
+ * 일기 연속 작성일(스트릭). 직접 확정(auto=false)한 일기만 센다.
+ * 오늘 아직 안 썼으면 어제까지의 연속을 반환한다 (오늘 몫은 아직 깨진 게 아님).
+ */
+export async function getDiaryStreak(today: string): Promise<number> {
+    const entries = await db.diaryEntries.where('date').belowOrEqual(today).toArray();
+    const written = new Set(entries.filter(e => !e.auto).map(e => e.date));
+    let streak = 0;
+    const cursor = new Date(today + 'T12:00:00');
+    if (!written.has(today)) cursor.setDate(cursor.getDate() - 1); // 오늘 미작성은 어제부터 카운트
+    for (;;) {
+        const dateStr = formatDateYYYYMMDD(cursor);
+        if (!written.has(dateStr)) break;
+        streak++;
+        cursor.setDate(cursor.getDate() - 1);
+    }
+    return streak;
+}
+
 // ── AI 생성물 캐시 헬퍼 ─────────────────────────────────────────────────────
 
 export async function getAiArtifact(kind: string, date: string): Promise<AiArtifact | undefined> {

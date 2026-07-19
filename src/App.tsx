@@ -4,6 +4,7 @@ import { initializeSettings, type Settings, db } from './lib/db'
 import Layout from './components/Layout'
 import { NativeBridge } from './lib/NativeBridge'
 const NameRegistrationModal = lazy(() => import('./components/NameRegistrationModal'))
+const MorningReportPopup = lazy(() => import('./components/MorningReportPopup'))
 
 // telemetry (Firebase) 모듈은 앱 렌더링을 막지 않도록 동적으로 로드
 const telemetryPromise = import('./lib/telemetry')
@@ -162,6 +163,11 @@ function App() {
     <>
       <Suspense fallback={null}>
         {showNameModal && <NameRegistrationModal onDone={handleRegistrationDone} />}
+      </Suspense>
+
+      {/* 그날 첫 아침 브리핑 준비 완료 시 전역 팝업 (공부 화면 포함 어디서든 1회) */}
+      <Suspense fallback={null}>
+        {settings && <MorningReportPopup settings={settings} />}
       </Suspense>
 
       <Suspense fallback={null}>
