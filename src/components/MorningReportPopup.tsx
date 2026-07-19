@@ -16,6 +16,8 @@ import type { Settings } from '../lib/db'
 import { getTodayDate } from '../lib/db'
 import { isAmbientAiEnabled, generateMorningReport, morningReportKindFor } from '../lib/ai/aiService'
 import AiMarkdown from './AiMarkdown'
+import Pressable from './ui/Pressable'
+import { materialize } from '../lib/motion'
 
 const SEEN_KEY_PREFIX = 'studymeter_morning_popup_'
 
@@ -64,10 +66,10 @@ export default function MorningReportPopup({ settings }: MorningReportPopupProps
                         onClick={() => setOpen(false)}
                     />
                     <motion.div
-                        initial={{ scale: 0.92, opacity: 0, y: 24 }}
-                        animate={{ scale: 1, opacity: 1, y: 0 }}
-                        exit={{ scale: 0.92, opacity: 0, y: 24 }}
-                        transition={{ type: 'spring', damping: 22, stiffness: 280 }}
+                        variants={materialize}
+                        initial="initial"
+                        animate="animate"
+                        exit="exit"
                         className="relative w-full max-w-md liquid-modal shadow-2xl overflow-hidden"
                         onClick={(e) => e.stopPropagation()}
                     >
@@ -87,13 +89,12 @@ export default function MorningReportPopup({ settings }: MorningReportPopupProps
                                 <AiMarkdown>{content}</AiMarkdown>
                             </div>
 
-                            <button
-                                type="button"
+                            <Pressable
                                 onClick={() => setOpen(false)}
-                                className="w-full py-4 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white font-black text-sm uppercase tracking-widest shadow-xl shadow-amber-500/25 active:scale-95 transition-all"
+                                className="w-full py-4 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white font-black text-sm uppercase tracking-widest shadow-xl shadow-amber-500/25"
                             >
                                 확인했어요
-                            </button>
+                            </Pressable>
                         </div>
                     </motion.div>
                 </div>

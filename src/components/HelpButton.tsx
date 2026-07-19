@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Icon } from '@iconify/react'
+import Pressable from './ui/Pressable'
+import { materialize } from '../lib/motion'
 
 export interface HelpItem {
     title?: string
@@ -24,13 +26,14 @@ export function HelpButton({ title, items, className = '', dark = false }: HelpB
 
     return (
         <>
-            <button
+            <Pressable
                 type="button"
+                pressScale={0.9}
                 onClick={(e) => {
                     e.stopPropagation()
                     setOpen(true)
                 }}
-                className={`w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-black transition-all flex-shrink-0
+                className={`w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-black flex-shrink-0
                     ${dark
                         ? 'bg-white/10 hover:bg-white/25 text-white/50 hover:text-white/80'
                         : 'bg-[var(--color-primary)]/15 hover:bg-[var(--color-primary)]/30 text-[var(--color-primary)]'
@@ -38,7 +41,7 @@ export function HelpButton({ title, items, className = '', dark = false }: HelpB
                 aria-label="도움말"
             >
                 ?
-            </button>
+            </Pressable>
 
             {createPortal(
                 <AnimatePresence>
@@ -55,10 +58,10 @@ export function HelpButton({ title, items, className = '', dark = false }: HelpB
 
                             {/* 모달 */}
                             <motion.div
-                                initial={{ scale: 0.9, opacity: 0, y: 24 }}
-                                animate={{ scale: 1, opacity: 1, y: 0 }}
-                                exit={{ scale: 0.9, opacity: 0, y: 24 }}
-                                transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+                                variants={materialize}
+                                initial="initial"
+                                animate="animate"
+                                exit="exit"
                                 className="relative w-full max-w-lg liquid-modal shadow-2xl max-h-[90vh] overflow-y-auto no-scrollbar"
                                 style={{ padding: '2.5rem' }}
                                 onClick={(e) => e.stopPropagation()}
@@ -96,12 +99,12 @@ export function HelpButton({ title, items, className = '', dark = false }: HelpB
                                     )}
                                 </div>
 
-                                <button
+                                <Pressable
                                     onClick={() => setOpen(false)}
-                                    className="mt-8 w-full py-4 rounded-2xl bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-secondary)] text-white font-black text-base relative z-10 active:scale-95 transition-all"
+                                    className="mt-8 w-full py-4 rounded-2xl bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-secondary)] text-white font-black text-base relative z-10"
                                 >
                                     확인
-                                </button>
+                                </Pressable>
                             </motion.div>
                         </div>
                     )}
