@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { Icon } from '@iconify/react'
 import type { Settings } from '../lib/db'
 import { db, formatDuration, formatDateYYYYMMDD, getTodayDate } from '../lib/db'
@@ -16,6 +17,8 @@ import { CHAT_FUNCTION_DECLARATIONS, executeChatFunction } from '../lib/ai/funct
 import { buildModelChain, supportsFunctionCalling, supportsGrounding, markModelExhausted, markModelCooldown } from '../lib/ai/router'
 import { buildSystemInstruction } from '../lib/ai/prompts'
 import AiMarkdown from '../components/AiMarkdown'
+import Pressable from '../components/ui/Pressable'
+import { fadeRise, staggerContainer, staggerItem } from '../lib/motion'
 
 interface GeminiChatProps {
     settings: Settings
@@ -345,18 +348,26 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
                     {/* Messages */}
                     <div className="flex-1 overflow-y-auto space-y-4 mb-4">
                         {messages.length === 0 && (
-                            <div className="text-center text-[var(--color-text-secondary)] py-12">
+                            <motion.div
+                                variants={fadeRise}
+                                initial="initial"
+                                animate="animate"
+                                className="text-center text-[var(--color-text-secondary)] py-12"
+                            >
                                 <span className="text-5xl block mb-4">✨</span>
                                 <p className="font-bold text-[var(--color-text)]">오늘 공부한 걸 그냥 말해보세요</p>
                                 <p className="text-sm mt-2 opacity-90">"학원에서 수학 2시간 듣고 좀 졸았어, 영어 단어도 1시간 했고"</p>
                                 <p className="text-sm mt-1 opacity-70">→ 세션 기록과 오늘 일기까지 알아서 정리해드려요.</p>
                                 <p className="text-xs mt-3 opacity-60">질문·개념 설명도 물어보세요. 📊 버튼으로 기록을 함께 공유할 수 있어요.</p>
-                            </div>
+                            </motion.div>
                         )}
 
                         {messages.map((msg, i) => (
-                            <div
+                            <motion.div
                                 key={i}
+                                variants={fadeRise}
+                                initial="initial"
+                                animate="animate"
                                 className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
                             >
                                 <div
@@ -380,10 +391,16 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
                                                 </details>
                                             )}
                                             {msg.functionActivity && msg.functionActivity.length > 0 && (
-                                                <div className="flex flex-wrap gap-1.5 mb-2">
+                                                <motion.div
+                                                    variants={staggerContainer}
+                                                    initial="initial"
+                                                    animate="animate"
+                                                    className="flex flex-wrap gap-1.5 mb-2"
+                                                >
                                                     {msg.functionActivity.map((fa, fi) => (
-                                                        <span
+                                                        <motion.span
                                                             key={fi}
+                                                            variants={staggerItem}
                                                             className={`text-[10px] font-medium px-2 py-1 rounded-full border flex items-center gap-1 ${fa.error
                                                                 ? 'bg-red-500/15 text-red-400 border-red-400/30'
                                                                 : 'bg-white/5 text-[var(--color-text-secondary)] border-white/10'
@@ -392,9 +409,9 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
                                                             <span>{fa.error ? '⚠️' : WRITE_FUNCTIONS.has(fa.name) ? '🔧' : '📂'}</span>
                                                             <span>{fa.name}</span>
                                                             <span className="opacity-70">— {fa.label}</span>
-                                                        </span>
+                                                        </motion.span>
                                                     ))}
-                                                </div>
+                                                </motion.div>
                                             )}
                                             <AiMarkdown>{msg.content}</AiMarkdown>
                                             {msg.grounding && msg.grounding.length > 0 && (
@@ -423,65 +440,73 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
                                         <p className="whitespace-pre-wrap">{msg.content}</p>
                                     )}
                                 </div>
-                            </div>
+                            </motion.div>
                         ))}
 
-                        {loading && (
-                            <div className="flex justify-start">
-                                <div className="glass-card p-4 rounded-2xl">
-                                    <p className="animate-pulse">생각 중...</p>
-                                </div>
-                            </div>
-                        )}
+                        <AnimatePresence>
+                            {loading && (
+                                <motion.div
+                                    variants={fadeRise}
+                                    initial="initial"
+                                    animate="animate"
+                                    exit="exit"
+                                    className="flex justify-start"
+                                >
+                                    <div className="glass-card p-4 rounded-2xl">
+                                        <p className="animate-pulse">생각 중...</p>
+                                    </div>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
                     </div>
 
-                    {/* Data Share Toggle + Input */}
-                    <div className="flex flex-col gap-2">
+                    {/* Data Share Toggle + Input — 하단에 고정된 떠 있는 입력 바 */}
+                    <div className="material-chrome rounded-2xl p-3 flex flex-col gap-2">
                         {/* Options row */}
                         <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-xs text-[var(--color-text-secondary)]">📊 기록 공유:</span>
-                            <button
+                            <Pressable
                                 onClick={() => setShareData(shareData === 'day' ? 'none' : 'day')}
-                                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${shareData === 'day'
+                                className={`px-3 py-1.5 rounded-lg text-xs font-medium ${shareData === 'day'
                                     ? 'bg-[var(--color-primary)] text-white'
                                     : 'bg-[var(--color-surface)] text-[var(--color-text-secondary)] border border-[var(--color-border)]'
                                     }`}
                             >
                                 오늘
-                            </button>
-                            <button
+                            </Pressable>
+                            <Pressable
                                 onClick={() => setShareData(shareData === 'week' ? 'none' : 'week')}
-                                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${shareData === 'week'
+                                className={`px-3 py-1.5 rounded-lg text-xs font-medium ${shareData === 'week'
                                     ? 'bg-[var(--color-primary)] text-white'
                                     : 'bg-[var(--color-surface)] text-[var(--color-text-secondary)] border border-[var(--color-border)]'
                                     }`}
                             >
                                 이번 주
-                            </button>
+                            </Pressable>
 
                             {activeModel.supportsGrounding && (
-                                <button
+                                <Pressable
                                     onClick={() => setUseGrounding((v) => !v)}
-                                    className={`ml-auto px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1 ${useGrounding
+                                    className={`ml-auto px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1 ${useGrounding
                                         ? 'bg-cyan-500/80 text-white'
                                         : 'bg-[var(--color-surface)] text-[var(--color-text-secondary)] border border-[var(--color-border)]'
                                         }`}
                                     title="Google 검색으로 최신 정보를 근거 삼아 답합니다 (기록 저장/조회와 함께 사용 가능)"
                                 >
                                     <Icon icon="mdi:google" className="text-xs" /> 검색
-                                </button>
+                                </Pressable>
                             )}
                             {activeModel.supportsThinking && (
-                                <button
+                                <Pressable
                                     onClick={() => setUseThinking((v) => !v)}
-                                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1 ${useThinking
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1 ${useThinking
                                         ? 'bg-purple-500/80 text-white'
                                         : 'bg-[var(--color-surface)] text-[var(--color-text-secondary)] border border-[var(--color-border)]'
                                         } ${activeModel.supportsGrounding ? '' : 'ml-auto'}`}
                                     title="모델의 추론 과정을 함께 받아 펼쳐 볼 수 있습니다"
                                 >
                                     <Icon icon="mdi:brain" className="text-xs" /> 추론
-                                </button>
+                                </Pressable>
                             )}
                         </div>
                         {shareData !== 'none' && (
@@ -500,13 +525,13 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
                                 placeholder="오늘 공부한 걸 말하거나 질문해보세요…"
                                 className="flex-1 px-4 py-3 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)]"
                             />
-                            <button
+                            <Pressable
                                 onClick={sendMessage}
                                 disabled={loading || !input.trim()}
                                 className="btn btn-primary px-6 disabled:opacity-50"
                             >
                                 전송
-                            </button>
+                            </Pressable>
                         </div>
                     </div>
                 </>

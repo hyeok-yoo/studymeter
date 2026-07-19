@@ -14,6 +14,9 @@ import { suggestDiaryScore, saveDiaryEntry, formatDurationHourMinute, computeDia
 import { getTopTags, getTagsForScope, recordTagUsage, TAG_CATEGORY_LABELS } from '../lib/tags'
 import { isAmbientAiEnabled, generateDiaryReply } from '../lib/ai/aiService'
 import AiMarkdown from './AiMarkdown'
+import Sheet from './ui/Sheet'
+import Pressable from './ui/Pressable'
+import { spring } from '../lib/motion'
 
 // ── 음성 입력 (Web Speech API) ───────────────────────────────────────────────
 
@@ -69,7 +72,7 @@ export function DiaryEntryView({ entry, onEdit }: { entry: DiaryEntry; onEdit?: 
         <div className="space-y-4">
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                    <span className="text-3xl font-black gradient-text tabular-nums">{entry.score}</span>
+                    <span className="text-display text-3xl font-black gradient-text tabular-nums">{entry.score}</span>
                     <span className="text-sm font-bold text-[var(--color-text-secondary)]/70">/ 10</span>
                     {entry.auto && (
                         <span className="ml-1 px-2 py-0.5 rounded-full bg-black/[0.05] dark:bg-white/10 text-[10px] font-bold text-[var(--color-text-secondary)]">자동 확정</span>
@@ -249,19 +252,25 @@ export function DiaryEditor({
             <div className="space-y-2">
                 <p className="text-xs font-black uppercase tracking-widest text-[var(--color-text-secondary)]">오늘 점수</p>
                 <div className="flex gap-1.5 h-11">
-                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => (
-                        <button
-                            key={n}
-                            type="button"
-                            onClick={() => setScore(n)}
-                            className={`flex-1 rounded-lg text-xs font-black transition-all ${n <= score
-                                ? 'bg-indigo-500 text-white scale-[1.03] shadow-[0_4px_12px_rgba(99,102,241,0.35)]'
-                                : 'bg-black/[0.04] dark:bg-white/5 text-[var(--color-text-secondary)]/70 hover:bg-black/[0.08] dark:hover:bg-white/10 hover:text-[var(--color-text-secondary)]'
-                                }`}
-                        >
-                            {n}
-                        </button>
-                    ))}
+                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => {
+                        const active = n <= score
+                        return (
+                            <motion.button
+                                key={n}
+                                type="button"
+                                onClick={() => setScore(n)}
+                                whileTap={{ scale: 0.9 }}
+                                animate={{ scale: active ? 1.03 : 1 }}
+                                transition={spring.snappy}
+                                className={`flex-1 rounded-lg text-xs font-black ${active
+                                    ? 'bg-indigo-500 text-white shadow-[0_4px_12px_rgba(99,102,241,0.35)]'
+                                    : 'bg-black/[0.04] dark:bg-white/5 text-[var(--color-text-secondary)]/70 hover:bg-black/[0.08] dark:hover:bg-white/10 hover:text-[var(--color-text-secondary)]'
+                                    }`}
+                            >
+                                {n}
+                            </motion.button>
+                        )
+                    })}
                 </div>
             </div>
 
@@ -269,26 +278,32 @@ export function DiaryEditor({
             <div className="space-y-2">
                 <p className="text-xs font-black uppercase tracking-widest text-[var(--color-text-secondary)]">하루 태그</p>
                 <div className="flex flex-wrap gap-2">
-                    {topTags.map(tag => (
-                        <button
-                            key={tag.name}
-                            type="button"
-                            onClick={() => toggleTag(tag.name)}
-                            className={`px-3.5 py-2 rounded-full text-xs font-bold transition-all active:scale-95 ${selectedTags.includes(tag.name)
-                                ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20'
-                                : 'bg-black/[0.04] dark:bg-white/5 text-[var(--color-text-secondary)] hover:bg-black/[0.08] dark:hover:bg-white/10'
-                                }`}
-                        >
-                            {tag.name}
-                        </button>
-                    ))}
-                    <button
+                    {topTags.map(tag => {
+                        const selected = selectedTags.includes(tag.name)
+                        return (
+                            <motion.button
+                                key={tag.name}
+                                type="button"
+                                onClick={() => toggleTag(tag.name)}
+                                whileTap={{ scale: 0.9 }}
+                                animate={{ scale: selected ? 1.04 : 1 }}
+                                transition={spring.snappy}
+                                className={`px-3.5 py-2 rounded-full text-xs font-bold ${selected
+                                    ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20'
+                                    : 'bg-black/[0.04] dark:bg-white/5 text-[var(--color-text-secondary)] hover:bg-black/[0.08] dark:hover:bg-white/10'
+                                    }`}
+                            >
+                                {tag.name}
+                            </motion.button>
+                        )
+                    })}
+                    <Pressable
                         type="button"
                         onClick={() => setShowAllTags(v => !v)}
-                        className="px-3.5 py-2 rounded-full text-xs font-bold bg-black/[0.04] dark:bg-white/5 text-[var(--color-text-secondary)] hover:bg-black/[0.08] dark:hover:bg-white/10 transition-all"
+                        className="px-3.5 py-2 rounded-full text-xs font-bold bg-black/[0.04] dark:bg-white/5 text-[var(--color-text-secondary)] hover:bg-black/[0.08] dark:hover:bg-white/10"
                     >
                         {showAllTags ? '접기' : '더보기'}
-                    </button>
+                    </Pressable>
                 </div>
                 <AnimatePresence>
                     {showAllTags && (
@@ -302,19 +317,25 @@ export function DiaryEditor({
                                 <div key={cat} className="space-y-1.5">
                                     <p className="text-[10px] font-black uppercase tracking-widest text-[var(--color-text-secondary)]/70">{TAG_CATEGORY_LABELS[cat]}</p>
                                     <div className="flex flex-wrap gap-2">
-                                        {tags.map(tag => (
-                                            <button
-                                                key={tag.name}
-                                                type="button"
-                                                onClick={() => toggleTag(tag.name)}
-                                                className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95 ${selectedTags.includes(tag.name)
-                                                    ? 'bg-indigo-500 text-white'
-                                                    : 'bg-black/[0.04] dark:bg-white/5 text-[var(--color-text-secondary)] hover:bg-black/[0.08] dark:hover:bg-white/10'
-                                                    }`}
-                                            >
-                                                {tag.name}
-                                            </button>
-                                        ))}
+                                        {tags.map(tag => {
+                                            const selected = selectedTags.includes(tag.name)
+                                            return (
+                                                <motion.button
+                                                    key={tag.name}
+                                                    type="button"
+                                                    onClick={() => toggleTag(tag.name)}
+                                                    whileTap={{ scale: 0.9 }}
+                                                    animate={{ scale: selected ? 1.04 : 1 }}
+                                                    transition={spring.snappy}
+                                                    className={`px-3 py-1.5 rounded-full text-xs font-bold ${selected
+                                                        ? 'bg-indigo-500 text-white'
+                                                        : 'bg-black/[0.04] dark:bg-white/5 text-[var(--color-text-secondary)] hover:bg-black/[0.08] dark:hover:bg-white/10'
+                                                        }`}
+                                                >
+                                                    {tag.name}
+                                                </motion.button>
+                                            )
+                                        })}
                                     </div>
                                 </div>
                             ))}
@@ -350,43 +371,43 @@ export function DiaryEditor({
 
                 <div className="flex flex-wrap gap-2">
                     {editingText ? (
-                        <button
+                        <Pressable
                             type="button"
                             onClick={() => setEditingText(false)}
-                            className="px-3.5 py-2 rounded-full text-xs font-bold bg-indigo-500 text-white transition-all active:scale-95"
+                            className="px-3.5 py-2 rounded-full text-xs font-bold bg-indigo-500 text-white"
                         >
                             <Icon icon="mdi:check" className="inline text-sm mr-1" />완료
-                        </button>
+                        </Pressable>
                     ) : (
                         <>
                             {initialDraft.trim() && oneLiner !== initialDraft && (
-                                <button
+                                <Pressable
                                     type="button"
                                     onClick={useDraftAsIs}
-                                    className="px-3.5 py-2 rounded-full text-xs font-bold bg-black/[0.04] dark:bg-white/5 text-[var(--color-text-secondary)] hover:bg-black/[0.08] dark:hover:bg-white/10 transition-all active:scale-95"
+                                    className="px-3.5 py-2 rounded-full text-xs font-bold bg-black/[0.04] dark:bg-white/5 text-[var(--color-text-secondary)] hover:bg-black/[0.08] dark:hover:bg-white/10"
                                 >
                                     초안 그대로
-                                </button>
+                                </Pressable>
                             )}
-                            <button
+                            <Pressable
                                 type="button"
                                 onClick={() => setEditingText(true)}
-                                className="px-3.5 py-2 rounded-full text-xs font-bold bg-black/[0.04] dark:bg-white/5 text-[var(--color-text-secondary)] hover:bg-black/[0.08] dark:hover:bg-white/10 transition-all active:scale-95"
+                                className="px-3.5 py-2 rounded-full text-xs font-bold bg-black/[0.04] dark:bg-white/5 text-[var(--color-text-secondary)] hover:bg-black/[0.08] dark:hover:bg-white/10"
                             >
                                 <Icon icon="mdi:pencil-outline" className="inline text-sm mr-1" />직접 고치기
-                            </button>
+                            </Pressable>
                             {isVoiceInputSupported() && (
-                                <button
+                                <Pressable
                                     type="button"
                                     onClick={startVoice}
                                     disabled={listening}
-                                    className={`px-3.5 py-2 rounded-full text-xs font-bold transition-all active:scale-95 ${listening
+                                    className={`px-3.5 py-2 rounded-full text-xs font-bold ${listening
                                         ? 'bg-red-500/80 text-white animate-pulse'
                                         : 'bg-black/[0.04] dark:bg-white/5 text-[var(--color-text-secondary)] hover:bg-black/[0.08] dark:hover:bg-white/10'
                                         }`}
                                 >
                                     <Icon icon="mdi:microphone" className="inline text-sm mr-1" />{listening ? '듣는 중…' : '음성'}
-                                </button>
+                                </Pressable>
                             )}
                         </>
                     )}
@@ -396,24 +417,24 @@ export function DiaryEditor({
             {/* 확정 버튼 */}
             <div className="flex gap-3 pt-1">
                 {onCancel && (
-                    <button
+                    <Pressable
                         type="button"
                         onClick={onCancel}
                         disabled={saving}
-                        className="flex-1 py-4 rounded-2xl bg-black/[0.04] dark:bg-white/5 hover:bg-black/[0.08] dark:hover:bg-white/10 text-[var(--color-text-secondary)] font-black text-sm transition-all active:scale-95 disabled:opacity-40"
+                        className="flex-1 py-4 rounded-2xl bg-black/[0.04] dark:bg-white/5 hover:bg-black/[0.08] dark:hover:bg-white/10 text-[var(--color-text-secondary)] font-black text-sm disabled:opacity-40"
                     >
                         취소
-                    </button>
+                    </Pressable>
                 )}
-                <button
+                <Pressable
                     type="button"
                     onClick={handleConfirm}
                     disabled={saving}
-                    className="flex-[1.6] py-4 rounded-2xl bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-black text-sm shadow-xl shadow-indigo-500/30 transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-70"
+                    className="flex-[1.6] py-4 rounded-2xl bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-black text-sm shadow-xl shadow-indigo-500/30 flex items-center justify-center gap-2 disabled:opacity-70"
                 >
                     {saving ? <Icon icon="mdi:loading" className="text-lg animate-spin" /> : <Icon icon="mdi:check-circle-outline" className="text-lg" />}
                     {existing ? '수정 완료' : '오늘 일기 확정'}
-                </button>
+                </Pressable>
             </div>
         </div>
     )
@@ -437,41 +458,18 @@ export default function DiaryEditModal({
     isOpen, onClose, date, settings, stats, existing, initialDraft, inheritedTags, onSaved,
 }: DiaryEditModalProps) {
     return (
-        <AnimatePresence>
-            {isOpen && (
-                <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 sm:p-6">
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="absolute inset-0 bg-black/70 backdrop-blur-xl"
-                        onClick={onClose}
-                    />
-                    <motion.div
-                        initial={{ scale: 0.9, opacity: 0, y: 30 }}
-                        animate={{ scale: 1, opacity: 1, y: 0 }}
-                        exit={{ scale: 0.9, opacity: 0, y: 30 }}
-                        transition={{ type: 'spring', damping: 20, stiffness: 300 }}
-                        className="relative w-full max-w-lg liquid-modal shadow-2xl overflow-hidden"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        <div className="absolute inset-0 pointer-events-none bg-gradient-to-br from-indigo-500/5 via-transparent to-transparent" />
-                        <div className="relative p-8 max-h-[85vh] overflow-y-auto no-scrollbar">
-                            <h2 className="text-xl font-black text-[var(--color-text)] mb-5">{date} 일기</h2>
-                            <DiaryEditor
-                                date={date}
-                                settings={settings}
-                                stats={stats}
-                                existing={existing}
-                                initialDraft={initialDraft}
-                                inheritedTags={inheritedTags}
-                                onSaved={async () => { await onSaved() }}
-                                onCancel={onClose}
-                            />
-                        </div>
-                    </motion.div>
-                </div>
-            )}
-        </AnimatePresence>
+        <Sheet open={isOpen} onClose={onClose} ariaLabel={`${date} 일기`}>
+            <h2 className="text-xl font-black text-[var(--color-text)] mb-5 pt-1">{date} 일기</h2>
+            <DiaryEditor
+                date={date}
+                settings={settings}
+                stats={stats}
+                existing={existing}
+                initialDraft={initialDraft}
+                inheritedTags={inheritedTags}
+                onSaved={async () => { await onSaved() }}
+                onCancel={onClose}
+            />
+        </Sheet>
     )
 }

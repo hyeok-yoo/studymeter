@@ -7,6 +7,7 @@
  * 공부 0분인 날도 통계 0으로 표시하며 작성 가능하다.
  */
 import { useState, useEffect } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { Icon } from '@iconify/react'
 import type { DiaryEntry, DiaryStats, Settings } from '../lib/db'
 import {
@@ -18,6 +19,7 @@ import {
 } from '../lib/db'
 import { generateDiaryDraft } from '../lib/ai/aiService'
 import { DiaryEditor, DiaryEntryView } from './DiaryEditModal'
+import { fadeRise } from '../lib/motion'
 
 interface DiaryCardProps {
     settings: Settings
@@ -64,7 +66,7 @@ export default function DiaryCard({ settings }: DiaryCardProps) {
     }
 
     return (
-        <section className="glass-card p-6 md:p-8 border-none dark:bg-white/5 bg-white/40">
+        <section className="glass-card p-6 md:p-8">
             <div className="flex items-center gap-2 mb-6">
                 <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20 flex-shrink-0">
                     <Icon icon="mdi:notebook-heart-outline" className="text-lg text-white" />
@@ -72,7 +74,7 @@ export default function DiaryCard({ settings }: DiaryCardProps) {
                 <h2 className="text-lg font-black text-[var(--color-text)]">오늘의 일기</h2>
                 {streak > 0 && (
                     <span className="text-[11px] font-black px-2 py-0.5 rounded-full bg-orange-500/15 text-orange-400 border border-orange-400/20 flex items-center gap-0.5">
-                        <Icon icon="mdi:fire" className="text-xs" /> {streak}일 연속
+                        <Icon icon="mdi:fire" className="text-xs" /> <span className="text-display">{streak}</span>일 연속
                     </span>
                 )}
                 {entry && !editing && (
@@ -82,28 +84,34 @@ export default function DiaryCard({ settings }: DiaryCardProps) {
                 )}
             </div>
 
-            {loading || !stats ? (
-                <div className="space-y-3 animate-pulse">
-                    <div className="grid grid-cols-4 gap-2">
-                        {[0, 1, 2, 3].map(i => <div key={i} className="h-16 rounded-xl bg-black/[0.04] dark:bg-white/5" />)}
-                    </div>
-                    <div className="h-11 rounded-lg bg-black/[0.04] dark:bg-white/5" />
-                    <div className="h-12 rounded-2xl bg-black/[0.04] dark:bg-white/5" />
-                </div>
-            ) : entry && !editing ? (
-                <DiaryEntryView entry={entry} onEdit={() => setEditing(true)} />
-            ) : (
-                <DiaryEditor
-                    date={today}
-                    settings={settings}
-                    stats={stats}
-                    existing={entry}
-                    initialDraft={draft}
-                    inheritedTags={inheritedTags}
-                    onSaved={reload}
-                    onCancel={entry ? () => setEditing(false) : undefined}
-                />
-            )}
+            <AnimatePresence mode="wait">
+                {loading || !stats ? (
+                    <motion.div key="skeleton" variants={fadeRise} initial="initial" animate="animate" exit="exit" className="space-y-3 animate-pulse">
+                        <div className="grid grid-cols-4 gap-2">
+                            {[0, 1, 2, 3].map(i => <div key={i} className="h-16 rounded-xl bg-black/[0.04] dark:bg-white/5" />)}
+                        </div>
+                        <div className="h-11 rounded-lg bg-black/[0.04] dark:bg-white/5" />
+                        <div className="h-12 rounded-2xl bg-black/[0.04] dark:bg-white/5" />
+                    </motion.div>
+                ) : entry && !editing ? (
+                    <motion.div key="entry" variants={fadeRise} initial="initial" animate="animate" exit="exit">
+                        <DiaryEntryView entry={entry} onEdit={() => setEditing(true)} />
+                    </motion.div>
+                ) : (
+                    <motion.div key="editor" variants={fadeRise} initial="initial" animate="animate" exit="exit">
+                        <DiaryEditor
+                            date={today}
+                            settings={settings}
+                            stats={stats}
+                            existing={entry}
+                            initialDraft={draft}
+                            inheritedTags={inheritedTags}
+                            onSaved={reload}
+                            onCancel={entry ? () => setEditing(false) : undefined}
+                        />
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </section>
     )
 }

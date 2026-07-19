@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { Icon } from '@iconify/react'
 import { useFocusSync } from '../lib/focusSync'
 import type { ModelInfo } from '../lib/focusSync'
 import { useLocalFocusLab } from '../lib/useLocalFocusLab'
+import { spring, fadeRise, staggerContainer, staggerItem } from '../lib/motion'
+import Pressable from '../components/ui/Pressable'
 
 const GITHUB_URL = 'https://github.com/hyeok-yoo'
 const SPONSORS_URL = 'https://github.com/sponsors/hyeok-yoo'
@@ -44,25 +46,92 @@ const HIGHLIGHTS = [
     },
 ]
 
+// ── Segmented control — 선택 배경이 layoutId 스프링으로 이동 (Settings.tsx 와 동일 패턴) ──
+function SegmentedControl<T extends string>({
+    layoutId,
+    options,
+    value,
+    onChange,
+}: {
+    layoutId: string
+    options: Array<{ value: T; label: React.ReactNode; icon: string }>
+    value: T
+    onChange: (v: T) => void
+}) {
+    return (
+        <div className="relative flex gap-2 p-1 rounded-2xl bg-white/5 border border-white/10">
+            {options.map((opt) => {
+                const active = opt.value === value
+                return (
+                    <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => onChange(opt.value)}
+                        className="relative flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-black transition-colors active:scale-[0.97]"
+                    >
+                        {active && (
+                            <motion.div
+                                layoutId={layoutId}
+                                className="absolute inset-0 rounded-xl bg-indigo-500/25 border border-indigo-400/40"
+                                transition={spring.default}
+                            />
+                        )}
+                        <span className={`relative z-10 flex items-center justify-center gap-2 ${active ? 'text-indigo-300' : 'text-[var(--color-text-secondary)] opacity-60'}`}>
+                            <Icon icon={opt.icon} className="text-lg" />
+                            {opt.label}
+                        </span>
+                    </button>
+                )
+            })}
+        </div>
+    )
+}
+
+// ── 작은 토글 스위치 (Settings.tsx 와 동일 패턴 — 즉시 눌림 피드백 + 스프링) ──────────
+function ToggleSwitch({ enabled, onChange }: { enabled: boolean; onChange: () => void }) {
+    return (
+        <motion.button
+            type="button"
+            role="switch"
+            aria-checked={enabled}
+            onClick={onChange}
+            whileTap={{ scale: 0.92 }}
+            transition={spring.snappy}
+            className="relative flex-shrink-0 w-12 h-7 rounded-full transition-colors duration-300"
+            style={{ background: enabled ? 'var(--color-primary)' : 'rgba(120,120,128,0.24)' }}
+        >
+            <motion.div
+                className="absolute top-1 left-1 w-5 h-5 rounded-full bg-white shadow-md"
+                animate={{ x: enabled ? 20 : 0 }}
+                transition={spring.snappy}
+            />
+        </motion.button>
+    )
+}
+
 export default function DeveloperPage() {
     const navigate = useNavigate()
 
     return (
-        <div className="flex flex-col gap-10 max-w-2xl mx-auto pb-16">
+        <motion.div
+            className="flex flex-col gap-10 max-w-2xl mx-auto pb-16"
+            initial="initial"
+            animate="animate"
+            variants={staggerContainer}
+        >
             {/* 뒤로 가기 */}
-            <button
+            <Pressable
                 onClick={() => navigate(-1)}
-                className="self-start flex items-center gap-2 text-sm font-bold text-[var(--color-text-secondary)] hover:text-[var(--color-text)] transition-colors -mb-4"
+                pressScale={0.96}
+                className="self-start flex items-center gap-2 text-sm font-bold text-[var(--color-text-secondary)] hover:text-[var(--color-text)] -mb-4"
             >
                 <Icon icon="mdi:arrow-left" className="text-lg" />
                 돌아가기
-            </button>
+            </Pressable>
 
             {/* 히어로 */}
             <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5 }}
+                variants={staggerItem}
                 className="glass-card p-8 md:p-12 relative overflow-hidden border-none dark:bg-white/5 bg-white/40"
             >
                 <div className="absolute -top-20 -right-20 w-64 h-64 bg-indigo-500/15 blur-[80px] rounded-full pointer-events-none" />
@@ -74,7 +143,7 @@ export default function DeveloperPage() {
                         <span className="text-4xl font-black text-white">Y</span>
                     </div>
 
-                    <h1 className="text-3xl md:text-4xl font-black tracking-tight text-[var(--color-text)] mb-1">
+                    <h1 className="text-3xl md:text-4xl font-black tracking-tight text-display text-[var(--color-text)] mb-1">
                         Yoo Seung Hyeok
                     </h1>
                     <p className="text-lg font-bold gradient-text mb-2">유승혁</p>
@@ -86,9 +155,7 @@ export default function DeveloperPage() {
 
             {/* 찬양 글 */}
             <motion.div
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.1, duration: 0.5 }}
+                variants={staggerItem}
                 className="glass-card p-6 md:p-8 border-none dark:bg-white/5 bg-white/40 space-y-4"
             >
                 <h2 className="text-xl font-black gradient-text">StudyMeter를 만든 사람</h2>
@@ -116,17 +183,13 @@ export default function DeveloperPage() {
 
             {/* 주요 성과 */}
             <motion.div
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2, duration: 0.5 }}
+                variants={staggerItem}
                 className="grid grid-cols-1 md:grid-cols-2 gap-4"
             >
-                {HIGHLIGHTS.map((h, i) => (
+                {HIGHLIGHTS.map((h) => (
                     <motion.div
                         key={h.title}
-                        initial={{ opacity: 0, y: 12 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.25 + i * 0.05 }}
+                        variants={staggerItem}
                         className="glass-card p-5 border-none dark:bg-white/5 bg-white/40"
                     >
                         <div className="text-2xl mb-2">{h.emoji}</div>
@@ -138,15 +201,13 @@ export default function DeveloperPage() {
 
             {/* 기술 스택 */}
             <motion.div
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3, duration: 0.5 }}
+                variants={staggerItem}
                 className="glass-card p-6 border-none dark:bg-white/5 bg-white/40"
             >
                 <h2 className="text-lg font-black text-[var(--color-text)] mb-4">기술 스택</h2>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                     {SKILLS.map((s) => (
-                        <div key={s.label} className="flex items-center gap-2.5 p-3 rounded-2xl bg-white/5 border border-white/5">
+                        <div key={s.label} className="glass-card-elevated flex items-center gap-2.5 p-3">
                             <Icon icon={s.icon} className="text-xl flex-shrink-0" style={{ color: s.color }} />
                             <span className="text-xs font-bold text-[var(--color-text-secondary)]">{s.label}</span>
                         </div>
@@ -156,53 +217,54 @@ export default function DeveloperPage() {
 
             {/* 링크 버튼 */}
             <motion.div
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.35, duration: 0.5 }}
+                variants={staggerItem}
                 className="flex flex-col sm:flex-row gap-4"
             >
-                <a
+                <motion.a
                     href={GITHUB_URL}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex-1 flex items-center justify-center gap-3 py-4 px-6 rounded-2xl bg-[var(--color-surface)] hover:bg-[var(--color-surface-elevated)] border border-[var(--color-border)] font-black text-[var(--color-text)] transition-all active:scale-95 group"
+                    whileTap={{ scale: 0.96 }}
+                    whileHover={{ y: -2 }}
+                    transition={spring.snappy}
+                    className="flex-1 flex items-center justify-center gap-3 py-4 px-6 rounded-2xl bg-[var(--color-surface)] hover:bg-[var(--color-surface-elevated)] border border-[var(--color-border)] font-black text-[var(--color-text)] group"
                 >
                     <Icon icon="mdi:github" className="text-2xl group-hover:scale-110 transition-transform" />
                     <div className="text-left">
                         <p className="text-sm">GitHub</p>
                         <p className="text-xs font-medium text-[var(--color-text-secondary)] opacity-60">@hyeok-yoo</p>
                     </div>
-                </a>
+                </motion.a>
 
-                <a
+                <motion.a
                     href={SPONSORS_URL}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex-1 flex items-center justify-center gap-3 py-4 px-6 rounded-2xl bg-gradient-to-r from-pink-500/15 to-rose-500/15 hover:from-pink-500/25 hover:to-rose-500/25 border border-pink-400/25 font-black transition-all active:scale-95 group"
+                    whileTap={{ scale: 0.96 }}
+                    whileHover={{ y: -2 }}
+                    transition={spring.snappy}
+                    className="flex-1 flex items-center justify-center gap-3 py-4 px-6 rounded-2xl bg-gradient-to-r from-pink-500/15 to-rose-500/15 hover:from-pink-500/25 hover:to-rose-500/25 border border-pink-400/25 font-black group"
                 >
                     <Icon icon="mdi:heart" className="text-2xl text-pink-400 group-hover:scale-110 transition-transform" />
                     <div className="text-left">
                         <p className="text-sm text-[var(--color-text)]">GitHub Sponsors</p>
                         <p className="text-xs font-medium text-pink-400/70">개발을 응원해주세요 ☕</p>
                     </div>
-                </a>
+                </motion.a>
             </motion.div>
 
             {/* 개발자 도구 */}
-            <DeveloperTools />
+            <motion.div variants={staggerItem}>
+                <DeveloperTools />
+            </motion.div>
 
             {/* 앱 링크 */}
-            <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.4 }}
-                className="text-center"
-            >
+            <motion.div variants={staggerItem} className="text-center">
                 <p className="text-xs text-[var(--color-text-secondary)] opacity-40">
                     StudyMeter v{__APP_VERSION__} · made with ♥ in Korea
                 </p>
             </motion.div>
-        </div>
+        </motion.div>
     )
 }
 
@@ -218,40 +280,38 @@ function DeveloperTools() {
     }
 
     return (
-        <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.38, duration: 0.5 }}
-            className="glass-card p-6 md:p-8 border-none dark:bg-white/5 bg-white/40 space-y-6"
-        >
+        <div className="glass-card p-6 md:p-8 border-none dark:bg-white/5 bg-white/40 space-y-6">
             <div className="flex items-center gap-2.5">
                 <Icon icon="mdi:tools" className="text-2xl text-indigo-400" />
                 <h2 className="text-xl font-black gradient-text">개발자 도구</h2>
             </div>
 
-            {/* 모드 전환: 온디바이스(기본) ↔ PC 서버 */}
-            <div className="flex gap-2 p-1 rounded-2xl bg-white/5 border border-white/10">
-                {([['local', '온디바이스', 'mdi:cellphone'], ['server', 'PC 서버', 'mdi:server']] as const).map(([key, text, icon]) => (
-                    <button
-                        key={key}
-                        onClick={() => switchMode(key)}
-                        className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-black transition-all ${
-                            mode === key
-                                ? 'bg-indigo-500/25 border border-indigo-400/40 text-indigo-300'
-                                : 'text-[var(--color-text-secondary)] opacity-60 hover:opacity-100'
-                        }`}
-                    >
-                        <Icon icon={icon} className="text-lg" />
-                        {text}
-                    </button>
-                ))}
-            </div>
+            {/* 모드 전환: 온디바이스(기본) ↔ PC 서버 — segmented control */}
+            <SegmentedControl
+                layoutId="devtools-mode"
+                value={mode}
+                onChange={switchMode}
+                options={[
+                    { value: 'local', label: '온디바이스', icon: 'mdi:cellphone' },
+                    { value: 'server', label: 'PC 서버', icon: 'mdi:server' },
+                ]}
+            />
 
-            {mode === 'local' ? <LocalLabTools /> : <ServerTools />}
+            <AnimatePresence mode="wait" initial={false}>
+                <motion.div
+                    key={mode}
+                    variants={fadeRise}
+                    initial="initial"
+                    animate="animate"
+                    exit="exit"
+                >
+                    {mode === 'local' ? <LocalLabTools /> : <ServerTools />}
+                </motion.div>
+            </AnimatePresence>
 
             {/* 고급 모드 토글 (모드와 무관) */}
             <AdvancedModeToggle />
-        </motion.div>
+        </div>
     )
 }
 
@@ -286,13 +346,14 @@ function ServerTools() {
                 <div className="flex items-start gap-2 px-4 py-3 rounded-2xl bg-red-500/15 border border-red-400/30">
                     <Icon icon="mdi:alert-circle" className="text-lg text-red-400 flex-shrink-0 mt-0.5" />
                     <p className="flex-1 text-sm font-bold text-red-400 leading-snug break-all">{devError}</p>
-                    <button
+                    <Pressable
                         onClick={clearDevError}
+                        pressScale={0.85}
                         className="text-red-400/60 hover:text-red-400 text-lg leading-none flex-shrink-0"
                         aria-label="닫기"
                     >
                         ×
-                    </button>
+                    </Pressable>
                 </div>
             )}
 
@@ -335,25 +396,27 @@ function LocalLabTools() {
                 <div className="flex items-start gap-2 px-4 py-3 rounded-2xl bg-red-500/15 border border-red-400/30">
                     <Icon icon="mdi:alert-circle" className="text-lg text-red-400 flex-shrink-0 mt-0.5" />
                     <p className="flex-1 text-sm font-bold text-red-400 leading-snug break-all">{lab.labError}</p>
-                    <button
+                    <Pressable
                         onClick={lab.clearLabError}
+                        pressScale={0.85}
                         className="text-red-400/60 hover:text-red-400 text-lg leading-none flex-shrink-0"
                         aria-label="닫기"
                     >
                         ×
-                    </button>
+                    </Pressable>
                 </div>
             )}
 
             {/* 측정 상태 카드 */}
             <div className="flex items-center justify-between px-4 py-3 rounded-2xl bg-white/5 border border-white/10">
                 <div className="flex items-center gap-2.5">
-                    <div
+                    <motion.div
                         className="w-2.5 h-2.5 rounded-full"
-                        style={{
-                            background: measuring ? '#22c55e' : lab.status === 'starting' ? '#eab308' : '#64748b',
-                            boxShadow: measuring ? '0 0 6px #22c55e' : 'none',
+                        animate={{
+                            backgroundColor: measuring ? '#22c55e' : lab.status === 'starting' ? '#eab308' : '#64748b',
                         }}
+                        transition={spring.snappy}
+                        style={{ boxShadow: measuring ? '0 0 6px #22c55e' : 'none' }}
                     />
                     <span className="text-sm font-black text-[var(--color-text)]">
                         {measuring
@@ -366,13 +429,14 @@ function LocalLabTools() {
                         </span>
                     )}
                 </div>
-                <button
+                <Pressable
                     onClick={measuring ? lab.stopMeasure : lab.startMeasure}
                     disabled={lab.status === 'starting'}
-                    className="text-xs font-black px-3.5 py-2 rounded-xl transition-all active:scale-95 disabled:opacity-40 bg-white/5 hover:bg-white/10 border border-white/10 text-[var(--color-text-secondary)]"
+                    pressScale={0.95}
+                    className="text-xs font-black px-3.5 py-2 rounded-xl disabled:opacity-40 bg-white/5 hover:bg-white/10 border border-white/10 text-[var(--color-text-secondary)]"
                 >
                     {measuring ? '측정 끄기' : '측정 켜기'}
-                </button>
+                </Pressable>
             </div>
 
             {/* 데이터 수집 */}
@@ -381,27 +445,30 @@ function LocalLabTools() {
                     데이터 수집 (기기 저장)
                 </h3>
                 <div className="flex flex-col sm:flex-row gap-2">
-                    <button
+                    <Pressable
                         onClick={() => lab.startCollect(0)}
                         disabled={lab.collectLabel === 0}
-                        className="flex-1 py-3 px-4 rounded-2xl font-black text-sm transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-400/30 text-emerald-300"
+                        pressScale={0.96}
+                        className="flex-1 py-3 px-4 rounded-2xl font-black text-sm disabled:opacity-40 disabled:cursor-not-allowed bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-400/30 text-emerald-300"
                     >
                         집중(0) 수집
-                    </button>
-                    <button
+                    </Pressable>
+                    <Pressable
                         onClick={() => lab.startCollect(1)}
                         disabled={lab.collectLabel === 1}
-                        className="flex-1 py-3 px-4 rounded-2xl font-black text-sm transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed bg-amber-500/15 hover:bg-amber-500/25 border border-amber-400/30 text-amber-300"
+                        pressScale={0.96}
+                        className="flex-1 py-3 px-4 rounded-2xl font-black text-sm disabled:opacity-40 disabled:cursor-not-allowed bg-amber-500/15 hover:bg-amber-500/25 border border-amber-400/30 text-amber-300"
                     >
                         산만(1) 수집
-                    </button>
-                    <button
+                    </Pressable>
+                    <Pressable
                         onClick={lab.stopCollect}
                         disabled={!collecting}
-                        className="flex-1 py-3 px-4 rounded-2xl font-black text-sm transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed bg-rose-500/15 hover:bg-rose-500/25 border border-rose-400/30 text-rose-300"
+                        pressScale={0.96}
+                        className="flex-1 py-3 px-4 rounded-2xl font-black text-sm disabled:opacity-40 disabled:cursor-not-allowed bg-rose-500/15 hover:bg-rose-500/25 border border-rose-400/30 text-rose-300"
                     >
                         수집 정지
-                    </button>
+                    </Pressable>
                 </div>
                 <div className="px-4 py-3 rounded-2xl bg-white/5 border border-white/10">
                     {collecting ? (
@@ -419,33 +486,36 @@ function LocalLabTools() {
                 </div>
                 {/* CSV 관리 */}
                 <div className="flex flex-wrap gap-2">
-                    <button
+                    <Pressable
                         onClick={lab.exportCsv}
                         disabled={lab.rowCount === 0}
-                        className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-[var(--color-text-secondary)] transition-all active:scale-95 disabled:opacity-40"
+                        pressScale={0.94}
+                        className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-[var(--color-text-secondary)] disabled:opacity-40"
                     >
                         <Icon icon="mdi:export" className="text-sm" />
                         CSV 내보내기
-                    </button>
-                    <button
+                    </Pressable>
+                    <Pressable
                         onClick={() => fileInputRef.current?.click()}
-                        className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-[var(--color-text-secondary)] transition-all active:scale-95"
+                        pressScale={0.94}
+                        className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-[var(--color-text-secondary)]"
                     >
                         <Icon icon="mdi:import" className="text-sm" />
                         CSV 가져오기
-                    </button>
-                    <button
+                    </Pressable>
+                    <Pressable
                         onClick={async () => {
                             if (window.confirm(`수집 데이터 ${lab.rowCount.toLocaleString()}행을 모두 삭제할까요?`)) {
                                 await lab.clearSamples()
                             }
                         }}
                         disabled={lab.rowCount === 0}
-                        className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 border border-red-400/20 text-red-400 transition-all active:scale-95 disabled:opacity-40"
+                        pressScale={0.94}
+                        className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 border border-red-400/20 text-red-400 disabled:opacity-40"
                     >
                         <Icon icon="mdi:delete-outline" className="text-sm" />
                         전체 삭제
-                    </button>
+                    </Pressable>
                     <input
                         ref={fileInputRef}
                         type="file"
@@ -471,10 +541,11 @@ function LocalLabTools() {
                 <h3 className="text-sm font-black text-[var(--color-text)] uppercase tracking-wider opacity-70">
                     온디바이스 학습
                 </h3>
-                <button
+                <Pressable
                     onClick={lab.train}
                     disabled={lab.training || lab.rowCount < 40}
-                    className="w-full py-3 px-4 rounded-2xl font-black text-sm transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-400/30 text-indigo-300 flex items-center justify-center gap-2"
+                    pressScale={0.97}
+                    className="w-full py-3 px-4 rounded-2xl font-black text-sm disabled:opacity-50 disabled:cursor-not-allowed bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-400/30 text-indigo-300 flex items-center justify-center gap-2"
                 >
                     {lab.training ? (
                         <>
@@ -484,7 +555,7 @@ function LocalLabTools() {
                     ) : (
                         `이 기기에서 학습 시작 (${lab.rowCount.toLocaleString()}행 · ${lab.featureCount}피처)`
                     )}
-                </button>
+                </Pressable>
                 {lab.rowCount < 40 && !lab.training && (
                     <p className="text-xs text-[var(--color-text-secondary)] opacity-60">
                         학습에는 최소 40행(집중·산만 모두 포함)이 필요합니다.
@@ -526,7 +597,7 @@ function LocalLabTools() {
                             return (
                                 <div
                                     key={m.id}
-                                    className={`flex items-center gap-3 px-4 py-3 rounded-2xl border transition-all ${
+                                    className={`flex items-center gap-3 px-4 py-3 rounded-2xl border transition-colors ${
                                         active ? 'bg-indigo-500/12 border-indigo-400/40' : 'bg-white/5 border-white/10'
                                     }`}
                                 >
@@ -543,21 +614,23 @@ function LocalLabTools() {
                                             {formatMtime(m.createdAt)} · val {(m.valAccuracy * 100).toFixed(1)}% · n={m.nSamples.toLocaleString()}
                                         </p>
                                     </div>
-                                    <button
+                                    <Pressable
                                         onClick={() => lab.applyModel(active ? null : m.id!)}
-                                        className="flex-shrink-0 text-xs font-black px-3.5 py-2 rounded-xl transition-all active:scale-95 bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-400/30 text-indigo-300"
+                                        pressScale={0.94}
+                                        className="flex-shrink-0 text-xs font-black px-3.5 py-2 rounded-xl bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-400/30 text-indigo-300"
                                     >
                                         {active ? '해제' : '적용'}
-                                    </button>
-                                    <button
+                                    </Pressable>
+                                    <Pressable
                                         onClick={async () => {
                                             if (window.confirm(`모델 "${m.name}"을 삭제할까요?`)) await lab.deleteModel(m.id!)
                                         }}
-                                        className="flex-shrink-0 text-xs font-black px-2.5 py-2 rounded-xl transition-all active:scale-95 bg-red-500/10 hover:bg-red-500/20 border border-red-400/20 text-red-400"
+                                        pressScale={0.9}
+                                        className="flex-shrink-0 text-xs font-black px-2.5 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 border border-red-400/20 text-red-400"
                                         aria-label="모델 삭제"
                                     >
                                         <Icon icon="mdi:delete-outline" className="text-sm" />
-                                    </button>
+                                    </Pressable>
                                 </div>
                             )
                         })}
@@ -616,27 +689,30 @@ function CollectSection({
         <section className="space-y-3">
             <h3 className="text-sm font-black text-[var(--color-text)] uppercase tracking-wider opacity-70">데이터 수집</h3>
             <div className="flex flex-col sm:flex-row gap-2">
-                <button
+                <Pressable
                     onClick={() => onStart(0)}
                     disabled={active}
-                    className="flex-1 py-3 px-4 rounded-2xl font-black text-sm transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-400/30 text-emerald-300"
+                    pressScale={0.96}
+                    className="flex-1 py-3 px-4 rounded-2xl font-black text-sm disabled:opacity-40 disabled:cursor-not-allowed bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-400/30 text-emerald-300"
                 >
                     집중(0) 수집
-                </button>
-                <button
+                </Pressable>
+                <Pressable
                     onClick={() => onStart(1)}
                     disabled={active}
-                    className="flex-1 py-3 px-4 rounded-2xl font-black text-sm transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed bg-amber-500/15 hover:bg-amber-500/25 border border-amber-400/30 text-amber-300"
+                    pressScale={0.96}
+                    className="flex-1 py-3 px-4 rounded-2xl font-black text-sm disabled:opacity-40 disabled:cursor-not-allowed bg-amber-500/15 hover:bg-amber-500/25 border border-amber-400/30 text-amber-300"
                 >
                     산만(1) 수집
-                </button>
-                <button
+                </Pressable>
+                <Pressable
                     onClick={onStop}
                     disabled={!active}
-                    className="flex-1 py-3 px-4 rounded-2xl font-black text-sm transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed bg-rose-500/15 hover:bg-rose-500/25 border border-rose-400/30 text-rose-300"
+                    pressScale={0.96}
+                    className="flex-1 py-3 px-4 rounded-2xl font-black text-sm disabled:opacity-40 disabled:cursor-not-allowed bg-rose-500/15 hover:bg-rose-500/25 border border-rose-400/30 text-rose-300"
                 >
                     수집 정지
-                </button>
+                </Pressable>
             </div>
             <div className="px-4 py-3 rounded-2xl bg-white/5 border border-white/10">
                 {active ? (
@@ -671,10 +747,11 @@ function TrainSection({
     return (
         <section className="space-y-3">
             <h3 className="text-sm font-black text-[var(--color-text)] uppercase tracking-wider opacity-70">모델 학습</h3>
-            <button
+            <Pressable
                 onClick={onStart}
                 disabled={running}
-                className="w-full py-3 px-4 rounded-2xl font-black text-sm transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-400/30 text-indigo-300 flex items-center justify-center gap-2"
+                pressScale={0.97}
+                className="w-full py-3 px-4 rounded-2xl font-black text-sm disabled:opacity-50 disabled:cursor-not-allowed bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-400/30 text-indigo-300 flex items-center justify-center gap-2"
             >
                 {running ? (
                     <>
@@ -684,7 +761,7 @@ function TrainSection({
                 ) : (
                     '학습 시작'
                 )}
-            </button>
+            </Pressable>
             {result && !running && (
                 result.ok ? (
                     <div className="px-4 py-3 rounded-2xl bg-emerald-500/12 border border-emerald-400/25">
@@ -730,13 +807,14 @@ function ModelSection({
         <section className="space-y-3">
             <div className="flex items-center justify-between">
                 <h3 className="text-sm font-black text-[var(--color-text)] uppercase tracking-wider opacity-70">모델 관리</h3>
-                <button
+                <Pressable
                     onClick={onRefresh}
-                    className="text-xs font-bold px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-[var(--color-text-secondary)] transition-all active:scale-95 flex items-center gap-1.5"
+                    pressScale={0.94}
+                    className="text-xs font-bold px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-[var(--color-text-secondary)] flex items-center gap-1.5"
                 >
                     <Icon icon="mdi:refresh" className="text-sm" />
                     목록 새로고침
-                </button>
+                </Pressable>
             </div>
             {models === null ? (
                 <p className="text-sm text-[var(--color-text-secondary)] opacity-50">목록을 불러오는 중...</p>
@@ -747,7 +825,7 @@ function ModelSection({
                     {models.map((m) => (
                         <div
                             key={m.name}
-                            className={`flex items-center gap-3 px-4 py-3 rounded-2xl border transition-all ${
+                            className={`flex items-center gap-3 px-4 py-3 rounded-2xl border transition-colors ${
                                 m.active
                                     ? 'bg-indigo-500/12 border-indigo-400/40'
                                     : 'bg-white/5 border-white/10'
@@ -766,13 +844,14 @@ function ModelSection({
                                     {formatMtime(m.mtime)} · {m.size_kb != null ? `${m.size_kb.toLocaleString()} KB` : ''}
                                 </p>
                             </div>
-                            <button
+                            <Pressable
                                 onClick={() => onApply(m.name)}
                                 disabled={m.active}
-                                className="flex-shrink-0 text-xs font-black px-3.5 py-2 rounded-xl transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-400/30 text-indigo-300"
+                                pressScale={0.94}
+                                className="flex-shrink-0 text-xs font-black px-3.5 py-2 rounded-xl disabled:opacity-40 disabled:cursor-not-allowed bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-400/30 text-indigo-300"
                             >
                                 {m.active ? '적용됨' : '적용'}
-                            </button>
+                            </Pressable>
                         </div>
                     ))}
                 </div>
@@ -814,19 +893,7 @@ function AdvancedModeToggle() {
                         Study 탭에 졸음·자세 상세 지표 표시
                     </p>
                 </div>
-                <button
-                    role="switch"
-                    aria-checked={enabled}
-                    onClick={toggle}
-                    className="relative flex-shrink-0 w-12 h-7 rounded-full transition-colors duration-300"
-                    style={{ background: enabled ? '#6366f1' : 'rgba(255,255,255,0.15)' }}
-                >
-                    <motion.div
-                        className="absolute top-1 left-1 w-5 h-5 rounded-full bg-white shadow-md"
-                        animate={{ x: enabled ? 20 : 0 }}
-                        transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-                    />
-                </button>
+                <ToggleSwitch enabled={enabled} onChange={toggle} />
             </div>
         </section>
     )

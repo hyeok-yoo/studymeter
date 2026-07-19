@@ -7,6 +7,8 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { HelpButton } from '../components/HelpButton'
 import { generateDiaryDraft } from '../lib/ai/aiService'
 import DiaryEditModal, { DiaryEntryView } from '../components/DiaryEditModal'
+import { spring, fadeRise } from '../lib/motion'
+import Pressable from '../components/ui/Pressable'
 
 const COLORS = ['#6366f1', '#a855f7', '#06b6d4', '#10b981', '#f59e0b', '#ef4444']
 
@@ -191,29 +193,41 @@ export default function Records() {
 
     return (
         <div className="animate-fade-in max-w-6xl mx-auto">
-            {/* 통계 / 일기 전환 */}
-            <div className="flex gap-2 mb-6">
-                <button
-                    onClick={() => setMainTab('stats')}
-                    className={`px-5 py-2.5 rounded-2xl text-sm font-bold transition-all flex items-center gap-2 ${mainTab === 'stats'
-                        ? 'bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-secondary)] text-white'
-                        : 'bg-[var(--color-surface)] text-[var(--color-text-secondary)]'
-                        }`}
-                >
-                    <Icon icon="mdi:chart-bar" className="text-lg" /> 통계
-                </button>
-                <button
-                    onClick={() => setMainTab('diary')}
-                    className={`px-5 py-2.5 rounded-2xl text-sm font-bold transition-all flex items-center gap-2 ${mainTab === 'diary'
-                        ? 'bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-secondary)] text-white'
-                        : 'bg-[var(--color-surface)] text-[var(--color-text-secondary)]'
-                        }`}
-                >
-                    <Icon icon="mdi:notebook-heart-outline" className="text-lg" /> 일기
-                </button>
+            {/* 통계 / 일기 전환 — Segmented control */}
+            <div className="relative inline-flex gap-1 p-1 rounded-2xl glass-card-elevated mb-6">
+                {([
+                    { key: 'stats' as const, icon: 'mdi:chart-bar', label: '통계' },
+                    { key: 'diary' as const, icon: 'mdi:notebook-heart-outline', label: '일기' },
+                ]).map(t => {
+                    const active = mainTab === t.key
+                    return (
+                        <button
+                            key={t.key}
+                            onClick={() => setMainTab(t.key)}
+                            className={`relative px-5 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-colors ${active ? 'text-white' : 'text-[var(--color-text-secondary)]'}`}
+                        >
+                            {active && (
+                                <motion.div
+                                    layoutId="mainTabIndicator"
+                                    transition={spring.default}
+                                    className="absolute inset-0 z-0 rounded-xl bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-secondary)] shadow-lg shadow-indigo-500/20"
+                                />
+                            )}
+                            <span className="relative z-10 flex items-center gap-2">
+                                <Icon icon={t.icon} className="text-lg" /> {t.label}
+                            </span>
+                        </button>
+                    )
+                })}
             </div>
 
-            {mainTab === 'diary' ? <DiaryTab /> : (<>
+            <AnimatePresence mode="wait">
+            {mainTab === 'diary' ? (
+              <motion.div key="diary" variants={fadeRise} initial="initial" animate="animate" exit="exit">
+                <DiaryTab />
+              </motion.div>
+            ) : (
+              <motion.div key="stats" variants={fadeRise} initial="initial" animate="animate" exit="exit">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
                 <div className="flex flex-col gap-1">
                     <div className="flex items-center gap-2">
@@ -227,62 +241,59 @@ export default function Records() {
                     </div>
                     {viewMode !== 'year' && (
                         <div className="flex items-center gap-2">
-                            <button onClick={handlePrev} className="p-2 rounded-lg bg-[var(--color-surface)] hover:bg-[var(--color-surface-elevated)] transition-all flex items-center justify-center">
+                            <Pressable onClick={handlePrev} pressScale={0.9} className="p-2 rounded-xl glass-card-elevated flex items-center justify-center">
                                 <Icon icon="mdi:chevron-left" className="text-xl" />
-                            </button>
-                            <p className="text-sm text-[var(--color-text-secondary)] min-w-[150px] text-center flex items-center justify-center gap-1">
+                            </Pressable>
+                            <p className="text-sm text-[var(--color-text-secondary)] min-w-[150px] text-center flex items-center justify-center gap-1 tabular-nums">
                                 <Icon icon="mdi:calendar" className="text-lg" /> {dateRange.label}
                             </p>
-                            <button onClick={handleNext} className="p-2 rounded-lg bg-[var(--color-surface)] hover:bg-[var(--color-surface-elevated)] transition-all flex items-center justify-center">
+                            <Pressable onClick={handleNext} pressScale={0.9} className="p-2 rounded-xl glass-card-elevated flex items-center justify-center">
                                 <Icon icon="mdi:chevron-right" className="text-xl" />
-                            </button>
-                            {offset !== 0 && (
-                                <button onClick={handleToday} className="px-3 py-1 rounded-lg bg-[var(--color-primary)] text-white text-xs font-bold">
-                                    오늘
-                                </button>
-                            )}
+                            </Pressable>
+                            <AnimatePresence>
+                                {offset !== 0 && (
+                                    <Pressable
+                                        onClick={handleToday}
+                                        pressScale={0.94}
+                                        initial={{ opacity: 0, scale: 0.9 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        exit={{ opacity: 0, scale: 0.9 }}
+                                        className="px-3 py-1.5 rounded-xl bg-[var(--color-primary)] text-white text-xs font-bold"
+                                    >
+                                        오늘
+                                    </Pressable>
+                                )}
+                            </AnimatePresence>
                         </div>
                     )}
                 </div>
 
-                {/* View Mode Toggle */}
-                <div className="flex gap-2">
-                    <button
-                        onClick={() => { setViewMode('day'); setOffset(0) }}
-                        className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${viewMode === 'day'
-                            ? 'bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-secondary)] text-white'
-                            : 'bg-[var(--color-surface)] text-[var(--color-text-secondary)]'
-                            }`}
-                    >
-                        일별
-                    </button>
-                    <button
-                        onClick={() => { setViewMode('week'); setOffset(0) }}
-                        className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${viewMode === 'week'
-                            ? 'bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-secondary)] text-white'
-                            : 'bg-[var(--color-surface)] text-[var(--color-text-secondary)]'
-                            }`}
-                    >
-                        주별
-                    </button>
-                    <button
-                        onClick={() => { setViewMode('month'); setOffset(0) }}
-                        className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${viewMode === 'month'
-                            ? 'bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-secondary)] text-white'
-                            : 'bg-[var(--color-surface)] text-[var(--color-text-secondary)]'
-                            }`}
-                    >
-                        월별
-                    </button>
-                    <button
-                        onClick={() => { setViewMode('year'); setOffset(0) }}
-                        className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${viewMode === 'year'
-                            ? 'bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-secondary)] text-white'
-                            : 'bg-[var(--color-surface)] text-[var(--color-text-secondary)]'
-                            }`}
-                    >
-                        연간
-                    </button>
+                {/* View Mode Toggle — Segmented control */}
+                <div className="relative inline-flex gap-1 p-1 rounded-2xl glass-card-elevated self-start">
+                    {([
+                        { key: 'day' as const, label: '일별' },
+                        { key: 'week' as const, label: '주별' },
+                        { key: 'month' as const, label: '월별' },
+                        { key: 'year' as const, label: '연간' },
+                    ]).map(v => {
+                        const active = viewMode === v.key
+                        return (
+                            <button
+                                key={v.key}
+                                onClick={() => { setViewMode(v.key); setOffset(0) }}
+                                className={`relative px-4 py-2 rounded-xl text-sm font-bold transition-colors ${active ? 'text-white' : 'text-[var(--color-text-secondary)]'}`}
+                            >
+                                {active && (
+                                    <motion.div
+                                        layoutId="viewModeIndicator"
+                                        transition={spring.default}
+                                        className="absolute inset-0 z-0 rounded-xl bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-secondary)] shadow-lg shadow-indigo-500/20"
+                                    />
+                                )}
+                                <span className="relative z-10">{v.label}</span>
+                            </button>
+                        )
+                    })}
                 </div>
             </div>
 
@@ -291,37 +302,37 @@ export default function Records() {
 
             {/* Summary Cards with Comparison */}
             {viewMode !== 'year' && <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-                <div className="glass-card p-4">
-                    <p className="text-sm text-[var(--color-text-secondary)] mb-1">총 공부 시간</p>
-                    <p className="text-2xl font-bold gradient-text">{formatDuration(totalTime)}</p>
+                <div className="glass-card p-5">
+                    <p className="text-[11px] uppercase tracking-widest font-bold text-[var(--color-text-secondary)] mb-2">총 공부 시간</p>
+                    <p className="text-display text-2xl font-black tabular-nums gradient-text">{formatDuration(totalTime)}</p>
                     {prevTotalTime > 0 && (
-                        <p className={`text-xs mt-1 ${totalChange >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                        <p className={`text-xs mt-1.5 font-semibold tabular-nums ${totalChange >= 0 ? 'text-green-500' : 'text-red-500'}`}>
                             {formatDurationChange(totalChange)} vs 이전
                         </p>
                     )}
                 </div>
-                <div className="glass-card p-4">
-                    <div className="flex items-center gap-1.5 mb-1">
-                        <p className="text-sm text-[var(--color-text-secondary)]">순공 시간</p>
+                <div className="glass-card p-5">
+                    <div className="flex items-center gap-1.5 mb-2">
+                        <p className="text-[11px] uppercase tracking-widest font-bold text-[var(--color-text-secondary)]">순공 시간</p>
                         <HelpButton title="순공 시간이란?" items={[
                             { description: '자습·테스트 타입으로 공부한 시간만 합산한 값입니다.' },
                             { title: '총합과의 차이', description: '총합에는 강의 시청 시간도 포함되지만, 순공은 스스로 학습한 시간만 측정합니다. 수험생이 실질 학습 시간을 파악할 때 주로 활용합니다.' },
                         ]} />
                     </div>
-                    <p className="text-2xl font-bold">{formatDuration(selfStudyTime)}</p>
+                    <p className="text-display text-2xl font-black tabular-nums text-[var(--color-text)]">{formatDuration(selfStudyTime)}</p>
                     {prevSelfStudyTime > 0 && (
-                        <p className={`text-xs mt-1 ${selfStudyChange >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                        <p className={`text-xs mt-1.5 font-semibold tabular-nums ${selfStudyChange >= 0 ? 'text-green-500' : 'text-red-500'}`}>
                             {formatDurationChange(selfStudyChange)} vs 이전
                         </p>
                     )}
                 </div>
-                <div className="glass-card p-4">
-                    <p className="text-sm text-[var(--color-text-secondary)] mb-1">세션 수</p>
-                    <p className="text-2xl font-bold">{sessions.length}회</p>
+                <div className="glass-card p-5">
+                    <p className="text-[11px] uppercase tracking-widest font-bold text-[var(--color-text-secondary)] mb-2">세션 수</p>
+                    <p className="text-display text-2xl font-black tabular-nums text-[var(--color-text)]">{sessions.length}회</p>
                 </div>
-                <div className="glass-card p-4">
-                    <p className="text-sm text-[var(--color-text-secondary)] mb-1">순공 비율</p>
-                    <p className="text-2xl font-bold">
+                <div className="glass-card p-5">
+                    <p className="text-[11px] uppercase tracking-widest font-bold text-[var(--color-text-secondary)] mb-2">순공 비율</p>
+                    <p className="text-display text-2xl font-black tabular-nums text-[var(--color-text)]">
                         {totalTime > 0 ? Math.round((selfStudyTime / totalTime) * 100) : 0}%
                     </p>
                 </div>
@@ -531,9 +542,15 @@ export default function Records() {
             {/* Recent Sessions */}
             {viewMode !== 'year' && <div className="glass-card p-6">
                 <h3 className="text-lg font-semibold mb-4">최근 기록</h3>
-                <div className="space-y-3 max-h-96 overflow-y-auto stagger-children">
-                    {[...sessions].sort((a, b) => b.startTime - a.startTime).slice(0, 20).map((session) => (
-                        <div key={session.id} className="p-4 bg-[var(--color-surface)] rounded-xl space-y-2">
+                <div className="space-y-3 max-h-96 overflow-y-auto">
+                    {[...sessions].sort((a, b) => b.startTime - a.startTime).slice(0, 20).map((session, i) => (
+                        <motion.div
+                            key={session.id}
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ ...spring.default, delay: Math.min(i, 5) * 0.05 }}
+                            className="p-4 glass-card-elevated space-y-2"
+                        >
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
                                     <span className="font-medium">{session.subject}</span>
@@ -576,7 +593,7 @@ export default function Records() {
                                     )}
                                 </div>
                             )}
-                        </div>
+                        </motion.div>
                     ))}
                     {sessions.length === 0 && (
                         <p className="text-center text-[var(--color-text-secondary)] py-8 flex items-center justify-center gap-2">
@@ -585,7 +602,9 @@ export default function Records() {
                     )}
                 </div>
             </div>}
-            </>)}
+              </motion.div>
+            )}
+            </AnimatePresence>
         </div>
     )
 }
@@ -698,19 +717,19 @@ function AnnualContributionGraph() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="glass-card p-4 text-center">
                     <p className="text-xs text-[var(--color-text-secondary)] mb-1 uppercase tracking-widest font-bold">공부한 날</p>
-                    <p className="text-3xl font-black gradient-text">{stats.totalDays}<span className="text-base font-bold opacity-60">일</span></p>
+                    <p className="text-display text-3xl font-black tabular-nums gradient-text">{stats.totalDays}<span className="text-base font-bold opacity-60">일</span></p>
                 </div>
                 <div className="glass-card p-4 text-center">
                     <p className="text-xs text-[var(--color-text-secondary)] mb-1 uppercase tracking-widest font-bold">최장 연속</p>
-                    <p className="text-3xl font-black" style={{ color: '#a855f7' }}>{stats.bestStreak}<span className="text-base font-bold opacity-60">일</span></p>
+                    <p className="text-display text-3xl font-black tabular-nums" style={{ color: '#a855f7' }}>{stats.bestStreak}<span className="text-base font-bold opacity-60">일</span></p>
                 </div>
                 <div className="glass-card p-4 text-center">
                     <p className="text-xs text-[var(--color-text-secondary)] mb-1 uppercase tracking-widest font-bold">현재 연속</p>
-                    <p className="text-3xl font-black" style={{ color: stats.currentStreak > 0 ? '#22c55e' : 'var(--color-text-secondary)' }}>{stats.currentStreak}<span className="text-base font-bold opacity-60">일</span></p>
+                    <p className="text-display text-3xl font-black tabular-nums" style={{ color: stats.currentStreak > 0 ? '#22c55e' : 'var(--color-text-secondary)' }}>{stats.currentStreak}<span className="text-base font-bold opacity-60">일</span></p>
                 </div>
                 <div className="glass-card p-4 text-center">
                     <p className="text-xs text-[var(--color-text-secondary)] mb-1 uppercase tracking-widest font-bold">연간 총합</p>
-                    <p className="text-2xl font-black text-indigo-400">{Math.floor(stats.totalMs / 3600000)}<span className="text-base font-bold opacity-60">h</span></p>
+                    <p className="text-display text-2xl font-black tabular-nums text-indigo-400">{Math.floor(stats.totalMs / 3600000)}<span className="text-base font-bold opacity-60">h</span></p>
                 </div>
             </div>
 
@@ -863,6 +882,7 @@ function DiaryTab() {
     }
 
     const selected = diaries.find(d => d.date === selectedDate) ?? null
+    let renderIndex = 0
 
     if (loading) {
         return (
@@ -888,12 +908,20 @@ function DiaryTab() {
                 <div key={group.month} className="space-y-2">
                     <h3 className="text-sm font-black text-[var(--color-text-secondary)] px-1">{group.month}</h3>
                     <div className="space-y-2">
-                        {group.items.map(entry => (
-                            <button
+                        {group.items.map(entry => {
+                          const idx = renderIndex++
+                          return (
+                            <motion.div
                                 key={entry.date}
-                                onClick={() => setSelectedDate(entry.date)}
-                                className="w-full text-left glass-card p-4 hover:scale-[1.01] transition-transform"
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ ...spring.default, delay: Math.min(idx, 5) * 0.05 }}
                             >
+                              <Pressable
+                                onClick={() => setSelectedDate(entry.date)}
+                                pressScale={0.99}
+                                className="w-full text-left glass-card p-4 block"
+                              >
                                 <div className="flex items-center gap-3">
                                     <div className="flex flex-col items-center justify-center w-12 flex-shrink-0">
                                         <span className="text-xl font-black gradient-text tabular-nums">{entry.score}</span>
@@ -922,8 +950,10 @@ function DiaryTab() {
                                     </div>
                                     <Icon icon="mdi:chevron-right" className="text-lg text-[var(--color-text-secondary)]/50 flex-shrink-0" />
                                 </div>
-                            </button>
-                        ))}
+                              </Pressable>
+                            </motion.div>
+                          )
+                        })}
                     </div>
                 </div>
             ))}

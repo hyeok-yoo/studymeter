@@ -17,26 +17,92 @@ import { PROMPT_LABELS, DEFAULT_PROMPTS, getPrompt, type PromptKey } from '../li
 import { getModelList, isModelExhausted } from '../lib/ai/router'
 import { getTodayUsage } from '../lib/ai/budget'
 import { DEFAULT_EVAL_TAGS, TAG_CATEGORY_LABELS } from '../lib/tags'
+import Pressable from '../components/ui/Pressable'
+import { spring, fadeRise, staggerContainer, staggerItem } from '../lib/motion'
 
 // ── 작은 토글 스위치 (고급 모드/앰비언트 AI 등에서 재사용) ──────────────────────
 function ToggleSwitch({ enabled, onChange }: { enabled: boolean; onChange: () => void }) {
     return (
-        <button
+        <motion.button
             type="button"
             role="switch"
             aria-checked={enabled}
             onClick={onChange}
+            whileTap={{ scale: 0.92 }}
+            transition={spring.snappy}
             className="relative flex-shrink-0 w-12 h-7 rounded-full transition-colors duration-300"
-            style={{ background: enabled ? '#6366f1' : 'rgba(255,255,255,0.15)' }}
+            style={{ background: enabled ? 'var(--color-primary)' : 'rgba(120,120,128,0.24)' }}
         >
             <motion.div
                 className="absolute top-1 left-1 w-5 h-5 rounded-full bg-white shadow-md"
                 animate={{ x: enabled ? 20 : 0 }}
-                transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                transition={spring.snappy}
             />
-        </button>
+        </motion.button>
     )
 }
+
+// ── 섹션 라벨 (iOS 설정 스타일 — 작은 uppercase tracking) ───────────────────────
+function SectionLabel({ children }: { children: React.ReactNode }) {
+    return (
+        <p className="px-1.5 mb-2 text-[11px] font-bold uppercase tracking-wider text-[var(--color-text-secondary)] opacity-60">
+            {children}
+        </p>
+    )
+}
+
+// ── 카드 안의 행(row) — 라벨 왼쪽 · 컨트롤 오른쪽, 구분선으로 정렬 ──────────────
+function SettingsRow({ children, first = false }: { children: React.ReactNode; first?: boolean }) {
+    return (
+        <div className={`flex items-center justify-between gap-4 px-5 py-4 ${first ? '' : 'border-t border-[var(--color-border)]'}`}>
+            {children}
+        </div>
+    )
+}
+
+// ── Segmented control — 선택 배경이 layoutId 스프링으로 이동 ─────────────────
+function SegmentedControl<T extends string>({
+    layoutId,
+    options,
+    value,
+    onChange,
+    size = 'md',
+}: {
+    layoutId: string
+    options: Array<{ value: T; label: React.ReactNode }>
+    value: T
+    onChange: (v: T) => void
+    size?: 'md' | 'sm'
+}) {
+    return (
+        <div className={`relative flex gap-1 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] ${size === 'sm' ? 'p-0.5' : 'p-1'}`}>
+            {options.map((opt) => {
+                const active = opt.value === value
+                return (
+                    <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => onChange(opt.value)}
+                        className={`relative flex-1 rounded-lg font-medium transition-colors active:scale-[0.97] ${size === 'sm' ? 'py-1 px-2 text-[10px]' : 'py-2.5 px-3 text-sm'}`}
+                    >
+                        {active && (
+                            <motion.div
+                                layoutId={layoutId}
+                                className="absolute inset-0 rounded-lg bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-secondary)]"
+                                transition={spring.default}
+                            />
+                        )}
+                        <span className={`relative z-10 flex items-center justify-center gap-1.5 whitespace-nowrap ${active ? 'text-white' : 'text-[var(--color-text-secondary)]'}`}>
+                            {opt.label}
+                        </span>
+                    </button>
+                )
+            })}
+        </div>
+    )
+}
+
+type ThinkingChoice = AiThinkingLevel | 'auto'
 
 const ROLE_ROWS: Array<{ role: AiRole; label: string; autoLabel: string }> = [
     { role: 'deep', label: '심층 분석', autoLabel: '자동 (추천: gemini-flash-latest)' },
@@ -474,157 +540,172 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
     }
 
     return (
-        <div className="animate-fade-in max-w-2xl mx-auto">
-            <h1 className="text-3xl font-bold gradient-text mb-8">설정</h1>
+        <motion.div
+            className="max-w-2xl mx-auto"
+            initial="initial"
+            animate="animate"
+            variants={staggerContainer}
+        >
+            <motion.h1 variants={staggerItem} className="text-3xl font-bold gradient-text text-display mb-8">설정</motion.h1>
 
             <div className="space-y-6">
-                {/* Profile Picture */}
-                <div className="glass-card p-6">
-                    <label className="block text-sm font-medium mb-4">프로필 사진</label>
-                    <div className="flex items-center gap-6">
-                        {profilePicture ? (
-                            <img
-                                src={profilePicture}
-                                alt="프로필"
-                                className="w-20 h-20 rounded-full object-cover shadow-lg border-4 border-[var(--color-primary)]"
-                            />
-                        ) : (
-                            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-indigo-400 to-purple-400 flex items-center justify-center text-3xl font-bold text-white shadow-lg">
-                                {userName.charAt(0)}
+                {/* 프로필 */}
+                <motion.div variants={staggerItem}>
+                    <SectionLabel>프로필</SectionLabel>
+                    <div className="glass-card overflow-hidden">
+                        <SettingsRow first>
+                            <div className="flex items-center gap-4">
+                                {profilePicture ? (
+                                    <img
+                                        src={profilePicture}
+                                        alt="프로필"
+                                        className="w-16 h-16 rounded-full object-cover shadow-lg border-4 border-[var(--color-primary)]"
+                                    />
+                                ) : (
+                                    <div className="w-16 h-16 rounded-full bg-gradient-to-br from-indigo-400 to-purple-400 flex items-center justify-center text-2xl font-bold text-white shadow-lg">
+                                        {userName.charAt(0)}
+                                    </div>
+                                )}
+                                <div className="flex flex-col gap-1.5">
+                                    <input
+                                        ref={fileInputRef}
+                                        type="file"
+                                        accept="image/*"
+                                        onChange={handleProfilePictureChange}
+                                        className="hidden"
+                                    />
+                                    <div className="flex gap-2">
+                                        <Pressable
+                                            onClick={() => fileInputRef.current?.click()}
+                                            className="px-3 py-1.5 rounded-lg bg-[var(--color-primary)] text-white font-medium text-xs flex items-center gap-1.5"
+                                        >
+                                            <Icon icon="mdi:camera-outline" className="text-sm" /> 사진 변경
+                                        </Pressable>
+                                        {profilePicture && (
+                                            <Pressable
+                                                onClick={handleRemoveProfilePicture}
+                                                className="px-3 py-1.5 rounded-lg bg-red-500/15 text-red-500 font-medium text-xs flex items-center gap-1.5"
+                                            >
+                                                <Icon icon="mdi:trash-can-outline" className="text-sm" /> 삭제
+                                            </Pressable>
+                                        )}
+                                    </div>
+                                    <p className="text-[10px] text-[var(--color-text-secondary)] opacity-70">최대 500KB</p>
+                                </div>
                             </div>
-                        )}
-                        <div className="flex flex-col gap-2">
+                        </SettingsRow>
+                        <SettingsRow>
+                            <label className="text-sm font-medium text-[var(--color-text)] whitespace-nowrap">사용자 이름</label>
                             <input
-                                ref={fileInputRef}
-                                type="file"
-                                accept="image/*"
-                                onChange={handleProfilePictureChange}
-                                className="hidden"
+                                type="text"
+                                value={userName}
+                                onChange={(e) => setUserName(e.target.value)}
+                                className="flex-1 max-w-[60%] px-3 py-2 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)] text-right"
                             />
-                            <button
-                                onClick={() => fileInputRef.current?.click()}
-                                className="px-4 py-2 rounded-xl bg-[var(--color-primary)] text-white font-medium text-sm hover:opacity-90 transition-all flex items-center gap-2"
-                            >
-                                <Icon icon="mdi:camera-outline" className="text-lg" /> 사진 변경
-                            </button>
-                            {profilePicture && (
-                                <button
-                                    onClick={handleRemoveProfilePicture}
-                                    className="px-4 py-2 rounded-xl bg-red-500/20 text-red-500 font-medium text-sm hover:bg-red-500/30 transition-all flex items-center gap-2"
-                                >
-                                    <Icon icon="mdi:trash-can-outline" className="text-lg" /> 삭제
-                                </button>
-                            )}
-                            <p className="text-xs text-[var(--color-text-secondary)]">최대 500KB</p>
+                        </SettingsRow>
+                    </div>
+                </motion.div>
+
+                {/* 학습 목표 */}
+                <motion.div variants={staggerItem}>
+                    <SectionLabel>학습 목표</SectionLabel>
+                    <div className="glass-card overflow-hidden">
+                        <div className="px-5 py-4">
+                            <div className="flex items-center gap-2 mb-1">
+                                <label className="block text-sm font-medium text-[var(--color-text)]">일일 목표 시간</label>
+                                <HelpButton title="일일 목표 시간" items={[
+                                    { description: '하루 동안 달성하고 싶은 총 공부 시간 목표를 설정합니다.' },
+                                    { title: '진척 바', description: '공부 타이머 화면 하단에 목표 대비 진행률을 퍼센트 바로 실시간 표시합니다.' },
+                                    { title: '비워두면', description: '진척 바가 비활성화되며 목표 없이 자유롭게 사용할 수 있습니다.' },
+                                ]} />
+                            </div>
+                            <p className="text-xs text-[var(--color-text-secondary)] mb-3">공부 화면에 진척 바로 표시됩니다. 비워두면 비활성화.</p>
+                            <div className="flex items-center gap-3">
+                                <input
+                                    type="number"
+                                    min="0"
+                                    max="24"
+                                    step="0.5"
+                                    value={dailyGoalHours}
+                                    onChange={(e) => setDailyGoalHours(e.target.value)}
+                                    placeholder="예: 8"
+                                    className="w-28 px-4 py-3 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)] text-center text-lg font-bold"
+                                />
+                                <span className="text-[var(--color-text-secondary)] font-medium">시간</span>
+                                {dailyGoalHours && (
+                                    <span className="text-xs text-purple-400 font-bold ml-2">
+                                        = {parseFloat(dailyGoalHours) * 60}분 목표
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="px-5 py-4 border-t border-[var(--color-border)]">
+                            <div className="flex items-center gap-2 mb-1">
+                                <label className="block text-sm font-medium text-[var(--color-text)]">졸음 감지 기준</label>
+                                <HelpButton title="졸음 감지 기준" items={[
+                                    { description: '집중도 측정 중 눈이 감기거나 게슴츠레한 상태가 설정한 시간 이상 지속되면 졸음으로 판단해 알립니다.' },
+                                    { title: '알림 방식', description: '디바이스가 소리 모드면 소리, 진동 모드면 진동, 무음이면 화면 팝업으로 알립니다. 눈을 다시 뜨면 자동으로 사라집니다.' },
+                                    { title: '권장', description: '기본 15초. 너무 짧으면 잠깐 눈 감는 것에도 울릴 수 있어요.' },
+                                ]} />
+                            </div>
+                            <p className="text-xs text-[var(--color-text-secondary)] mb-3">눈 감김이 몇 초 이상 지속되면 졸음으로 판단할지 설정합니다. (3~120초)</p>
+                            <div className="flex items-center gap-3">
+                                <input
+                                    type="number"
+                                    min="3"
+                                    max="120"
+                                    step="1"
+                                    value={drowsinessSec}
+                                    onChange={(e) => setDrowsinessSec(e.target.value)}
+                                    placeholder="15"
+                                    className="w-28 px-4 py-3 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)] text-center text-lg font-bold"
+                                />
+                                <span className="text-[var(--color-text-secondary)] font-medium">초 이상 지속 시</span>
+                            </div>
                         </div>
                     </div>
-                </div>
+                </motion.div>
 
-                {/* User Name */}
-                <div className="glass-card p-6">
-                    <label className="block text-sm font-medium mb-2">사용자 이름</label>
-                    <input
-                        type="text"
-                        value={userName}
-                        onChange={(e) => setUserName(e.target.value)}
-                        className="w-full px-4 py-3 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)]"
-                    />
-                </div>
-
-                {/* Daily Goal */}
-                <div className="glass-card p-6">
-                    <div className="flex items-center gap-2 mb-1">
-                        <label className="block text-sm font-medium">일일 목표 시간</label>
-                        <HelpButton title="일일 목표 시간" items={[
-                            { description: '하루 동안 달성하고 싶은 총 공부 시간 목표를 설정합니다.' },
-                            { title: '진척 바', description: '공부 타이머 화면 하단에 목표 대비 진행률을 퍼센트 바로 실시간 표시합니다.' },
-                            { title: '비워두면', description: '진척 바가 비활성화되며 목표 없이 자유롭게 사용할 수 있습니다.' },
-                        ]} />
-                    </div>
-                    <p className="text-xs text-[var(--color-text-secondary)] mb-3">공부 화면에 진척 바로 표시됩니다. 비워두면 비활성화.</p>
-                    <div className="flex items-center gap-3">
-                        <input
-                            type="number"
-                            min="0"
-                            max="24"
-                            step="0.5"
-                            value={dailyGoalHours}
-                            onChange={(e) => setDailyGoalHours(e.target.value)}
-                            placeholder="예: 8"
-                            className="w-28 px-4 py-3 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)] text-center text-lg font-bold"
-                        />
-                        <span className="text-[var(--color-text-secondary)] font-medium">시간</span>
-                        {dailyGoalHours && (
-                            <span className="text-xs text-purple-400 font-bold ml-2">
-                                = {parseFloat(dailyGoalHours) * 60}분 목표
-                            </span>
-                        )}
-                    </div>
-                </div>
-
-                {/* Drowsiness threshold */}
-                <div className="glass-card p-6">
-                    <div className="flex items-center gap-2 mb-1">
-                        <label className="block text-sm font-medium">졸음 감지 기준</label>
-                        <HelpButton title="졸음 감지 기준" items={[
-                            { description: '집중도 측정 중 눈이 감기거나 게슴츠레한 상태가 설정한 시간 이상 지속되면 졸음으로 판단해 알립니다.' },
-                            { title: '알림 방식', description: '디바이스가 소리 모드면 소리, 진동 모드면 진동, 무음이면 화면 팝업으로 알립니다. 눈을 다시 뜨면 자동으로 사라집니다.' },
-                            { title: '권장', description: '기본 15초. 너무 짧으면 잠깐 눈 감는 것에도 울릴 수 있어요.' },
-                        ]} />
-                    </div>
-                    <p className="text-xs text-[var(--color-text-secondary)] mb-3">눈 감김이 몇 초 이상 지속되면 졸음으로 판단할지 설정합니다. (3~120초)</p>
-                    <div className="flex items-center gap-3">
-                        <input
-                            type="number"
-                            min="3"
-                            max="120"
-                            step="1"
-                            value={drowsinessSec}
-                            onChange={(e) => setDrowsinessSec(e.target.value)}
-                            placeholder="15"
-                            className="w-28 px-4 py-3 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)] text-center text-lg font-bold"
-                        />
-                        <span className="text-[var(--color-text-secondary)] font-medium">초 이상 지속 시</span>
-                    </div>
-                </div>
-
-                {/* Subjects with Hierarchy Management */}
-                <div className="glass-card p-6">
-                    <div className="flex items-center justify-between mb-4">
+                {/* 과목 및 하위 항목 관리 */}
+                <motion.div variants={staggerItem}>
+                    <div className="flex items-center justify-between px-1.5 mb-2">
                         <div className="flex items-center gap-2">
-                            <label className="text-sm font-medium">과목 및 하위 항목 관리</label>
+                            <SectionLabel>과목 및 하위 항목</SectionLabel>
                             <HelpButton title="과목 및 하위 항목" items={[
                                 { description: '공부하는 과목 목록을 관리합니다. 공부 시작 시 과목을 선택하면 통계가 과목별로 집계됩니다.' },
                                 { title: '하위 항목', description: '과목에 세부 분류를 추가할 수 있습니다. 예: 수학 > 미분, 적분 / 영어 > 문법, 독해. 타이머 화면에서 선택하면 더 세밀하게 시간을 관리할 수 있습니다.' },
                                 { title: '삭제 주의', description: '과목을 삭제해도 기존 기록은 유지됩니다. 하지만 새로운 세션에서는 해당 과목을 선택할 수 없게 됩니다.' },
                             ]} />
                         </div>
-                        <button
+                        <Pressable
                             onClick={handleAddSubject}
-                            className="text-xs px-3 py-1.5 rounded-lg bg-indigo-500/10 text-indigo-500 font-bold hover:bg-indigo-500/20 transition-all"
+                            className="text-xs px-3 py-1.5 rounded-lg bg-indigo-500/10 text-indigo-500 font-bold"
                         >
                             + 과목 추가
-                        </button>
+                        </Pressable>
                     </div>
 
-                    <div className="space-y-4">
+                    <div className="glass-card p-6 space-y-4">
                         {localSubjects.map((subject, sIdx) => (
-                            <div key={sIdx} className="p-4 rounded-xl bg-white/5 border border-white/5">
+                            <div key={sIdx} className="glass-card-elevated p-4">
                                 <div className="flex items-center justify-between mb-3">
                                     <span className="font-bold text-indigo-400">{subject.name}</span>
                                     <div className="flex items-center gap-2">
-                                        <button
+                                        <Pressable
                                             onClick={() => handleAddSubItem(sIdx)}
+                                            pressScale={0.94}
                                             className="text-[10px] px-2 py-1 rounded-md bg-white/5 hover:bg-white/10"
                                         >
                                             + 하위 항목
-                                        </button>
-                                        <button
+                                        </Pressable>
+                                        <Pressable
                                             onClick={() => handleRemoveSubject(sIdx)}
+                                            pressScale={0.94}
                                             className="text-[10px] px-2 py-1 rounded-md bg-red-500/10 text-red-500 hover:bg-red-500/20"
                                         >
                                             삭제
-                                        </button>
+                                        </Pressable>
                                     </div>
                                 </div>
 
@@ -633,27 +714,28 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                                         {subject.children.map((child, cIdx) => (
                                             <div key={cIdx} className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-indigo-500/10 text-indigo-300 text-xs font-medium border border-indigo-500/20">
                                                 <span>{child}</span>
-                                                <button
+                                                <Pressable
                                                     onClick={() => handleRemoveSubItem(sIdx, cIdx)}
+                                                    pressScale={0.85}
                                                     className="opacity-40 hover:opacity-100 flex items-center justify-center p-0.5"
                                                 >
                                                     <Icon icon="mdi:close" className="text-sm" />
-                                                </button>
+                                                </Pressable>
                                             </div>
                                         ))}
                                     </div>
                                 ) : (
-                                    <p className="text-[10px] text-white/30 italic">하위 항목이 없습니다.</p>
+                                    <p className="text-[10px] text-[var(--color-text-secondary)] opacity-50 italic">하위 항목이 없습니다.</p>
                                 )}
                             </div>
                         ))}
                     </div>
-                </div>
+                </motion.div>
 
-                {/* Types */}
-                <div className="glass-card p-6">
-                    <div className="flex items-center gap-2 mb-2">
-                        <label className="block text-sm font-medium">유형 (쉼표로 구분)</label>
+                {/* 학습 유형 */}
+                <motion.div variants={staggerItem}>
+                    <div className="flex items-center gap-2 px-1.5 mb-2">
+                        <SectionLabel>학습 유형 (쉼표로 구분)</SectionLabel>
                         <HelpButton title="학습 유형 설정" items={[
                             { description: '공부 방식을 분류하는 태그입니다. 타이머 화면 상단에서 선택합니다.' },
                             { title: '순공 계산', description: '"자습"과 "테스트" 유형으로 기록된 세션만 순공 시간에 포함됩니다. 강의·수업 등은 총합에는 포함되지만 순공에서는 제외됩니다.' },
@@ -661,757 +743,808 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                             { title: '커스터마이즈', description: '원하는 유형명을 자유롭게 추가하되, 순공 집계가 필요하면 "자습"이나 "테스트"라는 단어를 포함시켜야 합니다.' },
                         ]} />
                     </div>
-                    <input
-                        type="text"
-                        value={types}
-                        onChange={(e) => setTypes(e.target.value)}
-                        placeholder="자습, 수업, 테스트, ..."
-                        className="w-full px-4 py-3 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)]"
-                    />
-                </div>
-
-                {/* Theme */}
-                <div className="glass-card p-6">
-                    <label className="block text-sm font-medium mb-3">테마</label>
-                    <div className="flex gap-3">
-                        {(['light', 'dark', 'system'] as const).map((t) => (
-                            <button
-                                key={t}
-                                onClick={() => {
-                                    setTheme(t)
-                                    // Instantly apply theme
-                                    if (t === 'dark') {
-                                        document.documentElement.classList.add('dark')
-                                    } else if (t === 'light') {
-                                        document.documentElement.classList.remove('dark')
-                                    } else {
-                                        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-                                        document.documentElement.classList.toggle('dark', prefersDark)
-                                    }
-                                    // Also save to DB immediately
-                                    db.settings.update(settings.id!, { theme: t })
-                                    onSettingsChange({ ...settings, theme: t })
-                                }}
-                                className={`flex-1 py-3 rounded-xl font-medium transition-all ${theme === t
-                                    ? 'bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-secondary)] text-white'
-                                    : 'bg-[var(--color-surface)] text-[var(--color-text-secondary)]'
-                                    }`}
-                            >
-                                <div className="flex items-center justify-center gap-2">
-                                    {t === 'light' ? <><Icon icon="mdi:white-balance-sunny" className="text-lg" /> 라이트</> : t === 'dark' ? <><Icon icon="mdi:weather-night" className="text-lg" /> 다크</> : <><Icon icon="mdi:remote-desktop" className="text-lg" /> 시스템</>}
-                                </div>
-                            </button>
-                        ))}
+                    <div className="glass-card p-6">
+                        <input
+                            type="text"
+                            value={types}
+                            onChange={(e) => setTypes(e.target.value)}
+                            placeholder="자습, 수업, 테스트, ..."
+                            className="w-full px-4 py-3 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)]"
+                        />
                     </div>
-                </div>
+                </motion.div>
 
-                {/* Gemini API */}
-                <div className="glass-card p-6">
-                    <div className="flex items-center gap-2 mb-2">
-                        <label className="block text-sm font-medium">Gemini API Key</label>
-                        <HelpButton title="Gemini AI 연동" items={[
-                            { description: 'Google의 Gemini AI를 StudyMeter에 연결하여 AI 학습 도우미 기능을 사용할 수 있습니다.' },
-                            { title: 'AI 학습 도우미', description: '"AI 도우미" 메뉴에서 공부 내용을 질문하거나, 학습 계획을 상담하거나, 개념 설명을 요청할 수 있습니다.' },
-                            { title: 'API 키 발급', description: 'Google AI Studio(aistudio.google.com)에서 무료로 발급받을 수 있습니다. 키는 기기에만 저장되며 외부 서버로 전송되지 않습니다.' },
-                        ]} />
+                {/* 테마 */}
+                <motion.div variants={staggerItem}>
+                    <SectionLabel>테마</SectionLabel>
+                    <div className="glass-card p-4">
+                        <SegmentedControl
+                            layoutId="theme-picker"
+                            value={theme}
+                            onChange={(t) => {
+                                setTheme(t)
+                                // Instantly apply theme
+                                if (t === 'dark') {
+                                    document.documentElement.classList.add('dark')
+                                } else if (t === 'light') {
+                                    document.documentElement.classList.remove('dark')
+                                } else {
+                                    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+                                    document.documentElement.classList.toggle('dark', prefersDark)
+                                }
+                                // Also save to DB immediately
+                                db.settings.update(settings.id!, { theme: t })
+                                onSettingsChange({ ...settings, theme: t })
+                            }}
+                            options={[
+                                { value: 'light', label: <><Icon icon="mdi:white-balance-sunny" className="text-base" /> 라이트</> },
+                                { value: 'dark', label: <><Icon icon="mdi:weather-night" className="text-base" /> 다크</> },
+                                { value: 'system', label: <><Icon icon="mdi:remote-desktop" className="text-base" /> 시스템</> },
+                            ]}
+                        />
                     </div>
-                    <input
-                        type="password"
-                        value={geminiApiKey}
-                        onChange={(e) => setGeminiApiKey(e.target.value)}
-                        placeholder="AIza..."
-                        className="w-full px-4 py-3 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)]"
-                    />
-                    <p className="text-sm text-[var(--color-text-secondary)] mt-2">
-                        <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="text-[var(--color-primary)] hover:underline">
-                            Google AI Studio에서 API 키 발급받기 →
-                        </a>
-                    </p>
-                </div>
+                </motion.div>
 
-                {/* Gemini Model */}
-                <div className="glass-card p-6">
-                    <div className="flex items-center justify-between mb-4">
-                        <label className="text-sm font-medium">Gemini 모델 설정</label>
-                        {loadingModels && <span className="text-[10px] text-[var(--color-text-secondary)] animate-pulse">동기화 중...</span>}
-                    </div>
-
-                    <select
-                        value={geminiModel}
-                        onChange={(e) => setGeminiModel(e.target.value)}
-                        disabled={geminiModels.length === 0}
-                        className="w-full px-4 py-3 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)] disabled:opacity-50"
-                    >
-                        {geminiModels.length === 0 ? (
-                            <option value="">
-                                {loadingModels ? '모델 목록 불러오는 중…' : 'API 키를 입력하면 모델 목록이 표시됩니다'}
-                            </option>
-                        ) : (
-                            geminiModels.map((model) => (
-                                <option key={model.name} value={model.name}>
-                                    {model.displayName}{model.description ? ` — ${model.description}` : ''}
-                                </option>
-                            ))
-                        )}
-                    </select>
-                    {modelsError && (
-                        <p className="text-xs text-red-400 mt-2">{modelsError}</p>
-                    )}
-                    {geminiModels.length > 0 && (
-                        <p className="text-[10px] text-[var(--color-text-secondary)] opacity-50 mt-2">
-                            API 에서 불러온 {geminiModels.length}개 모델 · 키마다 사용 가능 목록이 다를 수 있습니다
-                        </p>
-                    )}
-
-                    {/* 선택한 모델의 능력치 (API 제공 + 추정) */}
-                    {(() => {
-                        const m = geminiModels.find((x) => x.name === geminiModel)
-                        if (!m) return null
-                        return (
-                            <div className="mt-3 pt-3 border-t border-[var(--color-border)] space-y-2">
-                                <div className="flex flex-wrap gap-1.5">
-                                    {m.supportsThinking && (
-                                        <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-purple-500/15 text-purple-400 border border-purple-400/20 flex items-center gap-1">
-                                            <Icon icon="mdi:brain" className="text-xs" /> 단계적 추론 (Thinking)
-                                        </span>
-                                    )}
-                                    {m.supportsGrounding && (
-                                        <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-cyan-500/15 text-cyan-400 border border-cyan-400/20 flex items-center gap-1">
-                                            <Icon icon="mdi:google" className="text-xs" /> Google 검색 그라운딩
-                                        </span>
-                                    )}
-                                    {m.version && (
-                                        <span className="text-[10px] font-medium px-2 py-1 rounded-full bg-white/5 text-[var(--color-text-secondary)]">
-                                            v{m.version}
-                                        </span>
-                                    )}
-                                </div>
-                                <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-[var(--color-text-secondary)] opacity-70">
-                                    {m.inputTokenLimit != null && (
-                                        <span>입력 한도: {m.inputTokenLimit.toLocaleString()} 토큰</span>
-                                    )}
-                                    {m.outputTokenLimit != null && (
-                                        <span>출력 한도: {m.outputTokenLimit.toLocaleString()} 토큰</span>
-                                    )}
-                                    {m.temperature != null && (
-                                        <span>기본 온도: {m.temperature}{m.maxTemperature != null ? ` (최대 ${m.maxTemperature})` : ''}</span>
-                                    )}
-                                </div>
-                                {m.description && (
-                                    <p className="text-[10px] text-[var(--color-text-secondary)] opacity-60 leading-relaxed">
-                                        {m.description}
-                                    </p>
-                                )}
-                            </div>
-                        )
-                    })()}
-                </div>
-
-                {/* 고급 모드 */}
-                <div className="glass-card p-6">
-                    <div className="flex items-center justify-between gap-4">
-                        <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                                <label className="text-sm font-medium">고급 모드</label>
-                                <HelpButton title="고급 모드" items={[
-                                    { description: '역할별 AI 모델 오버라이드, 시스템 프롬프트 편집, AI 사용량 표시를 노출합니다.' },
-                                    { title: '누구를 위한 기능?', description: '기본값만으로도 충분히 잘 동작합니다. 세부적으로 모델을 고르거나 프롬프트를 튜닝하고 싶을 때만 켜세요.' },
+                {/* Gemini AI */}
+                <motion.div variants={staggerItem}>
+                    <SectionLabel>Gemini AI</SectionLabel>
+                    <div className="glass-card overflow-hidden">
+                        <div className="px-5 py-4">
+                            <div className="flex items-center gap-2 mb-2">
+                                <label className="block text-sm font-medium text-[var(--color-text)]">API Key</label>
+                                <HelpButton title="Gemini AI 연동" items={[
+                                    { description: 'Google의 Gemini AI를 StudyMeter에 연결하여 AI 학습 도우미 기능을 사용할 수 있습니다.' },
+                                    { title: 'AI 학습 도우미', description: '"AI 도우미" 메뉴에서 공부 내용을 질문하거나, 학습 계획을 상담하거나, 개념 설명을 요청할 수 있습니다.' },
+                                    { title: 'API 키 발급', description: 'Google AI Studio(aistudio.google.com)에서 무료로 발급받을 수 있습니다. 키는 기기에만 저장되며 외부 서버로 전송되지 않습니다.' },
                                 ]} />
                             </div>
-                            <p className="text-xs text-[var(--color-text-secondary)] mt-1">역할별 모델·시스템 프롬프트 편집 노출</p>
+                            <input
+                                type="password"
+                                value={geminiApiKey}
+                                onChange={(e) => setGeminiApiKey(e.target.value)}
+                                placeholder="AIza..."
+                                className="w-full px-4 py-3 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)]"
+                            />
+                            <p className="text-sm text-[var(--color-text-secondary)] mt-2">
+                                <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="text-[var(--color-primary)] hover:underline">
+                                    Google AI Studio에서 API 키 발급받기 →
+                                </a>
+                            </p>
                         </div>
-                        <ToggleSwitch enabled={advancedMode} onChange={handleToggleAdvancedMode} />
-                    </div>
-                </div>
 
-                {/* 앰비언트 AI / 아침 리포트 */}
-                <div className="glass-card p-6 space-y-4">
-                    <div className="flex items-center justify-between gap-4">
-                        <div className="flex-1 min-w-0">
-                            <label className="text-sm font-medium">앰비언트 AI</label>
-                            <p className="text-xs text-[var(--color-text-secondary)] mt-1">아침 리포트·일기 답장·세션 코멘트를 자동 생성합니다.</p>
-                        </div>
-                        <ToggleSwitch enabled={aiAmbientEnabled} onChange={handleToggleAmbient} />
-                    </div>
+                        <div className="px-5 py-4 border-t border-[var(--color-border)]">
+                            <div className="flex items-center justify-between mb-3">
+                                <label className="text-sm font-medium text-[var(--color-text)]">모델 설정</label>
+                                {loadingModels && <span className="text-[10px] text-[var(--color-text-secondary)] animate-pulse">동기화 중...</span>}
+                            </div>
 
-                    <div className="pt-3 border-t border-[var(--color-border)] flex items-center justify-between gap-4">
-                        <div className="flex-1 min-w-0">
-                            <label className="text-sm font-medium">아침 리포트</label>
-                            <p className="text-xs text-[var(--color-text-secondary)] mt-1">그날 처음 앱을 열 때 홈 화면에 어제·주간 분석을 자동으로 준비합니다. (백그라운드 실행·알림 없음)</p>
-                        </div>
-                        <ToggleSwitch enabled={morningReportEnabled} onChange={handleToggleMorningReport} />
-                    </div>
-
-                    <div className="pt-3 border-t border-[var(--color-border)] flex items-center justify-between gap-4">
-                        <div className="flex-1 min-w-0">
-                            <label className="text-sm font-medium">웹 검색(Google 그라운딩)</label>
-                            <p className="text-xs text-[var(--color-text-secondary)] mt-1">AI가 최신 정보를 Google 검색으로 근거 삼아 답합니다. (지원하는 모델에서만 자동 적용)</p>
-                        </div>
-                        <ToggleSwitch enabled={aiGroundingDefault} onChange={handleToggleGrounding} />
-                    </div>
-                </div>
-
-                {/* 역할별 모델 오버라이드 (고급 모드) */}
-                {advancedMode && (
-                    <div className="glass-card p-6 space-y-4">
-                        <div className="flex items-center justify-between">
-                            <label className="text-sm font-medium">역할별 모델 오버라이드</label>
-                            {loadingRoleModels && <span className="text-[10px] text-[var(--color-text-secondary)] animate-pulse">동기화 중...</span>}
-                        </div>
-                        <p className="text-xs text-[var(--color-text-secondary)]">비워두면 역할에 맞는 모델이 자동으로 선택됩니다.</p>
-
-                        {ROLE_ROWS.map(({ role, label, autoLabel }) => (
-                            <div key={role}>
-                                <p className="text-xs font-medium text-[var(--color-text-secondary)] mb-1.5">{label}</p>
-                                {roleModelList.length > 0 ? (
-                                    <select
-                                        value={aiRoleModels[role] || ''}
-                                        onChange={(e) => setAiRoleModels(prev => ({ ...prev, [role]: e.target.value }))}
-                                        className="w-full px-4 py-2.5 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)] text-sm"
-                                    >
-                                        <option value="">{autoLabel}</option>
-                                        {roleModelList.map((m) => (
-                                            <option key={m.name} value={m.name}>
-                                                {m.displayName}{isModelExhausted(m.name) ? ' · 오늘 소진' : ''}
-                                            </option>
-                                        ))}
-                                    </select>
+                            <select
+                                value={geminiModel}
+                                onChange={(e) => setGeminiModel(e.target.value)}
+                                disabled={geminiModels.length === 0}
+                                className="w-full px-4 py-3 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)] disabled:opacity-50"
+                            >
+                                {geminiModels.length === 0 ? (
+                                    <option value="">
+                                        {loadingModels ? '모델 목록 불러오는 중…' : 'API 키를 입력하면 모델 목록이 표시됩니다'}
+                                    </option>
                                 ) : (
-                                    <input
-                                        type="text"
-                                        value={aiRoleModels[role] || ''}
-                                        onChange={(e) => setAiRoleModels(prev => ({ ...prev, [role]: e.target.value }))}
-                                        placeholder={autoLabel}
-                                        className="w-full px-4 py-2.5 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)] text-sm font-mono"
-                                    />
+                                    geminiModels.map((model) => (
+                                        <option key={model.name} value={model.name}>
+                                            {model.displayName}{model.description ? ` — ${model.description}` : ''}
+                                        </option>
+                                    ))
                                 )}
-                                {/* 역할별 추론(thinking) 강도 */}
-                                <div className="flex items-center gap-2 mt-2">
-                                    <span className="text-[10px] text-[var(--color-text-secondary)] whitespace-nowrap">추론 강도</span>
-                                    <div className="flex gap-1">
-                                        {(['off', 'low', 'medium', 'high'] as AiThinkingLevel[]).map(lv => {
-                                            const active = aiThinkingLevels[role] === lv
-                                            const label = lv === 'off' ? '끔' : lv === 'low' ? '낮음' : lv === 'medium' ? '중간' : '높음'
-                                            return (
-                                                <button
-                                                    key={lv}
-                                                    type="button"
-                                                    onClick={() => setAiThinkingLevels(prev => ({ ...prev, [role]: lv }))}
-                                                    className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all ${active
-                                                        ? 'bg-[var(--color-primary)] text-white'
-                                                        : 'bg-[var(--color-surface)] text-[var(--color-text-secondary)] border border-[var(--color-border)]'}`}
-                                                >
-                                                    {label}
-                                                </button>
-                                            )
-                                        })}
-                                        <button
-                                            type="button"
-                                            onClick={() => setAiThinkingLevels(prev => { const n = { ...prev }; delete n[role]; return n })}
-                                            className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all ${!aiThinkingLevels[role]
-                                                ? 'bg-[var(--color-primary)] text-white'
-                                                : 'bg-[var(--color-surface)] text-[var(--color-text-secondary)] border border-[var(--color-border)]'}`}
-                                        >
-                                            자동
-                                        </button>
+                            </select>
+                            {modelsError && (
+                                <p className="text-xs text-red-400 mt-2">{modelsError}</p>
+                            )}
+                            {geminiModels.length > 0 && (
+                                <p className="text-[10px] text-[var(--color-text-secondary)] opacity-50 mt-2">
+                                    API 에서 불러온 {geminiModels.length}개 모델 · 키마다 사용 가능 목록이 다를 수 있습니다
+                                </p>
+                            )}
+
+                            {/* 선택한 모델의 능력치 (API 제공 + 추정) */}
+                            {(() => {
+                                const m = geminiModels.find((x) => x.name === geminiModel)
+                                if (!m) return null
+                                return (
+                                    <div className="mt-3 pt-3 border-t border-[var(--color-border)] space-y-2">
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {m.supportsThinking && (
+                                                <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-purple-500/15 text-purple-400 border border-purple-400/20 flex items-center gap-1">
+                                                    <Icon icon="mdi:brain" className="text-xs" /> 단계적 추론 (Thinking)
+                                                </span>
+                                            )}
+                                            {m.supportsGrounding && (
+                                                <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-cyan-500/15 text-cyan-400 border border-cyan-400/20 flex items-center gap-1">
+                                                    <Icon icon="mdi:google" className="text-xs" /> Google 검색 그라운딩
+                                                </span>
+                                            )}
+                                            {m.version && (
+                                                <span className="text-[10px] font-medium px-2 py-1 rounded-full bg-white/5 text-[var(--color-text-secondary)]">
+                                                    v{m.version}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-[var(--color-text-secondary)] opacity-70">
+                                            {m.inputTokenLimit != null && (
+                                                <span>입력 한도: {m.inputTokenLimit.toLocaleString()} 토큰</span>
+                                            )}
+                                            {m.outputTokenLimit != null && (
+                                                <span>출력 한도: {m.outputTokenLimit.toLocaleString()} 토큰</span>
+                                            )}
+                                            {m.temperature != null && (
+                                                <span>기본 온도: {m.temperature}{m.maxTemperature != null ? ` (최대 ${m.maxTemperature})` : ''}</span>
+                                            )}
+                                        </div>
+                                        {m.description && (
+                                            <p className="text-[10px] text-[var(--color-text-secondary)] opacity-60 leading-relaxed">
+                                                {m.description}
+                                            </p>
+                                        )}
                                     </div>
+                                )
+                            })()}
+                        </div>
+                    </div>
+                </motion.div>
+
+                {/* AI 동작 */}
+                <motion.div variants={staggerItem}>
+                    <SectionLabel>AI 동작</SectionLabel>
+                    <div className="glass-card overflow-hidden">
+                        <SettingsRow first>
+                            <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                    <label className="text-sm font-medium text-[var(--color-text)]">고급 모드</label>
+                                    <HelpButton title="고급 모드" items={[
+                                        { description: '역할별 AI 모델 오버라이드, 시스템 프롬프트 편집, AI 사용량 표시를 노출합니다.' },
+                                        { title: '누구를 위한 기능?', description: '기본값만으로도 충분히 잘 동작합니다. 세부적으로 모델을 고르거나 프롬프트를 튜닝하고 싶을 때만 켜세요.' },
+                                    ]} />
+                                </div>
+                                <p className="text-xs text-[var(--color-text-secondary)] mt-1">역할별 모델·시스템 프롬프트 편집 노출</p>
+                            </div>
+                            <ToggleSwitch enabled={advancedMode} onChange={handleToggleAdvancedMode} />
+                        </SettingsRow>
+
+                        <SettingsRow>
+                            <div className="flex-1 min-w-0">
+                                <label className="text-sm font-medium text-[var(--color-text)]">앰비언트 AI</label>
+                                <p className="text-xs text-[var(--color-text-secondary)] mt-1">아침 리포트·일기 답장·세션 코멘트를 자동 생성합니다.</p>
+                            </div>
+                            <ToggleSwitch enabled={aiAmbientEnabled} onChange={handleToggleAmbient} />
+                        </SettingsRow>
+
+                        <SettingsRow>
+                            <div className="flex-1 min-w-0">
+                                <label className="text-sm font-medium text-[var(--color-text)]">아침 리포트</label>
+                                <p className="text-xs text-[var(--color-text-secondary)] mt-1">그날 처음 앱을 열 때 홈 화면에 어제·주간 분석을 자동으로 준비합니다. (백그라운드 실행·알림 없음)</p>
+                            </div>
+                            <ToggleSwitch enabled={morningReportEnabled} onChange={handleToggleMorningReport} />
+                        </SettingsRow>
+
+                        <SettingsRow>
+                            <div className="flex-1 min-w-0">
+                                <label className="text-sm font-medium text-[var(--color-text)]">웹 검색(Google 그라운딩)</label>
+                                <p className="text-xs text-[var(--color-text-secondary)] mt-1">AI가 최신 정보를 Google 검색으로 근거 삼아 답합니다. (지원하는 모델에서만 자동 적용)</p>
+                            </div>
+                            <ToggleSwitch enabled={aiGroundingDefault} onChange={handleToggleGrounding} />
+                        </SettingsRow>
+                    </div>
+                </motion.div>
+
+                {/* 고급 모드 전용 섹션들 — opacity/y 로 부드럽게 펼침/접힘 */}
+                <AnimatePresence initial={false}>
+                    {advancedMode && (
+                        <motion.div
+                            key="advanced-sections"
+                            variants={fadeRise}
+                            initial="initial"
+                            animate="animate"
+                            exit="exit"
+                            className="space-y-6"
+                        >
+                            {/* 역할별 모델 오버라이드 */}
+                            <div>
+                                <SectionLabel>역할별 AI 설정</SectionLabel>
+                                <div className="glass-card p-6 space-y-4">
+                                    <div className="flex items-center justify-between">
+                                        <label className="text-sm font-medium text-[var(--color-text)]">역할별 모델 오버라이드</label>
+                                        {loadingRoleModels && <span className="text-[10px] text-[var(--color-text-secondary)] animate-pulse">동기화 중...</span>}
+                                    </div>
+                                    <p className="text-xs text-[var(--color-text-secondary)]">비워두면 역할에 맞는 모델이 자동으로 선택됩니다.</p>
+
+                                    {ROLE_ROWS.map(({ role, label, autoLabel }) => (
+                                        <div key={role} className="space-y-2">
+                                            <p className="text-xs font-medium text-[var(--color-text-secondary)]">{label}</p>
+                                            {roleModelList.length > 0 ? (
+                                                <select
+                                                    value={aiRoleModels[role] || ''}
+                                                    onChange={(e) => setAiRoleModels(prev => ({ ...prev, [role]: e.target.value }))}
+                                                    className="w-full px-4 py-2.5 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)] text-sm"
+                                                >
+                                                    <option value="">{autoLabel}</option>
+                                                    {roleModelList.map((m) => (
+                                                        <option key={m.name} value={m.name}>
+                                                            {m.displayName}{isModelExhausted(m.name) ? ' · 오늘 소진' : ''}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            ) : (
+                                                <input
+                                                    type="text"
+                                                    value={aiRoleModels[role] || ''}
+                                                    onChange={(e) => setAiRoleModels(prev => ({ ...prev, [role]: e.target.value }))}
+                                                    placeholder={autoLabel}
+                                                    className="w-full px-4 py-2.5 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)] text-sm font-mono"
+                                                />
+                                            )}
+                                            {/* 역할별 추론(thinking) 강도 — segmented control */}
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-[10px] text-[var(--color-text-secondary)] whitespace-nowrap">추론 강도</span>
+                                                <div className="flex-1">
+                                                    <SegmentedControl<ThinkingChoice>
+                                                        layoutId={`thinking-${role}`}
+                                                        size="sm"
+                                                        value={(aiThinkingLevels[role] ?? 'auto') as ThinkingChoice}
+                                                        onChange={(v) => {
+                                                            if (v === 'auto') {
+                                                                setAiThinkingLevels(prev => { const n = { ...prev }; delete n[role]; return n })
+                                                            } else {
+                                                                setAiThinkingLevels(prev => ({ ...prev, [role]: v }))
+                                                            }
+                                                        }}
+                                                        options={[
+                                                            { value: 'off', label: '끔' },
+                                                            { value: 'low', label: '낮음' },
+                                                            { value: 'medium', label: '중간' },
+                                                            { value: 'high', label: '높음' },
+                                                            { value: 'auto', label: '자동' },
+                                                        ]}
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    <p className="text-[10px] text-[var(--color-text-secondary)] opacity-70">추론 강도: 높을수록 답변 품질↑·속도↓. Gemini 3 계열은 낮음/중간/높음, 2.5 계열은 예산으로 자동 변환됩니다.</p>
                                 </div>
                             </div>
-                        ))}
-                        <p className="text-[10px] text-[var(--color-text-secondary)] opacity-70">추론 강도: 높을수록 답변 품질↑·속도↓. Gemini 3 계열은 낮음/중간/높음, 2.5 계열은 예산으로 자동 변환됩니다.</p>
-                    </div>
-                )}
 
-                {/* 오늘 AI 사용량 (고급 모드) */}
-                {advancedMode && (() => {
-                    const usage = getTodayUsage()
-                    const kindEntries = Object.entries(usage.byKind)
-                    const modelEntries = Object.entries(usage.byModel)
-                    return (
-                        <div className="glass-card p-6 space-y-3">
-                            <label className="text-sm font-medium">오늘 AI 사용량</label>
-                            {kindEntries.length === 0 && modelEntries.length === 0 ? (
-                                <p className="text-xs text-[var(--color-text-secondary)]">오늘 아직 AI 호출 기록이 없습니다.</p>
-                            ) : (
-                                <>
-                                    {kindEntries.length > 0 && (
-                                        <div>
-                                            <p className="text-[10px] text-[var(--color-text-secondary)] mb-1.5 opacity-70">기능별</p>
-                                            <div className="flex flex-wrap gap-1.5">
-                                                {kindEntries.map(([kind, count]) => (
-                                                    <span key={kind} className="text-[10px] font-medium px-2 py-1 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-400/20">
-                                                        {kind} × {count}
-                                                    </span>
-                                                ))}
-                                            </div>
+                            {/* 오늘 AI 사용량 */}
+                            {(() => {
+                                const usage = getTodayUsage()
+                                const kindEntries = Object.entries(usage.byKind)
+                                const modelEntries = Object.entries(usage.byModel)
+                                return (
+                                    <div>
+                                        <SectionLabel>AI 사용량</SectionLabel>
+                                        <div className="glass-card p-6 space-y-3">
+                                            <label className="text-sm font-medium text-[var(--color-text)]">오늘 AI 사용량</label>
+                                            {kindEntries.length === 0 && modelEntries.length === 0 ? (
+                                                <p className="text-xs text-[var(--color-text-secondary)]">오늘 아직 AI 호출 기록이 없습니다.</p>
+                                            ) : (
+                                                <>
+                                                    {kindEntries.length > 0 && (
+                                                        <div>
+                                                            <p className="text-[10px] text-[var(--color-text-secondary)] mb-1.5 opacity-70">기능별</p>
+                                                            <div className="flex flex-wrap gap-1.5">
+                                                                {kindEntries.map(([kind, count]) => (
+                                                                    <span key={kind} className="text-[10px] font-medium px-2 py-1 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-400/20">
+                                                                        {kind} × {count}
+                                                                    </span>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                    {modelEntries.length > 0 && (
+                                                        <div>
+                                                            <p className="text-[10px] text-[var(--color-text-secondary)] mb-1.5 opacity-70">모델별</p>
+                                                            <div className="flex flex-wrap gap-1.5">
+                                                                {modelEntries.map(([model, count]) => (
+                                                                    <span key={model} className="text-[10px] font-medium px-2 py-1 rounded-full bg-purple-500/10 text-purple-400 border border-purple-400/20 font-mono">
+                                                                        {model} × {count}
+                                                                    </span>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </>
+                                            )}
                                         </div>
-                                    )}
-                                    {modelEntries.length > 0 && (
-                                        <div>
-                                            <p className="text-[10px] text-[var(--color-text-secondary)] mb-1.5 opacity-70">모델별</p>
-                                            <div className="flex flex-wrap gap-1.5">
-                                                {modelEntries.map(([model, count]) => (
-                                                    <span key={model} className="text-[10px] font-medium px-2 py-1 rounded-full bg-purple-500/10 text-purple-400 border border-purple-400/20 font-mono">
-                                                        {model} × {count}
-                                                    </span>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-                                </>
-                            )}
-                        </div>
-                    )
-                })()}
-
-                {/* 시스템 프롬프트 편집 (고급 모드) */}
-                {advancedMode && (
-                    <div className="glass-card p-6 space-y-3">
-                        <div className="flex items-center gap-2">
-                            <label className="text-sm font-medium">시스템 프롬프트 편집</label>
-                            <HelpButton title="시스템 프롬프트 편집" items={[
-                                { description: 'AI 기능별로 실제 전달되는 시스템 지시문을 직접 확인하고 수정할 수 있습니다.' },
-                                { title: '공통 페르소나', description: '모든 AI 기능 앞에 항상 붙는 공통 말투 지시입니다.' },
-                                { title: '기본값 복원', description: '수정한 내용을 앱 기본 프롬프트로 되돌립니다. 비워두거나 기본값과 같으면 저장 시 자동으로 기본값을 사용합니다.' },
-                            ]} />
-                        </div>
-                        {(Object.keys(PROMPT_LABELS) as PromptKey[]).map((key) => {
-                            const current = aiSystemPromptsState[key] ?? ''
-                            const isModified = current.trim() !== DEFAULT_PROMPTS[key].trim()
-                            return (
-                                <details key={key} className="rounded-xl bg-white/5 border border-white/5 p-3">
-                                    <summary className="cursor-pointer text-sm font-medium flex items-center gap-2 select-none">
-                                        {isModified && <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 flex-shrink-0" />}
-                                        {PROMPT_LABELS[key]}
-                                    </summary>
-                                    <textarea
-                                        value={current}
-                                        onChange={(e) => setAiSystemPromptsState(prev => ({ ...prev, [key]: e.target.value }))}
-                                        rows={6}
-                                        className="w-full mt-3 px-3 py-2 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] text-xs font-mono text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
-                                    />
-                                    <div className="flex justify-end mt-2">
-                                        <button
-                                            onClick={() => setAiSystemPromptsState(prev => ({ ...prev, [key]: DEFAULT_PROMPTS[key] }))}
-                                            className="text-[10px] px-2 py-1 rounded-md bg-white/5 hover:bg-white/10 transition-all"
-                                        >
-                                            기본값 복원
-                                        </button>
                                     </div>
-                                </details>
-                            )
-                        })}
-                    </div>
-                )}
+                                )
+                            })()}
+
+                            {/* 시스템 프롬프트 편집 */}
+                            <div>
+                                <div className="flex items-center gap-2 px-1.5 mb-2">
+                                    <SectionLabel>시스템 프롬프트</SectionLabel>
+                                    <HelpButton title="시스템 프롬프트 편집" items={[
+                                        { description: 'AI 기능별로 실제 전달되는 시스템 지시문을 직접 확인하고 수정할 수 있습니다.' },
+                                        { title: '공통 페르소나', description: '모든 AI 기능 앞에 항상 붙는 공통 말투 지시입니다.' },
+                                        { title: '기본값 복원', description: '수정한 내용을 앱 기본 프롬프트로 되돌립니다. 비워두거나 기본값과 같으면 저장 시 자동으로 기본값을 사용합니다.' },
+                                    ]} />
+                                </div>
+                                <div className="glass-card p-6 space-y-3">
+                                    {(Object.keys(PROMPT_LABELS) as PromptKey[]).map((key) => {
+                                        const current = aiSystemPromptsState[key] ?? ''
+                                        const isModified = current.trim() !== DEFAULT_PROMPTS[key].trim()
+                                        return (
+                                            <details key={key} className="glass-card-elevated p-3">
+                                                <summary className="cursor-pointer text-sm font-medium text-[var(--color-text)] flex items-center gap-2 select-none">
+                                                    {isModified && <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 flex-shrink-0" />}
+                                                    {PROMPT_LABELS[key]}
+                                                </summary>
+                                                <textarea
+                                                    value={current}
+                                                    onChange={(e) => setAiSystemPromptsState(prev => ({ ...prev, [key]: e.target.value }))}
+                                                    rows={6}
+                                                    className="w-full mt-3 px-3 py-2 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] text-xs font-mono text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+                                                />
+                                                <div className="flex justify-end mt-2">
+                                                    <Pressable
+                                                        onClick={() => setAiSystemPromptsState(prev => ({ ...prev, [key]: DEFAULT_PROMPTS[key] }))}
+                                                        pressScale={0.94}
+                                                        className="text-[10px] px-2 py-1 rounded-md bg-white/5 hover:bg-white/10"
+                                                    >
+                                                        기본값 복원
+                                                    </Pressable>
+                                                </div>
+                                            </details>
+                                        )
+                                    })}
+                                </div>
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
 
                 {/* 평가 태그 관리 */}
-                <div className="glass-card p-6 space-y-4">
-                    <div className="flex items-center justify-between">
+                <motion.div variants={staggerItem}>
+                    <div className="flex items-center justify-between px-1.5 mb-2">
                         <div className="flex items-center gap-2">
-                            <label className="text-sm font-medium">평가 태그 관리</label>
+                            <SectionLabel>평가 태그 관리</SectionLabel>
                             <HelpButton title="평가 태그 관리" items={[
                                 { description: '세션 평가와 하루 일기에서 선택하는 태그 목록입니다. 필요 없는 태그는 숨기고, 원하는 태그를 직접 추가할 수 있습니다.' },
                                 { title: '숨기기', description: '기본 태그는 삭제할 수 없지만 숨겨서 목록에서 보이지 않게 할 수 있습니다.' },
                                 { title: '커스텀 태그', description: '직접 추가한 태그는 삭제할 수 있습니다.' },
                             ]} />
                         </div>
-                        <button
+                        <Pressable
                             onClick={handleRestoreDefaultTags}
-                            className="text-xs px-3 py-1.5 rounded-lg bg-indigo-500/10 text-indigo-500 font-bold hover:bg-indigo-500/20 transition-all"
+                            className="text-xs px-3 py-1.5 rounded-lg bg-indigo-500/10 text-indigo-500 font-bold"
                         >
                             기본 태그 복원
-                        </button>
+                        </Pressable>
                     </div>
 
-                    <div className="space-y-4">
-                        {TAG_CATEGORY_ORDER.map((cat) => {
-                            const rows = evalTagsState
-                                .map((tag, idx) => ({ tag, idx }))
-                                .filter(({ tag }) => tag.category === cat)
-                            if (rows.length === 0) return null
-                            return (
-                                <div key={cat}>
-                                    <p className="text-[10px] font-bold text-[var(--color-text-secondary)] opacity-70 mb-1.5">{TAG_CATEGORY_LABELS[cat]}</p>
-                                    <div className="flex flex-wrap gap-2">
-                                        {rows.map(({ tag, idx }) => (
-                                            <div
-                                                key={`${tag.name}-${idx}`}
-                                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${tag.hidden
-                                                    ? 'bg-white/5 text-[var(--color-text-secondary)] border-white/5 opacity-50'
-                                                    : 'bg-indigo-500/10 text-indigo-300 border-indigo-500/20'
-                                                    }`}
-                                            >
-                                                <span>{tag.name}</span>
-                                                {tag.custom && (
-                                                    <span className="text-[9px] px-1 py-0.5 rounded bg-white/10 opacity-70">커스텀</span>
-                                                )}
-                                                <button
-                                                    onClick={() => handleToggleTagHidden(idx)}
-                                                    className="opacity-60 hover:opacity-100 flex items-center justify-center p-0.5"
-                                                    title={tag.hidden ? '보이기' : '숨기기'}
+                    <div className="glass-card p-6 space-y-4">
+                        <div className="space-y-4">
+                            {TAG_CATEGORY_ORDER.map((cat) => {
+                                const rows = evalTagsState
+                                    .map((tag, idx) => ({ tag, idx }))
+                                    .filter(({ tag }) => tag.category === cat)
+                                if (rows.length === 0) return null
+                                return (
+                                    <div key={cat}>
+                                        <p className="text-[10px] font-bold text-[var(--color-text-secondary)] opacity-70 mb-1.5">{TAG_CATEGORY_LABELS[cat]}</p>
+                                        <div className="flex flex-wrap gap-2">
+                                            {rows.map(({ tag, idx }) => (
+                                                <div
+                                                    key={`${tag.name}-${idx}`}
+                                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${tag.hidden
+                                                        ? 'bg-white/5 text-[var(--color-text-secondary)] border-white/5 opacity-50'
+                                                        : 'bg-indigo-500/10 text-indigo-300 border-indigo-500/20'
+                                                        }`}
                                                 >
-                                                    <Icon icon={tag.hidden ? 'mdi:eye-off-outline' : 'mdi:eye-outline'} className="text-sm" />
-                                                </button>
-                                                {tag.custom && (
-                                                    <button
-                                                        onClick={() => handleRemoveCustomTag(idx)}
+                                                    <span>{tag.name}</span>
+                                                    {tag.custom && (
+                                                        <span className="text-[9px] px-1 py-0.5 rounded bg-white/10 opacity-70">커스텀</span>
+                                                    )}
+                                                    <Pressable
+                                                        onClick={() => handleToggleTagHidden(idx)}
+                                                        pressScale={0.85}
                                                         className="opacity-60 hover:opacity-100 flex items-center justify-center p-0.5"
-                                                        title="삭제"
+                                                        title={tag.hidden ? '보이기' : '숨기기'}
                                                     >
-                                                        <Icon icon="mdi:close" className="text-sm" />
-                                                    </button>
-                                                )}
-                                            </div>
-                                        ))}
+                                                        <Icon icon={tag.hidden ? 'mdi:eye-off-outline' : 'mdi:eye-outline'} className="text-sm" />
+                                                    </Pressable>
+                                                    {tag.custom && (
+                                                        <Pressable
+                                                            onClick={() => handleRemoveCustomTag(idx)}
+                                                            pressScale={0.85}
+                                                            className="opacity-60 hover:opacity-100 flex items-center justify-center p-0.5"
+                                                            title="삭제"
+                                                        >
+                                                            <Icon icon="mdi:close" className="text-sm" />
+                                                        </Pressable>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
                                     </div>
-                                </div>
-                            )
-                        })}
-                    </div>
+                                )
+                            })}
+                        </div>
 
-                    <div className="pt-3 border-t border-[var(--color-border)] space-y-2">
-                        <p className="text-xs font-medium text-[var(--color-text-secondary)]">커스텀 태그 추가</p>
-                        <div className="flex flex-wrap gap-2">
-                            <input
-                                type="text"
-                                value={newTagName}
-                                onChange={(e) => setNewTagName(e.target.value)}
-                                placeholder="태그 이름"
-                                className="flex-1 min-w-[120px] px-3 py-2 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)] text-sm"
-                            />
-                            <select
-                                value={newTagCategory}
-                                onChange={(e) => setNewTagCategory(e.target.value as EvalTag['category'])}
-                                className="px-3 py-2 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)] text-sm"
-                            >
-                                {TAG_CATEGORY_ORDER.map((cat) => (
-                                    <option key={cat} value={cat}>{TAG_CATEGORY_LABELS[cat]}</option>
-                                ))}
-                            </select>
-                            <select
-                                value={newTagScope}
-                                onChange={(e) => setNewTagScope(e.target.value as EvalTag['scope'])}
-                                className="px-3 py-2 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)] text-sm"
-                            >
-                                {(Object.keys(TAG_SCOPE_LABELS) as Array<EvalTag['scope']>).map((scope) => (
-                                    <option key={scope} value={scope}>{TAG_SCOPE_LABELS[scope]}</option>
-                                ))}
-                            </select>
-                            <button
-                                onClick={handleAddTag}
-                                disabled={!newTagName.trim()}
-                                className="px-4 py-2 rounded-lg bg-indigo-500/10 text-indigo-400 font-medium text-sm hover:bg-indigo-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                            >
-                                + 추가
-                            </button>
+                        <div className="pt-3 border-t border-[var(--color-border)] space-y-2">
+                            <p className="text-xs font-medium text-[var(--color-text-secondary)]">커스텀 태그 추가</p>
+                            <div className="flex flex-wrap gap-2">
+                                <input
+                                    type="text"
+                                    value={newTagName}
+                                    onChange={(e) => setNewTagName(e.target.value)}
+                                    placeholder="태그 이름"
+                                    className="flex-1 min-w-[120px] px-3 py-2 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)] text-sm"
+                                />
+                                <select
+                                    value={newTagCategory}
+                                    onChange={(e) => setNewTagCategory(e.target.value as EvalTag['category'])}
+                                    className="px-3 py-2 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)] text-sm"
+                                >
+                                    {TAG_CATEGORY_ORDER.map((cat) => (
+                                        <option key={cat} value={cat}>{TAG_CATEGORY_LABELS[cat]}</option>
+                                    ))}
+                                </select>
+                                <select
+                                    value={newTagScope}
+                                    onChange={(e) => setNewTagScope(e.target.value as EvalTag['scope'])}
+                                    className="px-3 py-2 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)] text-sm"
+                                >
+                                    {(Object.keys(TAG_SCOPE_LABELS) as Array<EvalTag['scope']>).map((scope) => (
+                                        <option key={scope} value={scope}>{TAG_SCOPE_LABELS[scope]}</option>
+                                    ))}
+                                </select>
+                                <Pressable
+                                    onClick={handleAddTag}
+                                    disabled={!newTagName.trim()}
+                                    className="px-4 py-2 rounded-lg bg-indigo-500/10 text-indigo-400 font-medium text-sm disabled:opacity-40 disabled:cursor-not-allowed"
+                                >
+                                    + 추가
+                                </Pressable>
+                            </div>
                         </div>
                     </div>
-                </div>
+                </motion.div>
 
                 {/* 태블릿 자체 측정 설정 */}
-                <div className="glass-card p-6 space-y-4">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                            <label className="text-sm font-medium">태블릿 자체 측정</label>
-                            <HelpButton title="집중도 측정 — 태블릿" items={[
-                                { description: 'Android 앱에서 전면 카메라를 이용해 얼굴·시선·생체신호를 분석하고 실시간 집중 점수를 측정합니다.' },
-                                { title: '시선 캘리브레이션', description: '9개 지점을 응시하면 시선 추적이 개인화됩니다. 책 모드(하향 시선)와 모니터 모드(정면 시선) 중 환경에 맞게 선택하세요.' },
-                                { title: '점수 개인화', description: '세션 종료 후 별점 평가를 여러 번 하면 나의 집중 패턴에 맞게 점수 기준이 조정됩니다.' },
-                                { title: '웹 버전', description: '앱이 아닌 브라우저에서도 웹캠을 통해 간략한 집중도 측정을 사용할 수 있습니다.' },
-                            ]} />
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <div className={`w-2 h-2 rounded-full ${isNative ? 'bg-green-400' : 'bg-white/20'}`} />
-                            <span className="text-xs text-[var(--color-text-secondary)]">
-                                {isNative ? '앱 환경' : '브라우저 — 앱에서만 사용 가능'}
-                            </span>
-                        </div>
+                <motion.div variants={staggerItem}>
+                    <div className="flex items-center gap-2 px-1.5 mb-2">
+                        <SectionLabel>집중도 측정 — 태블릿</SectionLabel>
+                        <HelpButton title="집중도 측정 — 태블릿" items={[
+                            { description: 'Android 앱에서 전면 카메라를 이용해 얼굴·시선·생체신호를 분석하고 실시간 집중 점수를 측정합니다.' },
+                            { title: '시선 캘리브레이션', description: '9개 지점을 응시하면 시선 추적이 개인화됩니다. 책 모드(하향 시선)와 모니터 모드(정면 시선) 중 환경에 맞게 선택하세요.' },
+                            { title: '점수 개인화', description: '세션 종료 후 별점 평가를 여러 번 하면 나의 집중 패턴에 맞게 점수 기준이 조정됩니다.' },
+                            { title: '웹 버전', description: '앱이 아닌 브라우저에서도 웹캠을 통해 간략한 집중도 측정을 사용할 수 있습니다.' },
+                        ]} />
                     </div>
-
-                    {/* Gaze calibration */}
-                    <div className="pt-2 border-t border-[var(--color-border)]">
-                        <p className="text-xs font-medium text-[var(--color-text-secondary)] mb-3">시선 캘리브레이션</p>
-                        {!isNative && (
-                            <p className="text-xs text-[var(--color-text-secondary)] bg-[var(--color-surface)] rounded-xl px-4 py-3">
-                                Android 앱에서만 사용 가능합니다.
-                            </p>
-                        )}
-                        {isNative && (
-                            <>
-                                <p className="text-[10px] text-white/40 mb-3">
-                                    캘리브레이션 화면이 열립니다. 빨간 점을 차례로 응시하고 버튼을 눌러 9개 지점을 캡처하세요.
-                                </p>
-                                <div className="flex gap-2">
-                                    <button
-                                        onClick={() => handleNativeCalibration('book')}
-                                        disabled={nativeCalibRunning || nativeStatus === 'starting'}
-                                        className="flex-1 px-4 py-3 rounded-xl bg-indigo-500/10 text-indigo-400 font-medium text-sm hover:bg-indigo-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                                    >
-                                        <Icon icon="mdi:book-open-outline" className="text-base" />
-                                        책 캘리브레이션
-                                    </button>
-                                    <button
-                                        onClick={() => handleNativeCalibration('monitor')}
-                                        disabled={nativeCalibRunning || nativeStatus === 'starting'}
-                                        className="flex-1 px-4 py-3 rounded-xl bg-purple-500/10 text-purple-400 font-medium text-sm hover:bg-purple-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                                    >
-                                        <Icon icon="mdi:monitor-outline" className="text-base" />
-                                        모니터 캘리브레이션
-                                    </button>
-                                </div>
-                            </>
-                        )}
-                    </div>
-
-                    {/* Score personalization */}
-                    <div className="pt-2 border-t border-[var(--color-border)]">
-                        <p className="text-xs font-medium text-[var(--color-text-secondary)] mb-3">점수 개인화</p>
-                        {trainingState ? (
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <p className="text-xs text-white/70">
-                                        누적 세션: <span className="font-bold text-white">{trainingState.session_count}회</span>
-                                    </p>
-                                    <p className="text-[10px] text-white/40 mt-0.5">
-                                        {trainingState.is_calibrated
-                                            ? '✓ 개인화 점수 적용 중'
-                                            : `${Math.max(0, 3 - trainingState.session_count)}회 더 평가 필요`}
-                                    </p>
-                                </div>
-                                {isNative && (
-                                    <button
-                                        onClick={resetScoreCalibration}
-                                        className="text-[10px] px-3 py-1.5 rounded-lg bg-red-500/10 text-red-400 font-bold hover:bg-red-500/20 transition-all"
-                                    >
-                                        초기화
-                                    </button>
-                                )}
+                    <div className="glass-card p-6 space-y-4">
+                        <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium text-[var(--color-text)]">상태</span>
+                            <div className="flex items-center gap-2">
+                                <div className={`w-2 h-2 rounded-full ${isNative ? 'bg-green-400' : 'bg-[var(--color-border)]'}`} />
+                                <span className="text-xs text-[var(--color-text-secondary)]">
+                                    {isNative ? '앱 환경' : '브라우저 — 앱에서만 사용 가능'}
+                                </span>
                             </div>
-                        ) : (
-                            <p className="text-xs text-[var(--color-text-secondary)]">
-                                측정 세션 종료 후 집중도를 평가하면 점수가 당신에게 맞게 조정됩니다.
-                            </p>
-                        )}
-                    </div>
-                </div>
-
-                {/* PC Focus 연결 설정 */}
-                <div className="glass-card p-6 space-y-4">
-                    <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                            <label className="text-sm font-medium">PC Focus 서버 연결</label>
-                            <HelpButton title="PC Focus 서버 연결" items={[
-                                { description: 'PC(노트북·데스크탑)의 웹캠을 이용해 집중도를 분석하는 별도 서버에 접속합니다.' },
-                                { title: '사용 방법', description: 'PC에 Focus 분석 서버 프로그램을 실행하고, 같은 Wi-Fi에 연결된 상태에서 PC의 IP 주소를 입력하여 연결합니다.' },
-                                { title: '언제 사용?', description: '태블릿을 책 받침으로 세워 두고 PC 카메라로 얼굴을 찍고 싶을 때, 또는 더 좋은 카메라 화질로 집중도를 측정하고 싶을 때 사용합니다.' },
-                                { title: '캘리브레이션', description: '9개 지점을 순서대로 응시하며 캡처하면 시선 추적이 정교해집니다. 책/모니터 환경에 따라 모드를 선택하세요.' },
-                            ]} />
                         </div>
-                        <div className="flex items-center gap-2">
-                            <div className={`w-2 h-2 rounded-full ${connected ? 'bg-green-400' : 'bg-red-400'}`} />
-                            <span className={`text-xs font-medium ${connected ? 'text-green-400' : 'text-[var(--color-text-secondary)]'}`}>
-                                {connected ? '연결됨' : '연결 안 됨'}
-                            </span>
-                        </div>
-                    </div>
 
-                    <div className="flex gap-2">
-                        <input
-                            type="text"
-                            value={serverUrlInput}
-                            onChange={(e) => setServerUrlInput(e.target.value)}
-                            placeholder="예: 192.168.25.14 (IP만 입력해도 자동 보강)"
-                            className="flex-1 px-4 py-3 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)] text-sm font-mono"
-                        />
-                        <button
-                            onClick={handleSaveServerUrl}
-                            className="px-4 py-3 rounded-xl bg-[var(--color-primary)] text-white font-medium text-sm hover:opacity-90 transition-all whitespace-nowrap"
-                        >
-                            저장
-                        </button>
-                    </div>
-                    {activeServerUrl && (
-                        <p className="text-[10px] text-[var(--color-text-secondary)] font-mono opacity-60">
-                            현재 연결 시도: {activeServerUrl}
-                        </p>
-                    )}
-
-                    <div className="pt-2 border-t border-[var(--color-border)]">
-                        <p className="text-xs font-medium text-[var(--color-text-secondary)] mb-3">파이프라인 컨트롤</p>
-
-                        <div className="flex items-center gap-2 mb-2">
-                            {pipelineState === null ? (
+                        {/* Gaze calibration */}
+                        <div className="pt-2 border-t border-[var(--color-border)]">
+                            <p className="text-xs font-medium text-[var(--color-text-secondary)] mb-3">시선 캘리브레이션</p>
+                            {!isNative && (
+                                <p className="text-xs text-[var(--color-text-secondary)] bg-[var(--color-surface)] rounded-xl px-4 py-3">
+                                    Android 앱에서만 사용 가능합니다.
+                                </p>
+                            )}
+                            {isNative && (
                                 <>
-                                    <div className="w-2 h-2 rounded-full bg-white/40" />
-                                    <span className="text-xs font-medium text-[var(--color-text-secondary)]">상태 불명</span>
-                                </>
-                            ) : pipelineState.running ? (
-                                <>
-                                    <div className="w-2 h-2 rounded-full bg-green-400" />
-                                    <span className="text-xs font-medium text-green-400">실행 중</span>
-                                </>
-                            ) : (
-                                <>
-                                    <div className="w-2 h-2 rounded-full bg-red-400" />
-                                    <span className="text-xs font-medium text-red-400">정지</span>
+                                    <p className="text-[10px] text-[var(--color-text-secondary)] opacity-70 mb-3">
+                                        캘리브레이션 화면이 열립니다. 빨간 점을 차례로 응시하고 버튼을 눌러 9개 지점을 캡처하세요.
+                                    </p>
+                                    <div className="flex gap-2">
+                                        <Pressable
+                                            onClick={() => handleNativeCalibration('book')}
+                                            disabled={nativeCalibRunning || nativeStatus === 'starting'}
+                                            className="flex-1 px-4 py-3 rounded-xl bg-indigo-500/10 text-indigo-400 font-medium text-sm disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                        >
+                                            <Icon icon="mdi:book-open-outline" className="text-base" />
+                                            책 캘리브레이션
+                                        </Pressable>
+                                        <Pressable
+                                            onClick={() => handleNativeCalibration('monitor')}
+                                            disabled={nativeCalibRunning || nativeStatus === 'starting'}
+                                            className="flex-1 px-4 py-3 rounded-xl bg-purple-500/10 text-purple-400 font-medium text-sm disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                        >
+                                            <Icon icon="mdi:monitor-outline" className="text-base" />
+                                            모니터 캘리브레이션
+                                        </Pressable>
+                                    </div>
                                 </>
                             )}
                         </div>
 
-                        <p className="text-[10px] text-[var(--color-text-secondary)] font-mono opacity-60 mb-3">
-                            모델: {pipelineState?.model ?? '없음'} · 캘리: {pipelineState?.calibration ?? '없음'} · fps: {pipelineState ? pipelineState.fps.toFixed(1) : '-'}
-                        </p>
-
-                        <div className="flex gap-2 mb-4">
-                            <button
-                                onClick={sendPipelineStart}
-                                disabled={!connected || (pipelineState?.running === true)}
-                                className="flex-1 px-4 py-3 rounded-xl bg-indigo-500/10 text-indigo-400 font-medium text-sm hover:bg-indigo-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                            >
-                                <Icon icon="mdi:play" className="text-base" />
-                                시작
-                            </button>
-                            <button
-                                onClick={sendPipelineStop}
-                                disabled={!connected || (pipelineState?.running !== true)}
-                                className="flex-1 px-4 py-3 rounded-xl bg-red-500/10 text-red-400 font-medium text-sm hover:bg-red-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                            >
-                                <Icon icon="mdi:stop" className="text-base" />
-                                정지
-                            </button>
+                        {/* Score personalization */}
+                        <div className="pt-2 border-t border-[var(--color-border)]">
+                            <p className="text-xs font-medium text-[var(--color-text-secondary)] mb-3">점수 개인화</p>
+                            {trainingState ? (
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <p className="text-xs text-[var(--color-text)]">
+                                            누적 세션: <span className="font-bold">{trainingState.session_count}회</span>
+                                        </p>
+                                        <p className="text-[10px] text-[var(--color-text-secondary)] opacity-70 mt-0.5">
+                                            {trainingState.is_calibrated
+                                                ? '✓ 개인화 점수 적용 중'
+                                                : `${Math.max(0, 3 - trainingState.session_count)}회 더 평가 필요`}
+                                        </p>
+                                    </div>
+                                    {isNative && (
+                                        <Pressable
+                                            onClick={resetScoreCalibration}
+                                            pressScale={0.94}
+                                            className="text-[10px] px-3 py-1.5 rounded-lg bg-red-500/10 text-red-400 font-bold"
+                                        >
+                                            초기화
+                                        </Pressable>
+                                    )}
+                                </div>
+                            ) : (
+                                <p className="text-xs text-[var(--color-text-secondary)]">
+                                    측정 세션 종료 후 집중도를 평가하면 점수가 당신에게 맞게 조정됩니다.
+                                </p>
+                            )}
                         </div>
                     </div>
+                </motion.div>
 
-                    <div className="pt-2 border-t border-[var(--color-border)]">
-                        <p className="text-xs font-medium text-[var(--color-text-secondary)] mb-3">캘리브레이션</p>
+                {/* PC Focus 연결 설정 */}
+                <motion.div variants={staggerItem}>
+                    <div className="flex items-center gap-2 px-1.5 mb-2">
+                        <SectionLabel>PC Focus 연결</SectionLabel>
+                        <HelpButton title="PC Focus 서버 연결" items={[
+                            { description: 'PC(노트북·데스크탑)의 웹캠을 이용해 집중도를 분석하는 별도 서버에 접속합니다.' },
+                            { title: '사용 방법', description: 'PC에 Focus 분석 서버 프로그램을 실행하고, 같은 Wi-Fi에 연결된 상태에서 PC의 IP 주소를 입력하여 연결합니다.' },
+                            { title: '언제 사용?', description: '태블릿을 책 받침으로 세워 두고 PC 카메라로 얼굴을 찍고 싶을 때, 또는 더 좋은 카메라 화질로 집중도를 측정하고 싶을 때 사용합니다.' },
+                            { title: '캘리브레이션', description: '9개 지점을 순서대로 응시하며 캡처하면 시선 추적이 정교해집니다. 책/모니터 환경에 따라 모드를 선택하세요.' },
+                        ]} />
+                    </div>
+                    <div className="glass-card p-6 space-y-4">
+                        <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm font-medium text-[var(--color-text)]">서버 연결</span>
+                            <div className="flex items-center gap-2">
+                                <div className={`w-2 h-2 rounded-full ${connected ? 'bg-green-400' : 'bg-red-400'}`} />
+                                <span className={`text-xs font-medium ${connected ? 'text-green-400' : 'text-[var(--color-text-secondary)]'}`}>
+                                    {connected ? '연결됨' : '연결 안 됨'}
+                                </span>
+                            </div>
+                        </div>
 
-                        {!connected && (
-                            <p className="text-xs text-[var(--color-text-secondary)] bg-[var(--color-surface)] rounded-xl px-4 py-3 mb-3">
-                                PC에 연결되지 않음 — 서버 URL을 저장하면 자동으로 연결됩니다.
+                        <div className="flex gap-2">
+                            <input
+                                type="text"
+                                value={serverUrlInput}
+                                onChange={(e) => setServerUrlInput(e.target.value)}
+                                placeholder="예: 192.168.25.14 (IP만 입력해도 자동 보강)"
+                                className="flex-1 px-4 py-3 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)] text-sm font-mono"
+                            />
+                            <Pressable
+                                onClick={handleSaveServerUrl}
+                                className="px-4 py-3 rounded-xl bg-[var(--color-primary)] text-white font-medium text-sm whitespace-nowrap"
+                            >
+                                저장
+                            </Pressable>
+                        </div>
+                        {activeServerUrl && (
+                            <p className="text-[10px] text-[var(--color-text-secondary)] font-mono opacity-60">
+                                현재 연결 시도: {activeServerUrl}
                             </p>
                         )}
 
-                        {/* 캘리 진행 중 안내 */}
-                        {currentCalibMode !== null && captureCount < 9 && (
-                            <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-xl px-4 py-3 mb-3">
-                                <p className="text-xs font-bold text-indigo-400 mb-1">
-                                    {captureCount + 1}/9 — <span className="text-white">{CALIB_LABELS[captureCount]}</span>을(를) 바라보세요
-                                </p>
-                                <p className="text-[10px] text-white/40">
-                                    {currentCalibMode === 'book' ? '책' : '모니터'}의 해당 위치를 응시한 뒤 캡처 버튼을 누르세요
-                                </p>
-                            </div>
-                        )}
-                        {currentCalibMode === null && captureCount >= 9 && (
-                            <div className="bg-green-500/10 border border-green-500/20 rounded-xl px-4 py-3 mb-3">
-                                <p className="text-xs font-bold text-green-400">캘리브레이션 완료!</p>
-                            </div>
-                        )}
+                        <div className="pt-2 border-t border-[var(--color-border)]">
+                            <p className="text-xs font-medium text-[var(--color-text-secondary)] mb-3">파이프라인 컨트롤</p>
 
-                        {/* 캘리 중 카메라 자동 활성 (video_frame PC 전송) */}
-                        {currentCalibMode !== null && (
-                            <div style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', width: 1, height: 1, overflow: 'hidden' }}>
-                                <TabletCamera sendVideoFrame={sendVideoFrame} connected={connected} fps={15} autoStart />
+                            <div className="flex items-center gap-2 mb-2">
+                                {pipelineState === null ? (
+                                    <>
+                                        <div className="w-2 h-2 rounded-full bg-[var(--color-border)]" />
+                                        <span className="text-xs font-medium text-[var(--color-text-secondary)]">상태 불명</span>
+                                    </>
+                                ) : pipelineState.running ? (
+                                    <>
+                                        <div className="w-2 h-2 rounded-full bg-green-400" />
+                                        <span className="text-xs font-medium text-green-400">실행 중</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <div className="w-2 h-2 rounded-full bg-red-400" />
+                                        <span className="text-xs font-medium text-red-400">정지</span>
+                                    </>
+                                )}
                             </div>
-                        )}
 
-                        <div className="flex gap-2 mb-3">
-                            <button
-                                onClick={() => handleCalibrateStart('book')}
-                                disabled={!connected}
-                                className="flex-1 px-4 py-3 rounded-xl bg-indigo-500/10 text-indigo-400 font-medium text-sm hover:bg-indigo-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                            >
-                                <Icon icon="mdi:book-open-outline" className="text-base" />
-                                책 캘리브레이션
-                            </button>
-                            <button
-                                onClick={() => handleCalibrateStart('monitor')}
-                                disabled={!connected}
-                                className="flex-1 px-4 py-3 rounded-xl bg-purple-500/10 text-purple-400 font-medium text-sm hover:bg-purple-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                            >
-                                <Icon icon="mdi:monitor-outline" className="text-base" />
-                                모니터 캘리브레이션
-                            </button>
+                            <p className="text-[10px] text-[var(--color-text-secondary)] font-mono opacity-60 mb-3">
+                                모델: {pipelineState?.model ?? '없음'} · 캘리: {pipelineState?.calibration ?? '없음'} · fps: {pipelineState ? pipelineState.fps.toFixed(1) : '-'}
+                            </p>
+
+                            <div className="flex gap-2 mb-4">
+                                <Pressable
+                                    onClick={sendPipelineStart}
+                                    disabled={!connected || (pipelineState?.running === true)}
+                                    className="flex-1 px-4 py-3 rounded-xl bg-indigo-500/10 text-indigo-400 font-medium text-sm disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                >
+                                    <Icon icon="mdi:play" className="text-base" />
+                                    시작
+                                </Pressable>
+                                <Pressable
+                                    onClick={sendPipelineStop}
+                                    disabled={!connected || (pipelineState?.running !== true)}
+                                    className="flex-1 px-4 py-3 rounded-xl bg-red-500/10 text-red-400 font-medium text-sm disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                >
+                                    <Icon icon="mdi:stop" className="text-base" />
+                                    정지
+                                </Pressable>
+                            </div>
                         </div>
 
-                        <div className="flex items-center gap-3">
-                            <button
-                                onClick={handleCalibrateCapture}
-                                disabled={!connected || captureCount >= 9}
-                                className="flex-1 px-4 py-3 rounded-xl bg-green-500/10 text-green-400 font-medium text-sm hover:bg-green-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                            >
-                                <Icon icon="mdi:camera-iris" className="text-base" />
-                                캡처
-                            </button>
-                            <div className="flex items-center gap-2 min-w-[90px]">
-                                <div className="flex gap-0.5">
-                                    {Array.from({ length: 9 }).map((_, i) => (
-                                        <div
-                                            key={i}
-                                            className={`w-2 h-2 rounded-full transition-all ${i < captureCount ? 'bg-green-400' : 'bg-[var(--color-border)]'}`}
-                                        />
-                                    ))}
+                        <div className="pt-2 border-t border-[var(--color-border)]">
+                            <p className="text-xs font-medium text-[var(--color-text-secondary)] mb-3">캘리브레이션</p>
+
+                            {!connected && (
+                                <p className="text-xs text-[var(--color-text-secondary)] bg-[var(--color-surface)] rounded-xl px-4 py-3 mb-3">
+                                    PC에 연결되지 않음 — 서버 URL을 저장하면 자동으로 연결됩니다.
+                                </p>
+                            )}
+
+                            {/* 캘리 진행 중 안내 */}
+                            <AnimatePresence mode="wait">
+                                {currentCalibMode !== null && captureCount < 9 && (
+                                    <motion.div
+                                        key="calib-progress"
+                                        variants={fadeRise}
+                                        initial="initial"
+                                        animate="animate"
+                                        exit="exit"
+                                        className="bg-indigo-500/10 border border-indigo-500/20 rounded-xl px-4 py-3 mb-3"
+                                    >
+                                        <p className="text-xs font-bold text-indigo-400 mb-1">
+                                            {captureCount + 1}/9 — <span className="text-[var(--color-text)]">{CALIB_LABELS[captureCount]}</span>을(를) 바라보세요
+                                        </p>
+                                        <p className="text-[10px] text-[var(--color-text-secondary)] opacity-70">
+                                            {currentCalibMode === 'book' ? '책' : '모니터'}의 해당 위치를 응시한 뒤 캡처 버튼을 누르세요
+                                        </p>
+                                    </motion.div>
+                                )}
+                                {currentCalibMode === null && captureCount >= 9 && (
+                                    <motion.div
+                                        key="calib-done"
+                                        variants={fadeRise}
+                                        initial="initial"
+                                        animate="animate"
+                                        exit="exit"
+                                        className="bg-green-500/10 border border-green-500/20 rounded-xl px-4 py-3 mb-3"
+                                    >
+                                        <p className="text-xs font-bold text-green-400">캘리브레이션 완료!</p>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+
+                            {/* 캘리 중 카메라 자동 활성 (video_frame PC 전송) */}
+                            {currentCalibMode !== null && (
+                                <div style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', width: 1, height: 1, overflow: 'hidden' }}>
+                                    <TabletCamera sendVideoFrame={sendVideoFrame} connected={connected} fps={15} autoStart />
                                 </div>
-                                <span className="text-xs text-[var(--color-text-secondary)] font-mono ml-1">{captureCount}/9</span>
+                            )}
+
+                            <div className="flex gap-2 mb-3">
+                                <Pressable
+                                    onClick={() => handleCalibrateStart('book')}
+                                    disabled={!connected}
+                                    className="flex-1 px-4 py-3 rounded-xl bg-indigo-500/10 text-indigo-400 font-medium text-sm disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                >
+                                    <Icon icon="mdi:book-open-outline" className="text-base" />
+                                    책 캘리브레이션
+                                </Pressable>
+                                <Pressable
+                                    onClick={() => handleCalibrateStart('monitor')}
+                                    disabled={!connected}
+                                    className="flex-1 px-4 py-3 rounded-xl bg-purple-500/10 text-purple-400 font-medium text-sm disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                >
+                                    <Icon icon="mdi:monitor-outline" className="text-base" />
+                                    모니터 캘리브레이션
+                                </Pressable>
+                            </div>
+
+                            <div className="flex items-center gap-3">
+                                <Pressable
+                                    onClick={handleCalibrateCapture}
+                                    disabled={!connected || captureCount >= 9}
+                                    className="flex-1 px-4 py-3 rounded-xl bg-green-500/10 text-green-400 font-medium text-sm disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                >
+                                    <Icon icon="mdi:camera-iris" className="text-base" />
+                                    캡처
+                                </Pressable>
+                                <div className="flex items-center gap-2 min-w-[90px]">
+                                    <div className="flex gap-0.5">
+                                        {Array.from({ length: 9 }).map((_, i) => (
+                                            <motion.div
+                                                key={i}
+                                                className="w-2 h-2 rounded-full"
+                                                animate={{ backgroundColor: i < captureCount ? '#4ade80' : 'var(--color-border)' }}
+                                                transition={spring.snappy}
+                                            />
+                                        ))}
+                                    </div>
+                                    <span className="text-xs text-[var(--color-text-secondary)] font-mono ml-1">{captureCount}/9</span>
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
+                </motion.div>
 
                 {/* 데이터 백업 / 복원 */}
-                <div className="glass-card p-6 space-y-4">
-                    <div className="flex items-center gap-2">
-                        <Icon icon="mdi:database-arrow-down-outline" className="text-lg text-[var(--color-primary)]" />
-                        <label className="text-sm font-medium">데이터 백업 / 복원</label>
-                    </div>
-                    <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed">
-                        모든 설정·공부 기록·일일 기록·메모를 하나의 JSON 파일로 저장합니다.
-                        앱을 재설치하거나 기기를 바꿀 때 이 파일로 데이터를 그대로 옮길 수 있습니다.
-                    </p>
+                <motion.div variants={staggerItem}>
+                    <SectionLabel>데이터</SectionLabel>
+                    <div className="glass-card p-6 space-y-4">
+                        <div className="flex items-center gap-2">
+                            <Icon icon="mdi:database-arrow-down-outline" className="text-lg text-[var(--color-primary)]" />
+                            <label className="text-sm font-medium text-[var(--color-text)]">데이터 백업 / 복원</label>
+                        </div>
+                        <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed">
+                            모든 설정·공부 기록·일일 기록·메모를 하나의 JSON 파일로 저장합니다.
+                            앱을 재설치하거나 기기를 바꿀 때 이 파일로 데이터를 그대로 옮길 수 있습니다.
+                        </p>
 
-                    <div className="flex gap-2">
-                        <button
-                            onClick={handleExportBackup}
-                            disabled={exporting || importing}
-                            className="flex-1 px-4 py-3 rounded-xl bg-indigo-500/10 text-indigo-400 font-medium text-sm hover:bg-indigo-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                        >
-                            <Icon icon="mdi:export-variant" className="text-base" />
-                            {exporting ? '내보내는 중...' : '내보내기 (백업)'}
-                        </button>
-                        <button
-                            onClick={() => backupInputRef.current?.click()}
-                            disabled={exporting || importing}
-                            className="flex-1 px-4 py-3 rounded-xl bg-green-500/10 text-green-400 font-medium text-sm hover:bg-green-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                        >
-                            <Icon icon="mdi:import" className="text-base" />
-                            {importing ? '복원 중...' : '가져오기 (복원)'}
-                        </button>
+                        <div className="flex gap-2">
+                            <Pressable
+                                onClick={handleExportBackup}
+                                disabled={exporting || importing}
+                                className="flex-1 px-4 py-3 rounded-xl bg-indigo-500/10 text-indigo-400 font-medium text-sm disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                            >
+                                <Icon icon="mdi:export-variant" className="text-base" />
+                                {exporting ? '내보내는 중...' : '내보내기 (백업)'}
+                            </Pressable>
+                            <Pressable
+                                onClick={() => backupInputRef.current?.click()}
+                                disabled={exporting || importing}
+                                className="flex-1 px-4 py-3 rounded-xl bg-green-500/10 text-green-400 font-medium text-sm disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                            >
+                                <Icon icon="mdi:import" className="text-base" />
+                                {importing ? '복원 중...' : '가져오기 (복원)'}
+                            </Pressable>
+                        </div>
+                        <p className="text-[10px] text-[var(--color-text-secondary)] opacity-60 leading-relaxed">
+                            ⚠️ 가져오기를 하면 현재 기기의 데이터가 백업 파일 내용으로 모두 교체됩니다.
+                        </p>
+                        <input
+                            ref={backupInputRef}
+                            type="file"
+                            accept="application/json,.json"
+                            onChange={handleImportFile}
+                            className="hidden"
+                        />
                     </div>
-                    <p className="text-[10px] text-[var(--color-text-secondary)] opacity-60 leading-relaxed">
-                        ⚠️ 가져오기를 하면 현재 기기의 데이터가 백업 파일 내용으로 모두 교체됩니다.
-                    </p>
-                    <input
-                        ref={backupInputRef}
-                        type="file"
-                        accept="application/json,.json"
-                        onChange={handleImportFile}
-                        className="hidden"
-                    />
-                </div>
+                </motion.div>
 
                 {/* Save Button */}
-                <button
-                    onClick={handleSave}
-                    className="w-full btn btn-primary text-lg py-4 flex items-center justify-center gap-2"
-                >
-                    {saved ? <><Icon icon="mdi:check-bold" className="text-xl" /> 저장됨!</> : '저장하기'}
-                </button>
+                <motion.div variants={staggerItem}>
+                    <Pressable
+                        onClick={handleSave}
+                        pressScale={0.98}
+                        className="w-full btn btn-primary text-lg py-4 flex items-center justify-center gap-2"
+                    >
+                        {saved ? <><Icon icon="mdi:check-bold" className="text-xl" /> 저장됨!</> : '저장하기'}
+                    </Pressable>
+                </motion.div>
 
                 {/* 개발자 & 버전 정보 */}
-                <div className="mt-4 pt-8 border-t border-[var(--color-border)] flex flex-col gap-3">
-                    <button
+                <motion.div variants={staggerItem} className="mt-4 pt-8 border-t border-[var(--color-border)] flex flex-col gap-3">
+                    <Pressable
                         onClick={() => navigate('/developer')}
-                        className="w-full flex items-center justify-between px-5 py-3.5 rounded-2xl bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-pink-500/10 hover:from-indigo-500/20 hover:via-purple-500/20 hover:to-pink-500/20 border border-indigo-400/25 hover:border-indigo-400/45 transition-all group"
+                        pressScale={0.98}
+                        className="w-full flex items-center justify-between px-5 py-3.5 rounded-2xl bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-pink-500/10 hover:from-indigo-500/20 hover:via-purple-500/20 hover:to-pink-500/20 border border-indigo-400/25 hover:border-indigo-400/45"
                     >
                         <div className="flex items-center gap-3">
                             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-xs font-black flex-shrink-0 ring-2 ring-indigo-400/20">
@@ -1422,28 +1555,23 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                                 <p className="text-sm font-bold gradient-text leading-tight">개발자 이야기 &amp; 개발자 도구 →</p>
                             </div>
                         </div>
-                        <motion.span
-                            animate={{ x: [0, 5, 0] }}
-                            transition={{ duration: 1.4, repeat: Infinity, ease: 'easeInOut' }}
-                            className="flex-shrink-0"
-                        >
-                            <Icon icon="mdi:chevron-right" className="text-xl text-indigo-400 opacity-70 group-hover:opacity-100 transition-all" />
-                        </motion.span>
-                    </button>
+                        <Icon icon="mdi:chevron-right" className="text-xl text-indigo-400 opacity-70 flex-shrink-0" />
+                    </Pressable>
 
                     {devAdmin && (
-                        <button
+                        <Pressable
                             onClick={() => navigate('/admin')}
-                            className="w-full flex items-center justify-between px-5 py-3.5 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all group"
+                            pressScale={0.98}
+                            className="w-full flex items-center justify-between px-5 py-3.5 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10"
                         >
                             <div className="flex items-center gap-3">
                                 <div className="w-8 h-8 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-white flex-shrink-0">
                                     <Icon icon="mdi:shield-crown" className="text-base" />
                                 </div>
-                                <p className="text-sm font-bold text-left">관리자 페이지</p>
+                                <p className="text-sm font-bold text-left text-[var(--color-text)]">관리자 페이지</p>
                             </div>
-                            <Icon icon="mdi:chevron-right" className="text-xl text-[var(--color-text-secondary)] opacity-50 group-hover:opacity-100 transition-all" />
-                        </button>
+                            <Icon icon="mdi:chevron-right" className="text-xl text-[var(--color-text-secondary)] opacity-50" />
+                        </Pressable>
                     )}
 
                     <div className="text-center flex flex-col items-center gap-0.5">
@@ -1460,7 +1588,7 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                             })}
                         </p>
                     </div>
-                </div>
+                </motion.div>
             </div>
 
             <AnimatePresence>
@@ -1475,6 +1603,6 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                     />
                 )}
             </AnimatePresence>
-        </div>
+        </motion.div>
     )
 }

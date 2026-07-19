@@ -7,11 +7,13 @@
  * 항상 펼쳐진 상태로 내용을 보여준다(접기/펼치기 없음).
  */
 import { useState, useEffect } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { Icon } from '@iconify/react'
 import type { Settings } from '../lib/db'
 import { getTodayDate, getAiArtifact } from '../lib/db'
 import { isAmbientAiEnabled, generateMorningReport, morningReportKindFor } from '../lib/ai/aiService'
 import AiMarkdown from './AiMarkdown'
+import { fadeRise } from '../lib/motion'
 
 interface MorningReportCardProps {
     settings: Settings
@@ -61,7 +63,7 @@ export default function MorningReportCard({ settings }: MorningReportCardProps) 
     if (hidden) return null
 
     return (
-        <section className="glass-card p-6 border-none dark:bg-white/5 bg-white/40 relative overflow-hidden">
+        <section className="glass-card p-6 relative overflow-hidden">
             <div className="absolute top-0 right-0 w-40 h-40 bg-amber-500/10 blur-[80px] rounded-full -mr-10 -mt-10" />
             <div className="flex items-center gap-2.5 relative z-10">
                 <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-400 to-orange-500 flex items-center justify-center shadow-lg shadow-amber-500/20 flex-shrink-0">
@@ -70,17 +72,19 @@ export default function MorningReportCard({ settings }: MorningReportCardProps) 
                 <h2 className="text-base font-black text-[var(--color-text)]">{title}</h2>
             </div>
 
-            {loading ? (
-                <div className="space-y-2 animate-pulse mt-4">
-                    <div className="h-3.5 rounded bg-black/[0.04] dark:bg-white/5 w-3/4" />
-                    <div className="h-3.5 rounded bg-black/[0.04] dark:bg-white/5 w-full" />
-                    <div className="h-3.5 rounded bg-black/[0.04] dark:bg-white/5 w-5/6" />
-                </div>
-            ) : content && (
-                <div className="pt-4 text-sm text-[var(--color-text)] opacity-90 relative z-10">
-                    <AiMarkdown>{content}</AiMarkdown>
-                </div>
-            )}
+            <AnimatePresence mode="wait">
+                {loading ? (
+                    <motion.div key="skeleton" variants={fadeRise} initial="initial" animate="animate" exit="exit" className="space-y-2 animate-pulse mt-4">
+                        <div className="h-3.5 rounded bg-black/[0.04] dark:bg-white/5 w-3/4" />
+                        <div className="h-3.5 rounded bg-black/[0.04] dark:bg-white/5 w-full" />
+                        <div className="h-3.5 rounded bg-black/[0.04] dark:bg-white/5 w-5/6" />
+                    </motion.div>
+                ) : content && (
+                    <motion.div key="content" variants={fadeRise} initial="initial" animate="animate" exit="exit" className="pt-4 text-sm text-[var(--color-text)] opacity-90 relative z-10">
+                        <AiMarkdown>{content}</AiMarkdown>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </section>
     )
 }
