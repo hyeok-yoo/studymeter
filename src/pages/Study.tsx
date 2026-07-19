@@ -31,6 +31,7 @@ import { HelpButton } from '../components/HelpButton'
 import { maybeSyncToday } from '../lib/telemetry'
 import { useDrowsiness } from '../lib/useDrowsiness'
 import { playTimerEndSound, startDrowsyAlarm, type AlarmModality } from '../lib/alarm'
+import { incrementSessionDrowsyCount, consumeSessionDrowsyCount } from '../lib/drowsyCounter'
 
 interface StudyProps {
     settings: Settings
@@ -341,6 +342,7 @@ export default function Study({ settings }: StudyProps) {
         if (showEval) setIsEnding(true)
 
         try {
+            const drowsyCount = consumeSessionDrowsyCount()
             const session: StudySession = {
                 date: getDateFromTimestamp(originalStartTimeRef.current), // 날짜 무결성: 원래 시작 시각 기준
                 subject: currentSubject,
@@ -348,7 +350,8 @@ export default function Study({ settings }: StudyProps) {
                 type: currentType,
                 startTime: originalStartTimeRef.current,
                 endTime: now,
-                duration: actualDuration
+                duration: actualDuration,
+                ...(drowsyCount > 0 ? { drowsyCount } : {})
             }
             const id = await db.sessions.add(session)
             localStorage.removeItem(STORAGE_KEY)
@@ -1507,6 +1510,7 @@ function DrowsinessAlert({ features, running, thresholdSec }: { features: FocusF
             stopAlarmRef.current = null
             return
         }
+        incrementSessionDrowsyCount() // 일기 자동 통계용: 졸음 경고 발생 횟수 기록
         let cancelled = false
         ;(async () => {
             const mode = await NativeBridge.getRingerMode()
