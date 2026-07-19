@@ -167,9 +167,6 @@ export default function Home({ settings }: HomeProps) {
                 </div>
             </section>
 
-            {/* 오늘의 일기 (3초 일기) */}
-            <DiaryCard settings={settings} />
-
             {/* Main Actions */}
             <div className={`grid gap-6 ${showAddBtn ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-1 md:grid-cols-3'}`}>
                 <motion.button
@@ -228,6 +225,9 @@ export default function Home({ settings }: HomeProps) {
                     )}
                 </AnimatePresence>
             </div>
+
+            {/* 오늘의 일기 (3초 일기) */}
+            <DiaryCard settings={settings} />
 
             {/* iOS 설치 가이드 모달 */}
             <IOSInstallGuide isOpen={showIOSGuide} onClose={() => setShowIOSGuide(false)} />

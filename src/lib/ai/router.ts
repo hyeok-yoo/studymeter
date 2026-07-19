@@ -58,7 +58,10 @@ export function supportsGrounding(modelId: string): boolean {
 
 // ── 소진(429) 마킹: 태평양 시간 자정 리셋 ──────────────────────────────────
 
-const EXHAUSTED_KEY = 'studymeter_ai_exhausted';
+// v2: 과거 버전이 분당(RPM) 429 까지 "하루 소진"으로 기록해 둔 잘못된 마킹을
+// 무효화하기 위해 키를 올린다. 구 키는 발견 즉시 제거.
+const EXHAUSTED_KEY = 'studymeter_ai_exhausted_v2';
+try { localStorage.removeItem('studymeter_ai_exhausted'); } catch { /* ignore */ }
 
 /** 다음 태평양 시간(America/Los_Angeles) 자정의 epoch ms. */
 export function nextPacificMidnight(now = new Date()): number {
@@ -89,11 +92,25 @@ function loadExhausted(): Record<string, number> {
     }
 }
 
-/** 모델을 오늘 소진으로 마킹 (429 수신 시 라우터/서비스가 호출). */
+/** 모델을 오늘 소진으로 마킹 — 일일 한도(PerDay) 429 에서만 호출할 것. */
 export function markModelExhausted(modelId: string): void {
+    setExhaustedUntil(modelId, nextPacificMidnight());
+}
+
+/**
+ * 분당 요청 한도(RPM) 등 일시적 429: 짧은 쿨다운만 건다.
+ * 하루 종일 차단하면 실제로는 쓸 수 있는 모델이 "사용량 초과"로 보이게 된다.
+ */
+export function markModelCooldown(modelId: string, ms?: number): void {
+    const cooldown = Math.min(Math.max(ms ?? 60_000, 15_000), 5 * 60_000);
+    setExhaustedUntil(modelId, Date.now() + cooldown);
+}
+
+function setExhaustedUntil(modelId: string, until: number): void {
     try {
         const map = loadExhausted();
-        map[modelId] = nextPacificMidnight();
+        // 이미 더 긴 차단이 걸려 있으면 줄이지 않는다
+        map[modelId] = Math.max(map[modelId] ?? 0, until);
         localStorage.setItem(EXHAUSTED_KEY, JSON.stringify(map));
     } catch { /* ignore */ }
 }

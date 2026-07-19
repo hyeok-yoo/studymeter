@@ -13,7 +13,7 @@ import {
     type GeminiReply,
 } from '../lib/gemini'
 import { CHAT_FUNCTION_DECLARATIONS, executeChatFunction } from '../lib/ai/functions'
-import { buildModelChain, supportsFunctionCalling, supportsGrounding, markModelExhausted } from '../lib/ai/router'
+import { buildModelChain, supportsFunctionCalling, supportsGrounding, markModelExhausted, markModelCooldown } from '../lib/ai/router'
 import { buildSystemInstruction } from '../lib/ai/prompts'
 import AiMarkdown from '../components/AiMarkdown'
 
@@ -219,16 +219,23 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
                     // 마지막 후보에서는 generateContent 자체의 1회 자동 폴백(flash 전환)을 허용한다.
                     noFallback: !isLast,
                 })
-                if (reply.fellBack) markModelExhausted(candidate)
+                // 내부 자동 폴백은 429 성격을 모르므로 보수적으로 짧은 쿨다운만 건다
+                if (reply.fellBack) markModelCooldown(candidate)
                 return reply
             } catch (err) {
                 if (err instanceof QuotaExceededError) {
-                    markModelExhausted(candidate)
+                    // 일일 소진만 하루 차단, 분당(RPM) 한도는 짧은 쿨다운 후 자동 복구
+                    if (err.scope === 'daily') markModelExhausted(candidate)
+                    else markModelCooldown(candidate, err.retryAfterMs)
                     lastErr = err
                     continue
                 }
                 throw err
             }
+        }
+        if (lastErr instanceof QuotaExceededError && lastErr.scope === 'rate') {
+            const secs = Math.max(5, Math.ceil((lastErr.retryAfterMs ?? 30_000) / 1000))
+            throw new Error(`요청이 잠깐 몰렸어요 (분당 한도). 약 ${secs}초 후에 다시 보내주세요 — 일일 사용량 초과가 아닙니다.`)
         }
         throw lastErr instanceof Error ? lastErr : new Error('모든 모델의 할당량이 초과되었습니다.')
     }

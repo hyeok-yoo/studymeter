@@ -147,14 +147,54 @@ export interface GenerateOptions {
     noFallback?: boolean
 }
 
-/** 쿼터 소진(429)을 라우터가 구분할 수 있게 하는 전용 에러 */
+/**
+ * 쿼터 관련 429 에러. scope 로 성격을 구분한다:
+ *  - 'daily': 일일 무료 한도 소진 — 그날은 그 모델을 쓸 수 없다.
+ *  - 'rate' : 분당 요청 한도(RPM) — 몇 초~몇십 초 후 자동으로 풀린다.
+ * 429 를 무조건 "일일 소진"으로 취급하면 순간적인 요청 몰림만으로 모델이
+ * 하루 종일 차단되므로, 분류가 불확실하면 'rate' 로 본다.
+ */
 export class QuotaExceededError extends Error {
     model: string
-    constructor(model: string) {
-        super(`일일 사용량 초과 (${model})`)
+    scope: 'daily' | 'rate'
+    retryAfterMs?: number
+    constructor(model: string, scope: 'daily' | 'rate' = 'rate', retryAfterMs?: number) {
+        super(scope === 'daily'
+            ? `일일 사용량 초과 (${model})`
+            : `분당 요청 한도 도달 (${model}) — 잠시 후 자동으로 풀립니다`)
         this.name = 'QuotaExceededError'
         this.model = model
+        this.scope = scope
+        this.retryAfterMs = retryAfterMs
     }
+}
+
+/**
+ * Gemini 429 에러 본문에서 쿼터 성격을 분류한다.
+ * QuotaFailure.violations[].quotaId 에 'PerDay' 가 있으면 일일 소진,
+ * RetryInfo.retryDelay 가 있으면 그 시간 후 재시도 가능(분당 한도).
+ */
+function classifyQuotaError(
+    error: unknown,
+): { scope: 'daily' | 'rate'; retryAfterMs?: number } {
+    let scope: 'daily' | 'rate' = 'rate'
+    let retryAfterMs: number | undefined
+    const details = (error as { details?: Array<Record<string, unknown>> })?.details ?? []
+    for (const d of details) {
+        const type = String(d['@type'] ?? '')
+        if (type.includes('QuotaFailure')) {
+            for (const v of (d.violations as Array<{ quotaId?: string }> | undefined) ?? []) {
+                if (/PerDay/i.test(String(v.quotaId ?? ''))) scope = 'daily'
+            }
+        }
+        if (type.includes('RetryInfo') && d.retryDelay) {
+            const secs = parseFloat(String(d.retryDelay).replace(/s$/i, ''))
+            if (Number.isFinite(secs)) retryAfterMs = Math.ceil(secs * 1000)
+        }
+    }
+    const msg = String((error as { message?: string })?.message ?? '')
+    if (/per\s*day|daily/i.test(msg)) scope = 'daily'
+    return { scope, retryAfterMs }
 }
 
 interface ParsedCandidate {
@@ -252,6 +292,9 @@ export async function generateContent(
 
     // 폴백으로 모델이 바뀌면 thinking 파라미터도 그 모델 세대에 맞게 재생성되도록 현재 모델을 추적
     let currentModel = model
+    // 그라운딩(google_search)은 모델 쿼터와 별개의 쿼터를 쓴다.
+    // 그라운딩 쿼터 429 를 모델 소진으로 오인하지 않도록, 429 시 검색만 빼고 재시도한다.
+    let sendGrounding = !!useGrounding
 
     const buildBody = () => {
         const body: Record<string, unknown> = { contents: requestContents }
@@ -259,7 +302,7 @@ export async function generateContent(
             body.systemInstruction = { parts: [{ text: systemInstruction }] }
         }
         const tools: Array<Record<string, unknown>> = []
-        if (useGrounding) tools.push({ google_search: {} })
+        if (sendGrounding) tools.push({ google_search: {} })
         if (functionDeclarations?.length) tools.push({ functionDeclarations })
         if (tools.length) body.tools = tools
         const thinkingConfig = thinkingConfigFor(thinkingLevel, !!useThinking, currentModel)
@@ -269,39 +312,42 @@ export async function generateContent(
         return body
     }
 
-    const call = (m: string) => {
+    const call = async (m: string): Promise<{ status: number; data: Record<string, unknown> & { error?: { code?: number; message?: string } } }> => {
         currentModel = m
-        return fetch(`${API_BASE}/models/${m}:generateContent?key=${encodeURIComponent(apiKey)}`, {
+        const res = await fetch(`${API_BASE}/models/${m}:generateContent?key=${encodeURIComponent(apiKey)}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(buildBody()),
         })
+        const data = await res.json().catch(() => ({}))
+        return { status: res.status, data }
     }
 
     let usedModel = model
     let fellBack = false
-    let res = await call(model)
+    let { status, data } = await call(model)
+    const is429 = () => status === 429 || data.error?.code === 429
 
-    if (res.status === 429 && noFallback) {
-        throw new QuotaExceededError(model)
+    if (is429() && sendGrounding) {
+        sendGrounding = false
+        ;({ status, data } = await call(model))
     }
 
-    if (res.status === 429 && !/flash/i.test(model)) {
+    if (is429() && !noFallback && !/flash/i.test(model)) {
         const models = availableModels ?? (await fetchGeminiModels(apiKey).catch(() => []))
         const fallback = models.find((m) => /flash/i.test(m.name) && m.name !== model)
         if (fallback) {
             usedModel = fallback.name
             fellBack = true
-            res = await call(fallback.name)
+            ;({ status, data } = await call(fallback.name))
         }
     }
 
-    const data = await res.json()
+    if (is429()) {
+        const { scope, retryAfterMs } = classifyQuotaError(data.error)
+        throw new QuotaExceededError(usedModel, scope, retryAfterMs)
+    }
     if (data.error) {
-        if (data.error.code === 429) {
-            if (noFallback) throw new QuotaExceededError(usedModel)
-            throw new Error('일일 사용량이 초과되었습니다. 내일 다시 시도하거나, Pay-as-you-go 가 활성화된 프로젝트의 API 키를 사용해주세요.')
-        }
         throw new Error(`API 오류: ${data.error.message}`)
     }
 
