@@ -24,6 +24,8 @@ import PWAInstallPrompt, {
 import { HelpButton } from '../components/HelpButton'
 import { HOME_PHRASES, getRandomPhrase } from '../lib/phrases'
 import { NativeBridge } from '../lib/NativeBridge'
+import { spring, materialize, staggerContainer, staggerItem } from '../lib/motion'
+import Pressable from '../components/ui/Pressable'
 
 interface HomeProps {
     settings: Settings
@@ -98,16 +100,21 @@ export default function Home({ settings }: HomeProps) {
     }, [])
 
     return (
-        <div className="flex flex-col gap-10">
+        <motion.div
+            className="flex flex-col gap-10"
+            variants={staggerContainer}
+            initial="initial"
+            animate="animate"
+        >
             {/* Header with High Contrast */}
-            <header className="flex flex-col gap-2">
-                <h1 className="text-4xl md:text-5xl font-black tracking-tight text-[var(--color-text)]">
+            <motion.header variants={staggerItem} className="flex flex-col gap-2">
+                <h1 className="text-display text-4xl md:text-5xl font-black text-[var(--color-text)]">
                     안녕하세요, <span className="gradient-text">{settings.userName}</span>님
                 </h1>
                 <p className="text-xl md:text-2xl font-semibold text-[var(--color-text-secondary)] opacity-80">
                     {randomPhrase}
                 </p>
-            </header>
+            </motion.header>
 
             {/* PWA 설치 권유 배너 */}
             <PWAInstallPrompt />
@@ -116,12 +123,20 @@ export default function Home({ settings }: HomeProps) {
             <MorningReportCard settings={settings} />
 
             {/* Hero Stats Card */}
-            <section className="glass-card p-8 md:p-12 flex flex-col items-center justify-center text-center relative overflow-hidden group border-none dark:bg-white/5 bg-white/40">
-                <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 blur-[100px] rounded-full -mr-20 -mt-20"></div>
+            <motion.section
+                variants={materialize}
+                className="glass-card p-8 md:p-14 flex flex-col items-center justify-center text-center relative overflow-hidden"
+            >
+                {/* 은은한 그라디언트 어시스트 — 히어로 숫자 뒤 소프트 글로우 하나만 */}
+                <div
+                    aria-hidden
+                    className="pointer-events-none absolute -top-20 left-1/2 -translate-x-1/2 w-80 h-80 rounded-full"
+                    style={{ background: 'radial-gradient(closest-side, rgba(99,102,241,0.18), transparent)' }}
+                />
 
-                <div className="relative z-10">
-                    <div className="flex items-center justify-center gap-2 mb-6">
-                        <h2 className="text-sm font-black uppercase tracking-[0.2em] text-[var(--color-text-secondary)] opacity-60">Today's Focus Time</h2>
+                <div className="relative z-10 w-full">
+                    <div className="flex items-center justify-center gap-2 mb-8">
+                        <h2 className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--color-text-secondary)]">Today's Focus Time</h2>
                         <HelpButton
                             title="오늘의 집중 시간"
                             items={[
@@ -132,21 +147,27 @@ export default function Home({ settings }: HomeProps) {
                         />
                     </div>
 
-                    <div className="flex flex-col gap-1">
-                        <span className="text-7xl md:text-9xl font-black tracking-tighter tabular-nums gradient-text">
+                    <div className="flex flex-col items-center gap-5">
+                        <span className="text-display text-7xl md:text-[8.5rem] font-black tabular-nums gradient-text leading-none">
                             {formatDuration(todayTotal)}
                         </span>
-                        <div className="h-2 w-24 bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-secondary)] mx-auto rounded-full mt-4"></div>
+                        <div className="h-1.5 w-20 bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-secondary)] rounded-full"></div>
                     </div>
 
-                    <div className="flex flex-wrap justify-center gap-3 mt-10 items-center">
+                    <motion.div
+                        variants={staggerContainer}
+                        initial="initial"
+                        animate="animate"
+                        className="flex flex-wrap justify-center gap-2.5 mt-10 items-center"
+                    >
                         {Array.from(subjectTimes.entries()).map(([subject, times]) => (
-                            <div
+                            <motion.div
                                 key={subject}
-                                className="px-4 py-2 rounded-2xl glass-card-elevated text-xs font-bold border-none bg-white/10"
+                                variants={staggerItem}
+                                className="px-4 py-2 rounded-full glass-card-elevated text-xs font-bold text-[var(--color-text)]"
                             >
                                 {subject} · {formatDuration(times.total)}
-                            </div>
+                            </motion.div>
                         ))}
                         {subjectTimes.size === 0 && (
                             <div className="text-[var(--color-text-secondary)] font-medium opacity-60 italic">
@@ -163,42 +184,44 @@ export default function Home({ settings }: HomeProps) {
                                 ]}
                             />
                         )}
-                    </div>
+                    </motion.div>
                 </div>
-            </section>
+            </motion.section>
 
             {/* Main Actions */}
-            <div className={`grid gap-6 ${showAddBtn ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-1 md:grid-cols-3'}`}>
-                <motion.button
-                    whileHover={{ scale: 1.02, translateY: -4 }}
-                    whileTap={{ scale: 0.95 }}
+            <motion.div
+                variants={staggerItem}
+                className={`grid gap-6 ${showAddBtn ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-1 md:grid-cols-3'}`}
+            >
+                <Pressable
+                    pressScale={0.98}
+                    hoverLift
                     onClick={() => setShowModal(true)}
                     className={`btn btn-primary text-xl font-black py-8 flex flex-col gap-2 group overflow-hidden relative ${showAddBtn ? 'col-span-2 md:col-span-1' : ''}`}
                 >
-                    <Icon icon="mdi:play-circle-outline" className="text-4xl group-hover:scale-125 transition-transform duration-500" />
+                    <Icon icon="mdi:play-circle-outline" className="text-4xl group-hover:scale-110 transition-transform duration-500" />
                     <span>공부 시작하기</span>
-                    <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                </motion.button>
+                </Pressable>
 
-                <motion.button
-                    whileHover={{ scale: 1.02, translateY: -4 }}
-                    whileTap={{ scale: 0.95 }}
+                <Pressable
+                    pressScale={0.98}
+                    hoverLift
                     onClick={() => navigate('/records')}
-                    className="btn btn-glass text-lg font-bold py-8 flex flex-col gap-2 border-none bg-white/40 dark:bg-white/5 relative"
+                    className="btn btn-glass text-lg font-bold py-8 flex flex-col gap-2 relative"
                 >
                     <Icon icon="mdi:chart-bar" className="text-3xl text-indigo-400" />
                     <span>학습 기록 분석</span>
-                </motion.button>
+                </Pressable>
 
-                <motion.button
-                    whileHover={{ scale: 1.02, translateY: -4 }}
-                    whileTap={{ scale: 0.95 }}
+                <Pressable
+                    pressScale={0.98}
+                    hoverLift
                     onClick={() => navigate('/edit-records')}
-                    className="btn btn-glass text-lg font-bold py-8 flex flex-col gap-2 border-none bg-white/40 dark:bg-white/5 relative"
+                    className="btn btn-glass text-lg font-bold py-8 flex flex-col gap-2 relative"
                 >
                     <Icon icon="mdi:pencil-outline" className="text-3xl text-purple-400" />
                     <span>학습 기록 편집</span>
-                </motion.button>
+                </Pressable>
 
                 {/* 홈 화면 추가 버튼 — 웹 브라우저에서만 표시 */}
                 <AnimatePresence>
@@ -207,8 +230,9 @@ export default function Home({ settings }: HomeProps) {
                             initial={{ opacity: 0, scale: 0.9 }}
                             animate={{ opacity: 1, scale: 1 }}
                             exit={{ opacity: 0, scale: 0.9 }}
-                            whileHover={{ scale: 1.02, translateY: -4 }}
-                            whileTap={{ scale: 0.95 }}
+                            whileTap={{ scale: 0.98 }}
+                            whileHover={{ y: -2 }}
+                            transition={spring.snappy}
                             onClick={handleAddToHome}
                             className="btn btn-glass text-lg font-bold py-8 flex flex-col gap-2 border border-indigo-400/30 bg-indigo-500/10 hover:bg-indigo-500/20 relative overflow-hidden"
                         >
@@ -224,7 +248,7 @@ export default function Home({ settings }: HomeProps) {
                         </motion.button>
                     )}
                 </AnimatePresence>
-            </div>
+            </motion.div>
 
             {/* 오늘의 일기 (3초 일기) */}
             <DiaryCard settings={settings} />
@@ -233,23 +257,24 @@ export default function Home({ settings }: HomeProps) {
             <IOSInstallGuide isOpen={showIOSGuide} onClose={() => setShowIOSGuide(false)} />
 
             {/* 개발자 크레딧 */}
-            <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.97 }}
-                onClick={() => navigate('/developer')}
-                className="w-full flex items-center justify-between px-5 py-3.5 rounded-2xl bg-white/5 hover:bg-white/10 dark:bg-white/3 border border-white/10 hover:border-[var(--color-primary)]/30 transition-all group"
-            >
-                <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-xs font-black flex-shrink-0">
-                        Y
+            <motion.div variants={staggerItem}>
+                <Pressable
+                    pressScale={0.98}
+                    onClick={() => navigate('/developer')}
+                    className="w-full flex items-center justify-between px-5 py-3.5 rounded-2xl glass-card-elevated hover:border-[var(--color-primary)]/30 transition-colors group"
+                >
+                    <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-xs font-black flex-shrink-0">
+                            Y
+                        </div>
+                        <div className="text-left">
+                            <p className="text-xs font-black text-[var(--color-text-secondary)] leading-tight">개발자</p>
+                            <p className="text-sm font-bold text-[var(--color-text)] leading-tight">Yoo Seung Hyeok</p>
+                        </div>
                     </div>
-                    <div className="text-left">
-                        <p className="text-xs font-black text-[var(--color-text-secondary)] leading-tight">개발자</p>
-                        <p className="text-sm font-bold text-[var(--color-text)] leading-tight">Yoo Seung Hyeok</p>
-                    </div>
-                </div>
-                <Icon icon="mdi:chevron-right" className="text-lg text-[var(--color-text-secondary)] opacity-40 group-hover:opacity-70 group-hover:translate-x-0.5 transition-all" />
-            </motion.button>
+                    <Icon icon="mdi:chevron-right" className="text-lg text-[var(--color-text-secondary)] opacity-40 group-hover:opacity-70 group-hover:translate-x-0.5 transition-all" />
+                </Pressable>
+            </motion.div>
 
             {showModal && (
                 <StartStudyModal
@@ -262,6 +287,6 @@ export default function Home({ settings }: HomeProps) {
                     }}
                 />
             )}
-        </div>
+        </motion.div>
     )
 }

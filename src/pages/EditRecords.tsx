@@ -6,6 +6,8 @@ import type { Settings, StudySession, DailyRecord, EvalTag } from '../lib/db'
 import { getTopTags, getTagsForScope, recordTagUsage, TAG_CATEGORY_LABELS } from '../lib/tags'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Icon } from '@iconify/react'
+import { spring } from '../lib/motion'
+import Pressable from '../components/ui/Pressable'
 
 interface EditRecordsProps {
     settings: Settings
@@ -320,22 +322,28 @@ export default function EditRecords({ settings }: EditRecordsProps) {
     const handleToday = () => setSelectedDate(getTodayDate())
 
     return (
-        <div className="flex flex-col gap-10">
+        <motion.div
+            className="flex flex-col gap-10"
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={spring.default}
+        >
             <header>
-                <h1 className="text-3xl font-black gradient-text">학습 기록 편집</h1>
+                <h1 className="text-display text-3xl font-black gradient-text">학습 기록 편집</h1>
                 <p className="text-[var(--color-text-secondary)]">일정과 공부 세션을 관리하세요.</p>
             </header>
 
             {/* Date Navigation */}
             <div className="flex items-center justify-center gap-4">
-                <button
+                <Pressable
                     onClick={handlePrevDay}
-                    className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center font-bold transition-all"
+                    pressScale={0.9}
+                    className="w-10 h-10 rounded-full glass-card-elevated flex items-center justify-center font-bold"
                 >
                     <Icon icon="mdi:chevron-left" className="text-2xl" />
-                </button>
+                </Pressable>
                 <div className="flex flex-col items-center">
-                    <span className="text-lg font-bold">{formatDateKorean(selectedDate)}</span>
+                    <span className="text-lg font-bold tabular-nums">{formatDateKorean(selectedDate)}</span>
                     {!isToday && (
                         <button
                             onClick={handleToday}
@@ -345,14 +353,15 @@ export default function EditRecords({ settings }: EditRecordsProps) {
                         </button>
                     )}
                 </div>
-                <button
+                <Pressable
                     onClick={handleNextDay}
                     disabled={isToday}
-                    className={`w-10 h-10 rounded-full flex items-center justify-center font-bold transition-all ${isToday ? 'bg-white/5 opacity-30 cursor-not-allowed' : 'bg-white/10 hover:bg-white/20'
+                    pressScale={0.9}
+                    className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${isToday ? 'bg-white/5 opacity-30 cursor-not-allowed' : 'glass-card-elevated'
                         }`}
                 >
                     <Icon icon="mdi:chevron-right" className="text-2xl" />
-                </button>
+                </Pressable>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -434,28 +443,31 @@ export default function EditRecords({ settings }: EditRecordsProps) {
                                 </select>
                             )}
 
-                            {/* Input Mode Toggle */}
-                            <div className="flex gap-2 p-1 bg-white/5 rounded-xl">
-                                <button
-                                    type="button"
-                                    onClick={() => setInputMode('duration')}
-                                    className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${inputMode === 'duration'
-                                        ? 'bg-indigo-500 text-white shadow-lg'
-                                        : 'text-[var(--color-text-secondary)] hover:bg-white/5'
-                                        }`}
-                                >
-                                    <div className="flex items-center justify-center gap-1"><Icon icon="mdi:timer-outline" className="text-lg" /> 시간 입력</div>
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setInputMode('timeRange')}
-                                    className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${inputMode === 'timeRange'
-                                        ? 'bg-indigo-500 text-white shadow-lg'
-                                        : 'text-[var(--color-text-secondary)] hover:bg-white/5'
-                                        }`}
-                                >
-                                    <div className="flex items-center justify-center gap-1"><Icon icon="mdi:clock-outline" className="text-lg" /> 시작~끝 입력</div>
-                                </button>
+                            {/* Input Mode Toggle — Segmented control */}
+                            <div className="relative flex gap-1 p-1 bg-black/[0.04] dark:bg-white/5 rounded-xl">
+                                {([
+                                    { key: 'duration' as const, icon: 'mdi:timer-outline', label: '시간 입력' },
+                                    { key: 'timeRange' as const, icon: 'mdi:clock-outline', label: '시작~끝 입력' },
+                                ]).map(m => {
+                                    const active = inputMode === m.key
+                                    return (
+                                        <button
+                                            key={m.key}
+                                            type="button"
+                                            onClick={() => setInputMode(m.key)}
+                                            className={`relative flex-1 py-2 rounded-lg text-xs font-bold transition-colors ${active ? 'text-white' : 'text-[var(--color-text-secondary)]'}`}
+                                        >
+                                            {active && (
+                                                <motion.div
+                                                    layoutId="inputModeIndicator"
+                                                    transition={spring.default}
+                                                    className="absolute inset-0 z-0 rounded-lg bg-indigo-500 shadow-lg"
+                                                />
+                                            )}
+                                            <span className="relative z-10 flex items-center justify-center gap-1"><Icon icon={m.icon} className="text-lg" /> {m.label}</span>
+                                        </button>
+                                    )
+                                })}
                             </div>
 
                             {/* Duration Mode */}
@@ -656,9 +668,9 @@ export default function EditRecords({ settings }: EditRecordsProps) {
                             </div>
 
 
-                            <button type="submit" className={`w-full py-3 rounded-xl text-white font-bold text-sm active:scale-95 transition-all shadow-lg ${editingSessionId ? 'bg-indigo-600 hover:bg-indigo-500' : 'bg-indigo-500 hover:bg-indigo-400'}`}>
+                            <Pressable type="submit" pressScale={0.98} className={`w-full py-3.5 rounded-xl text-white font-bold text-sm transition-colors shadow-lg shadow-indigo-500/25 ${editingSessionId ? 'bg-indigo-600 hover:bg-indigo-500' : 'bg-indigo-500 hover:bg-indigo-400'}`}>
                                 {editingSessionId ? '기록 수정 완료' : '기록 추가하기'}
-                            </button>
+                            </Pressable>
                         </form>
                     </section>
                 </div>
@@ -676,7 +688,7 @@ export default function EditRecords({ settings }: EditRecordsProps) {
                     <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2 no-scrollbar">
                         <p className="text-[10px] text-indigo-500 font-bold opacity-60 text-center tracking-tight flex items-center justify-center gap-1"><Icon icon="mdi:lightbulb-on-outline" className="text-lg" /> 내역을 클릭하면 수정, 왼쪽으로 밀면 삭제할 수 있습니다.</p>
                         <AnimatePresence mode="popLayout">
-                            {recentSessions.map((session) => (
+                            {recentSessions.map((session, i) => (
                                 <div key={session.id} className="relative overflow-hidden rounded-[2rem]">
                                     {/* Delete Button */}
                                     <div
@@ -699,11 +711,18 @@ export default function EditRecords({ settings }: EditRecordsProps) {
                                         dragElastic={0.05}
                                         dragMomentum={false}
                                         layout
-                                        initial={{ opacity: 0, scale: 0.95 }}
-                                        animate={{ opacity: 1, scale: 1 }}
+                                        initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                                        animate={{ opacity: 1, scale: 1, y: 0 }}
                                         exit={{ opacity: 0, scale: 0.95, x: -100 }}
+                                        whileTap={{ scale: 0.98 }}
+                                        transition={{
+                                            ...spring.default,
+                                            opacity: { ...spring.default, delay: Math.min(i, 5) * 0.05 },
+                                            y: { ...spring.default, delay: Math.min(i, 5) * 0.05 },
+                                            layout: spring.snappy,
+                                        }}
                                         onClick={() => handleSelectSession(session)}
-                                        className={`relative glass-card-solid p-4 flex items-center justify-between group cursor-pointer transition-all hover:border-indigo-500/50 ${editingSessionId === session.id ? 'ring-2 ring-indigo-500 border-transparent shadow-xl' : ''}`}
+                                        className={`relative glass-card-solid p-4 flex items-center justify-between group cursor-pointer transition-colors hover:border-indigo-500/50 ${editingSessionId === session.id ? 'ring-2 ring-indigo-500 border-transparent shadow-xl' : ''}`}
                                     >
                                         <div className="flex flex-col gap-1">
                                             <div className="flex items-center gap-2">
@@ -801,6 +820,6 @@ export default function EditRecords({ settings }: EditRecordsProps) {
                     </div>
                 )}
             </AnimatePresence>
-        </div>
+        </motion.div>
     )
 }
