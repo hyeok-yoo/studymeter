@@ -97,7 +97,6 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
     const [advancedMode, setAdvancedMode] = useState(!!settings.advancedMode)
     const [aiAmbientEnabled, setAiAmbientEnabled] = useState(settings.aiAmbientEnabled ?? true)
     const [morningReportEnabled, setMorningReportEnabled] = useState(settings.morningReportEnabled ?? true)
-    const [morningReportHour, setMorningReportHour] = useState(settings.morningReportHour ?? 7)
     const [aiRoleModels, setAiRoleModels] = useState<Partial<Record<AiRole, string>>>(settings.aiRoleModels ?? {})
     const [aiSystemPromptsState, setAiSystemPromptsState] = useState<Record<PromptKey, string>>(() => {
         const init = {} as Record<PromptKey, string>
@@ -265,12 +264,6 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
         onSettingsChange({ ...settings, morningReportEnabled: next })
     }
 
-    const handleMorningReportHourChange = (hour: number) => {
-        setMorningReportHour(hour)
-        db.settings.update(settings.id!, { morningReportHour: hour })
-        onSettingsChange({ ...settings, morningReportHour: hour })
-    }
-
     // ── 평가 태그 관리 핸들러 ────────────────────────────────────────────────
     const handleToggleTagHidden = (idx: number) => {
         setEvalTagsState(prev => {
@@ -400,7 +393,6 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
             advancedMode,
             aiAmbientEnabled,
             morningReportEnabled,
-            morningReportHour,
             aiRoleModels: Object.keys(roleModelOverrides).length > 0 ? roleModelOverrides : undefined,
             aiSystemPrompts: Object.keys(promptOverrides).length > 0 ? promptOverrides : undefined,
             evalTags: evalTagsDirty ? evalTagsState : settings.evalTags,
@@ -832,23 +824,12 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                     </div>
 
                     <div className="pt-3 border-t border-[var(--color-border)] flex items-center justify-between gap-4">
-                        <label className="text-sm font-medium">아침 리포트</label>
+                        <div className="flex-1 min-w-0">
+                            <label className="text-sm font-medium">아침 리포트</label>
+                            <p className="text-xs text-[var(--color-text-secondary)] mt-1">그날 처음 앱을 열 때 홈 화면에 어제·주간 분석을 자동으로 준비합니다. (백그라운드 실행·알림 없음)</p>
+                        </div>
                         <ToggleSwitch enabled={morningReportEnabled} onChange={handleToggleMorningReport} />
                     </div>
-                    {morningReportEnabled && (
-                        <div className="flex items-center gap-3">
-                            <span className="text-xs text-[var(--color-text-secondary)]">알림 시각</span>
-                            <select
-                                value={morningReportHour}
-                                onChange={(e) => handleMorningReportHourChange(Number(e.target.value))}
-                                className="px-4 py-2 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)] text-sm"
-                            >
-                                {Array.from({ length: 24 }).map((_, h) => (
-                                    <option key={h} value={h}>{h}시</option>
-                                ))}
-                            </select>
-                        </div>
-                    )}
                 </div>
 
                 {/* 역할별 모델 오버라이드 (고급 모드) */}
