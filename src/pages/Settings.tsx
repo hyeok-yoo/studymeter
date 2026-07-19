@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Icon } from '@iconify/react'
-import type { Settings, SubjectItem } from '../lib/db'
+import type { Settings, SubjectItem, AiRole, EvalTag, AiSystemPrompts } from '../lib/db'
 import { db } from '../lib/db'
 import { exportBackup, importBackup } from '../lib/backup'
 import { useModal } from '../lib/ModalContext'
@@ -13,6 +13,39 @@ import { HelpButton } from '../components/HelpButton'
 import DevAccessModal from '../components/DevAccessModal'
 import { isOwner } from '../lib/telemetry'
 import { fetchGeminiModels, type GeminiModel } from '../lib/gemini'
+import { PROMPT_LABELS, DEFAULT_PROMPTS, getPrompt, type PromptKey } from '../lib/ai/prompts'
+import { getModelList, isModelExhausted } from '../lib/ai/router'
+import { getTodayUsage } from '../lib/ai/budget'
+import { DEFAULT_EVAL_TAGS, TAG_CATEGORY_LABELS } from '../lib/tags'
+
+// ── 작은 토글 스위치 (고급 모드/앰비언트 AI 등에서 재사용) ──────────────────────
+function ToggleSwitch({ enabled, onChange }: { enabled: boolean; onChange: () => void }) {
+    return (
+        <button
+            type="button"
+            role="switch"
+            aria-checked={enabled}
+            onClick={onChange}
+            className="relative flex-shrink-0 w-12 h-7 rounded-full transition-colors duration-300"
+            style={{ background: enabled ? '#6366f1' : 'rgba(255,255,255,0.15)' }}
+        >
+            <motion.div
+                className="absolute top-1 left-1 w-5 h-5 rounded-full bg-white shadow-md"
+                animate={{ x: enabled ? 20 : 0 }}
+                transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+            />
+        </button>
+    )
+}
+
+const ROLE_ROWS: Array<{ role: AiRole; label: string; autoLabel: string }> = [
+    { role: 'deep', label: '심층 분석', autoLabel: '자동 (추천: gemini-flash-latest)' },
+    { role: 'interactive', label: '대화·기록', autoLabel: '자동 (추천: gemini-flash-lite-latest)' },
+    { role: 'ambient', label: '백그라운드 코멘트', autoLabel: '자동 (추천: Gemma 4 31B)' },
+]
+
+const TAG_CATEGORY_ORDER: EvalTag['category'][] = ['obstacle', 'condition', 'good', 'context', 'day']
+const TAG_SCOPE_LABELS: Record<EvalTag['scope'], string> = { session: '세션', day: '하루', both: '양쪽' }
 
 interface SettingsPageProps {
     settings: Settings
@@ -59,6 +92,33 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
     const backupInputRef = useRef<HTMLInputElement>(null)
     const [exporting, setExporting] = useState(false)
     const [importing, setImporting] = useState(false)
+
+    // ── AI 통합 설정 ──────────────────────────────────────────────────────────
+    const [advancedMode, setAdvancedMode] = useState(!!settings.advancedMode)
+    const [aiAmbientEnabled, setAiAmbientEnabled] = useState(settings.aiAmbientEnabled ?? true)
+    const [morningReportEnabled, setMorningReportEnabled] = useState(settings.morningReportEnabled ?? true)
+    const [morningReportHour, setMorningReportHour] = useState(settings.morningReportHour ?? 7)
+    const [aiRoleModels, setAiRoleModels] = useState<Partial<Record<AiRole, string>>>(settings.aiRoleModels ?? {})
+    const [aiSystemPromptsState, setAiSystemPromptsState] = useState<Record<PromptKey, string>>(() => {
+        const init = {} as Record<PromptKey, string>
+        for (const key of Object.keys(PROMPT_LABELS) as PromptKey[]) {
+            init[key] = getPrompt(settings, key)
+        }
+        return init
+    })
+    const [roleModelList, setRoleModelList] = useState<GeminiModel[]>([])
+    const [loadingRoleModels, setLoadingRoleModels] = useState(false)
+
+    // ── 평가 태그 관리 ────────────────────────────────────────────────────────
+    const [evalTagsState, setEvalTagsState] = useState<EvalTag[]>(() =>
+        settings.evalTags && settings.evalTags.length > 0
+            ? settings.evalTags.map(t => ({ ...t }))
+            : DEFAULT_EVAL_TAGS.map(t => ({ ...t }))
+    )
+    const [evalTagsDirty, setEvalTagsDirty] = useState(false)
+    const [newTagName, setNewTagName] = useState('')
+    const [newTagCategory, setNewTagCategory] = useState<EvalTag['category']>('obstacle')
+    const [newTagScope, setNewTagScope] = useState<EvalTag['scope']>('both')
 
     // 숨겨진 개발자 진입: 버전명 5회 탭
     const [showDevAccess, setShowDevAccess] = useState(false)
@@ -169,6 +229,79 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
         }
     }, [geminiModels, geminiModel])
 
+    // 역할별 모델 오버라이드용 목록 (라우터의 캐시를 그대로 사용/예열)
+    useEffect(() => {
+        if (!geminiApiKey || geminiApiKey.length < 10) {
+            setRoleModelList([])
+            return
+        }
+        let cancelled = false
+        setLoadingRoleModels(true)
+        getModelList(geminiApiKey)
+            .then((models) => { if (!cancelled) setRoleModelList(models) })
+            .finally(() => { if (!cancelled) setLoadingRoleModels(false) })
+        return () => { cancelled = true }
+    }, [geminiApiKey])
+
+    // 고급 모드 / 앰비언트 AI / 아침 리포트 토글은 즉시 저장 (테마 토글과 동일한 패턴)
+    const handleToggleAdvancedMode = () => {
+        const next = !advancedMode
+        setAdvancedMode(next)
+        db.settings.update(settings.id!, { advancedMode: next })
+        onSettingsChange({ ...settings, advancedMode: next })
+    }
+
+    const handleToggleAmbient = () => {
+        const next = !aiAmbientEnabled
+        setAiAmbientEnabled(next)
+        db.settings.update(settings.id!, { aiAmbientEnabled: next })
+        onSettingsChange({ ...settings, aiAmbientEnabled: next })
+    }
+
+    const handleToggleMorningReport = () => {
+        const next = !morningReportEnabled
+        setMorningReportEnabled(next)
+        db.settings.update(settings.id!, { morningReportEnabled: next })
+        onSettingsChange({ ...settings, morningReportEnabled: next })
+    }
+
+    const handleMorningReportHourChange = (hour: number) => {
+        setMorningReportHour(hour)
+        db.settings.update(settings.id!, { morningReportHour: hour })
+        onSettingsChange({ ...settings, morningReportHour: hour })
+    }
+
+    // ── 평가 태그 관리 핸들러 ────────────────────────────────────────────────
+    const handleToggleTagHidden = (idx: number) => {
+        setEvalTagsState(prev => {
+            const next = [...prev]
+            next[idx] = { ...next[idx], hidden: !next[idx].hidden }
+            return next
+        })
+        setEvalTagsDirty(true)
+    }
+
+    const handleRemoveCustomTag = async (idx: number) => {
+        const tag = evalTagsState[idx]
+        const confirmed = await showConfirm('태그 삭제', `'${tag.name}' 태그를 삭제하시겠습니까?`)
+        if (!confirmed) return
+        setEvalTagsState(prev => prev.filter((_, i) => i !== idx))
+        setEvalTagsDirty(true)
+    }
+
+    const handleAddTag = () => {
+        const name = newTagName.trim()
+        if (!name) return
+        setEvalTagsState(prev => [...prev, { name, category: newTagCategory, scope: newTagScope, custom: true }])
+        setEvalTagsDirty(true)
+        setNewTagName('')
+    }
+
+    const handleRestoreDefaultTags = () => {
+        setEvalTagsState(prev => prev.map(t => t.custom ? t : { ...t, hidden: false }))
+        setEvalTagsDirty(true)
+    }
+
     // Handle profile picture upload
     const handleProfilePictureChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0]
@@ -237,6 +370,22 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
     const handleSave = async () => {
         const goalHours = parseFloat(dailyGoalHours)
         const drowsySec = parseInt(drowsinessSec, 10)
+
+        // 역할별 모델 오버라이드: 빈 값은 저장하지 않는다 (= 자동)
+        const roleModelOverrides: Partial<Record<AiRole, string>> = {}
+        for (const { role } of ROLE_ROWS) {
+            const v = (aiRoleModels[role] || '').trim()
+            if (v) roleModelOverrides[role] = v
+        }
+
+        // 시스템 프롬프트: 기본값과 동일하거나 공백이면 저장하지 않는다 (= 기본값 사용)
+        const promptOverrides: AiSystemPrompts = {}
+        for (const key of Object.keys(PROMPT_LABELS) as PromptKey[]) {
+            const val = (aiSystemPromptsState[key] || '').trim()
+            const def = DEFAULT_PROMPTS[key].trim()
+            if (val && val !== def) promptOverrides[key] = val
+        }
+
         const newSettings: Settings = {
             ...settings,
             userName,
@@ -247,10 +396,17 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
             theme,
             profilePicture: profilePicture || undefined,
             dailyGoalMs: (!isNaN(goalHours) && goalHours > 0) ? Math.round(goalHours * 3600000) : undefined,
-            drowsinessThresholdSec: (!isNaN(drowsySec) && drowsySec > 0) ? Math.min(120, Math.max(3, drowsySec)) : 15
+            drowsinessThresholdSec: (!isNaN(drowsySec) && drowsySec > 0) ? Math.min(120, Math.max(3, drowsySec)) : 15,
+            advancedMode,
+            aiAmbientEnabled,
+            morningReportEnabled,
+            morningReportHour,
+            aiRoleModels: Object.keys(roleModelOverrides).length > 0 ? roleModelOverrides : undefined,
+            aiSystemPrompts: Object.keys(promptOverrides).length > 0 ? promptOverrides : undefined,
+            evalTags: evalTagsDirty ? evalTagsState : settings.evalTags,
         }
 
-        await db.settings.update(settings.id!, newSettings as any)
+        await db.settings.put(newSettings)
         onSettingsChange(newSettings)
 
         // Apply theme
@@ -646,6 +802,278 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                             </div>
                         )
                     })()}
+                </div>
+
+                {/* 고급 모드 */}
+                <div className="glass-card p-6">
+                    <div className="flex items-center justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                                <label className="text-sm font-medium">고급 모드</label>
+                                <HelpButton title="고급 모드" items={[
+                                    { description: '역할별 AI 모델 오버라이드, 시스템 프롬프트 편집, AI 사용량 표시를 노출합니다.' },
+                                    { title: '누구를 위한 기능?', description: '기본값만으로도 충분히 잘 동작합니다. 세부적으로 모델을 고르거나 프롬프트를 튜닝하고 싶을 때만 켜세요.' },
+                                ]} />
+                            </div>
+                            <p className="text-xs text-[var(--color-text-secondary)] mt-1">역할별 모델·시스템 프롬프트 편집 노출</p>
+                        </div>
+                        <ToggleSwitch enabled={advancedMode} onChange={handleToggleAdvancedMode} />
+                    </div>
+                </div>
+
+                {/* 앰비언트 AI / 아침 리포트 */}
+                <div className="glass-card p-6 space-y-4">
+                    <div className="flex items-center justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                            <label className="text-sm font-medium">앰비언트 AI</label>
+                            <p className="text-xs text-[var(--color-text-secondary)] mt-1">아침 리포트·일기 답장·세션 코멘트를 자동 생성합니다.</p>
+                        </div>
+                        <ToggleSwitch enabled={aiAmbientEnabled} onChange={handleToggleAmbient} />
+                    </div>
+
+                    <div className="pt-3 border-t border-[var(--color-border)] flex items-center justify-between gap-4">
+                        <label className="text-sm font-medium">아침 리포트</label>
+                        <ToggleSwitch enabled={morningReportEnabled} onChange={handleToggleMorningReport} />
+                    </div>
+                    {morningReportEnabled && (
+                        <div className="flex items-center gap-3">
+                            <span className="text-xs text-[var(--color-text-secondary)]">알림 시각</span>
+                            <select
+                                value={morningReportHour}
+                                onChange={(e) => handleMorningReportHourChange(Number(e.target.value))}
+                                className="px-4 py-2 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)] text-sm"
+                            >
+                                {Array.from({ length: 24 }).map((_, h) => (
+                                    <option key={h} value={h}>{h}시</option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
+                </div>
+
+                {/* 역할별 모델 오버라이드 (고급 모드) */}
+                {advancedMode && (
+                    <div className="glass-card p-6 space-y-4">
+                        <div className="flex items-center justify-between">
+                            <label className="text-sm font-medium">역할별 모델 오버라이드</label>
+                            {loadingRoleModels && <span className="text-[10px] text-[var(--color-text-secondary)] animate-pulse">동기화 중...</span>}
+                        </div>
+                        <p className="text-xs text-[var(--color-text-secondary)]">비워두면 역할에 맞는 모델이 자동으로 선택됩니다.</p>
+
+                        {ROLE_ROWS.map(({ role, label, autoLabel }) => (
+                            <div key={role}>
+                                <p className="text-xs font-medium text-[var(--color-text-secondary)] mb-1.5">{label}</p>
+                                {roleModelList.length > 0 ? (
+                                    <select
+                                        value={aiRoleModels[role] || ''}
+                                        onChange={(e) => setAiRoleModels(prev => ({ ...prev, [role]: e.target.value }))}
+                                        className="w-full px-4 py-2.5 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)] text-sm"
+                                    >
+                                        <option value="">{autoLabel}</option>
+                                        {roleModelList.map((m) => (
+                                            <option key={m.name} value={m.name}>
+                                                {m.displayName}{isModelExhausted(m.name) ? ' · 오늘 소진' : ''}
+                                            </option>
+                                        ))}
+                                    </select>
+                                ) : (
+                                    <input
+                                        type="text"
+                                        value={aiRoleModels[role] || ''}
+                                        onChange={(e) => setAiRoleModels(prev => ({ ...prev, [role]: e.target.value }))}
+                                        placeholder={autoLabel}
+                                        className="w-full px-4 py-2.5 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)] text-sm font-mono"
+                                    />
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                )}
+
+                {/* 오늘 AI 사용량 (고급 모드) */}
+                {advancedMode && (() => {
+                    const usage = getTodayUsage()
+                    const kindEntries = Object.entries(usage.byKind)
+                    const modelEntries = Object.entries(usage.byModel)
+                    return (
+                        <div className="glass-card p-6 space-y-3">
+                            <label className="text-sm font-medium">오늘 AI 사용량</label>
+                            {kindEntries.length === 0 && modelEntries.length === 0 ? (
+                                <p className="text-xs text-[var(--color-text-secondary)]">오늘 아직 AI 호출 기록이 없습니다.</p>
+                            ) : (
+                                <>
+                                    {kindEntries.length > 0 && (
+                                        <div>
+                                            <p className="text-[10px] text-[var(--color-text-secondary)] mb-1.5 opacity-70">기능별</p>
+                                            <div className="flex flex-wrap gap-1.5">
+                                                {kindEntries.map(([kind, count]) => (
+                                                    <span key={kind} className="text-[10px] font-medium px-2 py-1 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-400/20">
+                                                        {kind} × {count}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                    {modelEntries.length > 0 && (
+                                        <div>
+                                            <p className="text-[10px] text-[var(--color-text-secondary)] mb-1.5 opacity-70">모델별</p>
+                                            <div className="flex flex-wrap gap-1.5">
+                                                {modelEntries.map(([model, count]) => (
+                                                    <span key={model} className="text-[10px] font-medium px-2 py-1 rounded-full bg-purple-500/10 text-purple-400 border border-purple-400/20 font-mono">
+                                                        {model} × {count}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </div>
+                    )
+                })()}
+
+                {/* 시스템 프롬프트 편집 (고급 모드) */}
+                {advancedMode && (
+                    <div className="glass-card p-6 space-y-3">
+                        <div className="flex items-center gap-2">
+                            <label className="text-sm font-medium">시스템 프롬프트 편집</label>
+                            <HelpButton title="시스템 프롬프트 편집" items={[
+                                { description: 'AI 기능별로 실제 전달되는 시스템 지시문을 직접 확인하고 수정할 수 있습니다.' },
+                                { title: '공통 페르소나', description: '모든 AI 기능 앞에 항상 붙는 공통 말투 지시입니다.' },
+                                { title: '기본값 복원', description: '수정한 내용을 앱 기본 프롬프트로 되돌립니다. 비워두거나 기본값과 같으면 저장 시 자동으로 기본값을 사용합니다.' },
+                            ]} />
+                        </div>
+                        {(Object.keys(PROMPT_LABELS) as PromptKey[]).map((key) => {
+                            const current = aiSystemPromptsState[key] ?? ''
+                            const isModified = current.trim() !== DEFAULT_PROMPTS[key].trim()
+                            return (
+                                <details key={key} className="rounded-xl bg-white/5 border border-white/5 p-3">
+                                    <summary className="cursor-pointer text-sm font-medium flex items-center gap-2 select-none">
+                                        {isModified && <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 flex-shrink-0" />}
+                                        {PROMPT_LABELS[key]}
+                                    </summary>
+                                    <textarea
+                                        value={current}
+                                        onChange={(e) => setAiSystemPromptsState(prev => ({ ...prev, [key]: e.target.value }))}
+                                        rows={6}
+                                        className="w-full mt-3 px-3 py-2 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] text-xs font-mono text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+                                    />
+                                    <div className="flex justify-end mt-2">
+                                        <button
+                                            onClick={() => setAiSystemPromptsState(prev => ({ ...prev, [key]: DEFAULT_PROMPTS[key] }))}
+                                            className="text-[10px] px-2 py-1 rounded-md bg-white/5 hover:bg-white/10 transition-all"
+                                        >
+                                            기본값 복원
+                                        </button>
+                                    </div>
+                                </details>
+                            )
+                        })}
+                    </div>
+                )}
+
+                {/* 평가 태그 관리 */}
+                <div className="glass-card p-6 space-y-4">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <label className="text-sm font-medium">평가 태그 관리</label>
+                            <HelpButton title="평가 태그 관리" items={[
+                                { description: '세션 평가와 하루 일기에서 선택하는 태그 목록입니다. 필요 없는 태그는 숨기고, 원하는 태그를 직접 추가할 수 있습니다.' },
+                                { title: '숨기기', description: '기본 태그는 삭제할 수 없지만 숨겨서 목록에서 보이지 않게 할 수 있습니다.' },
+                                { title: '커스텀 태그', description: '직접 추가한 태그는 삭제할 수 있습니다.' },
+                            ]} />
+                        </div>
+                        <button
+                            onClick={handleRestoreDefaultTags}
+                            className="text-xs px-3 py-1.5 rounded-lg bg-indigo-500/10 text-indigo-500 font-bold hover:bg-indigo-500/20 transition-all"
+                        >
+                            기본 태그 복원
+                        </button>
+                    </div>
+
+                    <div className="space-y-4">
+                        {TAG_CATEGORY_ORDER.map((cat) => {
+                            const rows = evalTagsState
+                                .map((tag, idx) => ({ tag, idx }))
+                                .filter(({ tag }) => tag.category === cat)
+                            if (rows.length === 0) return null
+                            return (
+                                <div key={cat}>
+                                    <p className="text-[10px] font-bold text-[var(--color-text-secondary)] opacity-70 mb-1.5">{TAG_CATEGORY_LABELS[cat]}</p>
+                                    <div className="flex flex-wrap gap-2">
+                                        {rows.map(({ tag, idx }) => (
+                                            <div
+                                                key={`${tag.name}-${idx}`}
+                                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${tag.hidden
+                                                    ? 'bg-white/5 text-[var(--color-text-secondary)] border-white/5 opacity-50'
+                                                    : 'bg-indigo-500/10 text-indigo-300 border-indigo-500/20'
+                                                    }`}
+                                            >
+                                                <span>{tag.name}</span>
+                                                {tag.custom && (
+                                                    <span className="text-[9px] px-1 py-0.5 rounded bg-white/10 opacity-70">커스텀</span>
+                                                )}
+                                                <button
+                                                    onClick={() => handleToggleTagHidden(idx)}
+                                                    className="opacity-60 hover:opacity-100 flex items-center justify-center p-0.5"
+                                                    title={tag.hidden ? '보이기' : '숨기기'}
+                                                >
+                                                    <Icon icon={tag.hidden ? 'mdi:eye-off-outline' : 'mdi:eye-outline'} className="text-sm" />
+                                                </button>
+                                                {tag.custom && (
+                                                    <button
+                                                        onClick={() => handleRemoveCustomTag(idx)}
+                                                        className="opacity-60 hover:opacity-100 flex items-center justify-center p-0.5"
+                                                        title="삭제"
+                                                    >
+                                                        <Icon icon="mdi:close" className="text-sm" />
+                                                    </button>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )
+                        })}
+                    </div>
+
+                    <div className="pt-3 border-t border-[var(--color-border)] space-y-2">
+                        <p className="text-xs font-medium text-[var(--color-text-secondary)]">커스텀 태그 추가</p>
+                        <div className="flex flex-wrap gap-2">
+                            <input
+                                type="text"
+                                value={newTagName}
+                                onChange={(e) => setNewTagName(e.target.value)}
+                                placeholder="태그 이름"
+                                className="flex-1 min-w-[120px] px-3 py-2 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)] text-sm"
+                            />
+                            <select
+                                value={newTagCategory}
+                                onChange={(e) => setNewTagCategory(e.target.value as EvalTag['category'])}
+                                className="px-3 py-2 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)] text-sm"
+                            >
+                                {TAG_CATEGORY_ORDER.map((cat) => (
+                                    <option key={cat} value={cat}>{TAG_CATEGORY_LABELS[cat]}</option>
+                                ))}
+                            </select>
+                            <select
+                                value={newTagScope}
+                                onChange={(e) => setNewTagScope(e.target.value as EvalTag['scope'])}
+                                className="px-3 py-2 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)] text-sm"
+                            >
+                                {(Object.keys(TAG_SCOPE_LABELS) as Array<EvalTag['scope']>).map((scope) => (
+                                    <option key={scope} value={scope}>{TAG_SCOPE_LABELS[scope]}</option>
+                                ))}
+                            </select>
+                            <button
+                                onClick={handleAddTag}
+                                disabled={!newTagName.trim()}
+                                className="px-4 py-2 rounded-lg bg-indigo-500/10 text-indigo-400 font-medium text-sm hover:bg-indigo-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                                + 추가
+                            </button>
+                        </div>
+                    </div>
                 </div>
 
                 {/* 태블릿 자체 측정 설정 */}

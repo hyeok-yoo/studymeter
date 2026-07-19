@@ -8,7 +8,14 @@ interface NowBarPlugin {
     updateNowBar(options: { subject: string; startTime: number; isRunning: boolean; totalStudyMs: number; subjectStudyMs: number }): Promise<void>;
     checkPermissions(): Promise<{ display: PermissionState }>;
     requestPermissions(): Promise<{ display: PermissionState }>;
+    consumePendingActions(): Promise<{ actions: { action: string; at: number }[] }>;
     addListener(eventName: 'timerAction', listenerFunc: (info: { action: string }) => void): Promise<import('@capacitor/core').PluginListenerHandle>;
+}
+
+/** 알림 버튼으로 큐잉된 대기 액션 (버튼 누른 시각 at 포함) */
+export interface PendingTimerAction {
+    action: string;
+    at: number;
 }
 
 const NowBar = registerPlugin<NowBarPlugin>('NowBar');
@@ -157,6 +164,22 @@ export const NativeBridge = {
         } catch (e) {
             console.error('getRingerMode failed', e);
             return 'normal';
+        }
+    },
+
+    /**
+     * 서비스가 영속화한 대기 알림 액션 큐를 소비(읽고 비움)한다.
+     * WebView가 frozen인 동안 눌린 버튼들을 앱 재개 시 소급 반영하기 위한 경로.
+     * 비네이티브/실패 시 빈 배열을 반환한다.
+     */
+    async consumePendingActions(): Promise<PendingTimerAction[]> {
+        if (!this.isNative()) return [];
+        try {
+            const res = await NowBar.consumePendingActions();
+            return res?.actions ?? [];
+        } catch (e) {
+            console.error('consumePendingActions failed', e);
+            return [];
         }
     },
 

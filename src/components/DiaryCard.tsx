@@ -1,0 +1,97 @@
+/**
+ * DiaryCard.tsx — 홈 화면 "3초 일기" 카드.
+ *
+ * 오늘(getTodayDate) 일기의 상태를 보여준다.
+ *  - 미확정: 자동 통계 + 프리셋 점수 + 승계 태그 + AI 초안을 담은 편집 폼(DiaryEditor).
+ *  - 확정됨: 컴팩트 뷰(DiaryEntryView), [수정] 탭 시 편집 폼 재진입.
+ * 공부 0분인 날도 통계 0으로 표시하며 작성 가능하다.
+ */
+import { useState, useEffect } from 'react'
+import { Icon } from '@iconify/react'
+import type { DiaryEntry, DiaryStats, Settings } from '../lib/db'
+import {
+    getTodayDate,
+    getDiaryEntry,
+    computeDiaryStats,
+    collectSessionTags,
+} from '../lib/db'
+import { generateDiaryDraft } from '../lib/ai/aiService'
+import { DiaryEditor, DiaryEntryView } from './DiaryEditModal'
+
+interface DiaryCardProps {
+    settings: Settings
+}
+
+export default function DiaryCard({ settings }: DiaryCardProps) {
+    const today = getTodayDate()
+    const [loading, setLoading] = useState(true)
+    const [entry, setEntry] = useState<DiaryEntry | undefined>(undefined)
+    const [stats, setStats] = useState<DiaryStats | null>(null)
+    const [inheritedTags, setInheritedTags] = useState<string[]>([])
+    const [draft, setDraft] = useState('')
+    const [editing, setEditing] = useState(false)
+
+    useEffect(() => {
+        let cancelled = false
+        ;(async () => {
+            const [e, s, tags] = await Promise.all([
+                getDiaryEntry(today),
+                computeDiaryStats(today, settings.dailyGoalMs),
+                collectSessionTags(today),
+            ])
+            if (cancelled) return
+            setEntry(e)
+            setStats(s)
+            setInheritedTags(tags)
+            setLoading(false)
+            // 초안은 항상 성공(규칙 기반 폴백). 편집 진입 대비 미리 확보.
+            const d = await generateDiaryDraft(settings, today, s)
+            if (!cancelled) setDraft(d)
+        })()
+        return () => { cancelled = true }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [today])
+
+    const reload = async () => {
+        const e = await getDiaryEntry(today)
+        setEntry(e)
+        setEditing(false)
+    }
+
+    return (
+        <section className="glass-card p-6 md:p-8 border-none dark:bg-white/5 bg-white/40">
+            <div className="flex items-center gap-2 mb-5">
+                <Icon icon="mdi:notebook-heart-outline" className="text-2xl text-indigo-400" />
+                <h2 className="text-lg font-black text-[var(--color-text)]">오늘의 일기</h2>
+                {entry && !editing && (
+                    <span className="ml-auto text-[11px] font-bold text-emerald-400 flex items-center gap-1">
+                        <Icon icon="mdi:check-circle" className="text-sm" /> 확정됨
+                    </span>
+                )}
+            </div>
+
+            {loading || !stats ? (
+                <div className="space-y-3 animate-pulse">
+                    <div className="grid grid-cols-4 gap-2">
+                        {[0, 1, 2, 3].map(i => <div key={i} className="h-16 rounded-xl bg-white/5" />)}
+                    </div>
+                    <div className="h-11 rounded-lg bg-white/5" />
+                    <div className="h-12 rounded-2xl bg-white/5" />
+                </div>
+            ) : entry && !editing ? (
+                <DiaryEntryView entry={entry} onEdit={() => setEditing(true)} />
+            ) : (
+                <DiaryEditor
+                    date={today}
+                    settings={settings}
+                    stats={stats}
+                    existing={entry}
+                    initialDraft={draft}
+                    inheritedTags={inheritedTags}
+                    onSaved={reload}
+                    onCancel={entry ? () => setEditing(false) : undefined}
+                />
+            )}
+        </section>
+    )
+}

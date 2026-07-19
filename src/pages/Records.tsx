@@ -1,9 +1,12 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
-import { db, formatDuration, formatDateYYYYMMDD, formatDurationHourMinute, getMonday, getSunday, getStudyToday } from '../lib/db'
-import type { StudySession, DailyRecord } from '../lib/db'
+import { db, formatDuration, formatDateYYYYMMDD, formatDurationHourMinute, formatTimeHHMM, getMonday, getSunday, getStudyToday, getTodayDate, getDiaryRange, computeDiaryStats, collectSessionTags, getEvalScore } from '../lib/db'
+import type { StudySession, DailyRecord, DiaryEntry, Settings } from '../lib/db'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LabelList } from 'recharts'
 import { Icon } from '@iconify/react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { HelpButton } from '../components/HelpButton'
+import { generateDiaryDraft } from '../lib/ai/aiService'
+import DiaryEditModal, { DiaryEntryView } from '../components/DiaryEditModal'
 
 const COLORS = ['#6366f1', '#a855f7', '#06b6d4', '#10b981', '#f59e0b', '#ef4444']
 
@@ -40,6 +43,7 @@ export default function Records() {
     const [pieData, setPieData] = useState<{ name: string; value: number }[]>([])
     const [calendarData, setCalendarData] = useState<Map<string, { total: number; selfStudy: number }>>(new Map())
     const [dailyRecord, setDailyRecord] = useState<DailyRecord | null>(null)
+    const [mainTab, setMainTab] = useState<'stats' | 'diary'>('stats')
 
     // Calculate date range based on viewMode and offset
     const dateRange = useMemo(() => {
@@ -187,6 +191,29 @@ export default function Records() {
 
     return (
         <div className="animate-fade-in max-w-6xl mx-auto">
+            {/* 통계 / 일기 전환 */}
+            <div className="flex gap-2 mb-6">
+                <button
+                    onClick={() => setMainTab('stats')}
+                    className={`px-5 py-2.5 rounded-2xl text-sm font-bold transition-all flex items-center gap-2 ${mainTab === 'stats'
+                        ? 'bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-secondary)] text-white'
+                        : 'bg-[var(--color-surface)] text-[var(--color-text-secondary)]'
+                        }`}
+                >
+                    <Icon icon="mdi:chart-bar" className="text-lg" /> 통계
+                </button>
+                <button
+                    onClick={() => setMainTab('diary')}
+                    className={`px-5 py-2.5 rounded-2xl text-sm font-bold transition-all flex items-center gap-2 ${mainTab === 'diary'
+                        ? 'bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-secondary)] text-white'
+                        : 'bg-[var(--color-surface)] text-[var(--color-text-secondary)]'
+                        }`}
+                >
+                    <Icon icon="mdi:notebook-heart-outline" className="text-lg" /> 일기
+                </button>
+            </div>
+
+            {mainTab === 'diary' ? <DiaryTab /> : (<>
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
                 <div className="flex flex-col gap-1">
                     <div className="flex items-center gap-2">
@@ -518,19 +545,23 @@ export default function Records() {
                                     <p className="text-[10px] text-[var(--color-text-secondary)]">{session.date}</p>
                                 </div>
                             </div>
-                            {/* Evaluation Badges */}
+                            {/* Evaluation Badges — 신형(단일 score+tags)·구형(focus/satisfaction) 모두 지원 */}
                             {session.evaluation && (
-                                <div className="flex items-center gap-3 pt-1 border-t border-white/5">
-                                    <div className="flex items-center gap-1.5">
-                                        <Icon icon="mdi:fire" className="text-md text-orange-400" />
-                                        <span className="text-[10px] text-[var(--color-text-secondary)]">집중</span>
-                                        <span className="text-xs font-bold text-indigo-400">{session.evaluation.focus}/10</span>
-                                    </div>
-                                    <div className="flex items-center gap-1.5">
-                                        <Icon icon="mdi:diamond-stone" className="text-md text-cyan-400" />
-                                        <span className="text-[10px] text-[var(--color-text-secondary)]">만족</span>
-                                        <span className="text-xs font-bold text-emerald-400">{session.evaluation.satisfaction}/10</span>
-                                    </div>
+                                <div className="flex items-center gap-3 pt-1 border-t border-white/5 flex-wrap">
+                                    {getEvalScore(session.evaluation) !== null && (
+                                        <div className="flex items-center gap-1.5">
+                                            <Icon icon="mdi:fire" className="text-md text-orange-400" />
+                                            <span className="text-[10px] text-[var(--color-text-secondary)]">점수</span>
+                                            <span className="text-xs font-bold text-indigo-400">{getEvalScore(session.evaluation)}/10</span>
+                                        </div>
+                                    )}
+                                    {(session.evaluation.tags?.length ?? 0) > 0 && (
+                                        <div className="flex items-center gap-1 flex-wrap">
+                                            {session.evaluation.tags!.map(tag => (
+                                                <span key={tag} className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-white/5 text-[var(--color-text-secondary)]">{tag}</span>
+                                            ))}
+                                        </div>
+                                    )}
                                     {session.evaluation.problemSolving && (
                                         <div className="flex items-center gap-1.5">
                                             <Icon icon="mdi:check-circle-outline" className="text-md text-green-400" />
@@ -554,6 +585,7 @@ export default function Records() {
                     )}
                 </div>
             </div>}
+            </>)}
         </div>
     )
 }
@@ -785,5 +817,244 @@ function AnnualContributionGraph() {
                 </div>
             </div>
         </div>
+    )
+}
+
+// ── 일기 탭 ───────────────────────────────────────────────────────────────────
+
+function diaryMonthLabel(date: string): string {
+    const [y, m] = date.split('-')
+    return `${y}년 ${parseInt(m)}월`
+}
+
+function DiaryTab() {
+    const [settings, setSettings] = useState<Settings | null>(null)
+    const [diaries, setDiaries] = useState<DiaryEntry[]>([])
+    const [loading, setLoading] = useState(true)
+    const [selectedDate, setSelectedDate] = useState<string | null>(null)
+
+    const reload = async () => {
+        const today = getStudyToday()
+        const start = new Date(today)
+        start.setDate(start.getDate() - 365)
+        const list = await getDiaryRange(formatDateYYYYMMDD(start), getTodayDate())
+        list.sort((a, b) => b.date.localeCompare(a.date))
+        setDiaries(list)
+    }
+
+    useEffect(() => {
+        let cancelled = false
+        ;(async () => {
+            const s = await db.settings.toCollection().first()
+            if (!cancelled) setSettings(s ?? null)
+            await reload()
+            if (!cancelled) setLoading(false)
+        })()
+        return () => { cancelled = true }
+    }, [])
+
+    // 월 구분 헤더용 그룹핑
+    const grouped: Array<{ month: string; items: DiaryEntry[] }> = []
+    for (const d of diaries) {
+        const month = diaryMonthLabel(d.date)
+        const last = grouped[grouped.length - 1]
+        if (last && last.month === month) last.items.push(d)
+        else grouped.push({ month, items: [d] })
+    }
+
+    const selected = diaries.find(d => d.date === selectedDate) ?? null
+
+    if (loading) {
+        return (
+            <div className="space-y-3 animate-pulse">
+                {[0, 1, 2].map(i => <div key={i} className="h-20 rounded-2xl bg-white/5" />)}
+            </div>
+        )
+    }
+
+    if (diaries.length === 0) {
+        return (
+            <div className="glass-card p-10 text-center text-[var(--color-text-secondary)]">
+                <Icon icon="mdi:notebook-outline" className="text-4xl mx-auto mb-3 opacity-40" />
+                <p className="font-medium">아직 작성된 일기가 없습니다.</p>
+                <p className="text-sm opacity-60 mt-1">홈 화면에서 오늘 일기를 확정해 보세요.</p>
+            </div>
+        )
+    }
+
+    return (
+        <div className="space-y-6">
+            {grouped.map(group => (
+                <div key={group.month} className="space-y-2">
+                    <h3 className="text-sm font-black text-[var(--color-text-secondary)] px-1">{group.month}</h3>
+                    <div className="space-y-2">
+                        {group.items.map(entry => (
+                            <button
+                                key={entry.date}
+                                onClick={() => setSelectedDate(entry.date)}
+                                className="w-full text-left glass-card p-4 hover:scale-[1.01] transition-transform"
+                            >
+                                <div className="flex items-center gap-3">
+                                    <div className="flex flex-col items-center justify-center w-12 flex-shrink-0">
+                                        <span className="text-xl font-black gradient-text tabular-nums">{entry.score}</span>
+                                        <span className="text-[9px] font-bold text-white/30">/ 10</span>
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <span className="text-xs font-bold text-[var(--color-text-secondary)]">{entry.date}</span>
+                                            {entry.auto && (
+                                                <span className="px-1.5 py-0.5 rounded-full bg-white/10 text-[9px] font-bold text-white/40">자동</span>
+                                            )}
+                                        </div>
+                                        {entry.oneLiner && (
+                                            <p className="text-sm font-semibold text-[var(--color-text)] truncate">"{entry.oneLiner}"</p>
+                                        )}
+                                        {entry.dayTags.length > 0 && (
+                                            <div className="flex flex-wrap gap-1 mt-1.5">
+                                                {entry.dayTags.slice(0, 4).map(t => (
+                                                    <span key={t} className="px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-300 text-[10px] font-bold">{t}</span>
+                                                ))}
+                                                {entry.dayTags.length > 4 && (
+                                                    <span className="text-[10px] font-bold text-white/30">+{entry.dayTags.length - 4}</span>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                    <Icon icon="mdi:chevron-right" className="text-lg text-white/20 flex-shrink-0" />
+                                </div>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            ))}
+
+            {selected && settings && (
+                <DiaryDetailModal
+                    entry={selected}
+                    settings={settings}
+                    onClose={() => setSelectedDate(null)}
+                    onEdited={reload}
+                />
+            )}
+        </div>
+    )
+}
+
+function DiaryDetailModal({ entry, settings, onClose, onEdited }: {
+    entry: DiaryEntry
+    settings: Settings
+    onClose: () => void
+    onEdited: () => void | Promise<void>
+}) {
+    const [sessions, setSessions] = useState<StudySession[]>([])
+    const [editing, setEditing] = useState(false)
+    const [editData, setEditData] = useState<{ stats: DiaryEntry['stats']; draft: string; inheritedTags: string[] } | null>(null)
+
+    useEffect(() => {
+        let cancelled = false
+        ;(async () => {
+            const list = await db.sessions.where('date').equals(entry.date).sortBy('startTime')
+            if (!cancelled) setSessions(list)
+        })()
+        return () => { cancelled = true }
+    }, [entry.date])
+
+    const openEditor = async () => {
+        const stats = await computeDiaryStats(entry.date, settings.dailyGoalMs)
+        const [draft, inheritedTags] = await Promise.all([
+            generateDiaryDraft(settings, entry.date, stats),
+            collectSessionTags(entry.date),
+        ])
+        setEditData({ stats, draft, inheritedTags })
+        setEditing(true)
+    }
+
+    return (
+        <>
+            <AnimatePresence>
+                {!editing && (
+                    <div className="fixed inset-0 z-[105] flex items-center justify-center p-4 sm:p-6">
+                        <motion.div
+                            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                            className="absolute inset-0 bg-black/70 backdrop-blur-xl"
+                            onClick={onClose}
+                        />
+                        <motion.div
+                            initial={{ scale: 0.9, opacity: 0, y: 30 }}
+                            animate={{ scale: 1, opacity: 1, y: 0 }}
+                            exit={{ scale: 0.9, opacity: 0, y: 30 }}
+                            transition={{ type: 'spring', damping: 20, stiffness: 300 }}
+                            className="relative w-full max-w-lg liquid-modal shadow-2xl overflow-hidden"
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <div className="absolute inset-0 pointer-events-none bg-gradient-to-br from-white/5 to-transparent" />
+                            <div className="relative p-8 space-y-6 max-h-[85vh] overflow-y-auto no-scrollbar">
+                                <div className="flex items-center justify-between">
+                                    <h2 className="text-xl font-black text-white">{entry.date}</h2>
+                                    <button onClick={onClose} className="p-1.5 rounded-full hover:bg-white/10 transition-all">
+                                        <Icon icon="mdi:close" className="text-xl text-white/50" />
+                                    </button>
+                                </div>
+
+                                {entry.oneLiner && (
+                                    <p className="text-lg font-bold text-[var(--color-text)] leading-relaxed">"{entry.oneLiner}"</p>
+                                )}
+
+                                <DiaryEntryView entry={entry} onEdit={openEditor} />
+
+                                {/* 세션 타임라인 */}
+                                {sessions.length > 0 && (
+                                    <div className="space-y-2 pt-2 border-t border-white/5">
+                                        <p className="text-xs font-black uppercase tracking-widest text-white/40 pt-2">세션 타임라인</p>
+                                        {sessions.map(s => {
+                                            const sc = getEvalScore(s.evaluation)
+                                            return (
+                                                <div key={s.id} className="flex items-start gap-3 px-3 py-2.5 rounded-xl bg-white/5">
+                                                    <span className="text-xs font-bold text-white/40 tabular-nums mt-0.5 flex-shrink-0">{formatTimeHHMM(s.startTime)}</span>
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex items-center gap-2 flex-wrap">
+                                                            <span className="text-sm font-bold text-[var(--color-text)]">{s.subject}</span>
+                                                            {s.subItem && <span className="text-xs text-[var(--color-primary)]">› {s.subItem}</span>}
+                                                            <span className="text-[10px] text-white/40">{formatDurationHourMinute(s.duration)}</span>
+                                                            {sc !== null && (
+                                                                <span className="text-[10px] font-bold text-indigo-300">{sc}/10</span>
+                                                            )}
+                                                        </div>
+                                                        {s.evaluation?.tags && s.evaluation.tags.length > 0 && (
+                                                            <div className="flex flex-wrap gap-1 mt-1">
+                                                                {s.evaluation.tags.map(t => (
+                                                                    <span key={t} className="px-1.5 py-0.5 rounded-full bg-white/10 text-[9px] font-bold text-white/50">{t}</span>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                        {s.evaluation?.memo && (
+                                                            <p className="text-xs text-white/50 italic mt-1 truncate">"{s.evaluation.memo}"</p>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            )
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
+
+            {editing && editData && (
+                <DiaryEditModal
+                    isOpen={editing}
+                    onClose={() => setEditing(false)}
+                    date={entry.date}
+                    settings={settings}
+                    stats={editData.stats}
+                    existing={entry}
+                    initialDraft={editData.draft}
+                    inheritedTags={editData.inheritedTags}
+                    onSaved={async () => { await onEdited(); setEditing(false) }}
+                />
+            )}
+        </>
     )
 }
