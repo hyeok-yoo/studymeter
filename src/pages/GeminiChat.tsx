@@ -13,7 +13,7 @@ import {
     type GeminiReply,
 } from '../lib/gemini'
 import { CHAT_FUNCTION_DECLARATIONS, executeChatFunction } from '../lib/ai/functions'
-import { buildModelChain, supportsFunctionCalling, markModelExhausted } from '../lib/ai/router'
+import { buildModelChain, supportsFunctionCalling, supportsGrounding, markModelExhausted } from '../lib/ai/router'
 import { buildSystemInstruction } from '../lib/ai/prompts'
 import AiMarkdown from '../components/AiMarkdown'
 
@@ -94,7 +94,7 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
     const [loading, setLoading] = useState(false)
     const [shareData, setShareData] = useState<'none' | 'day' | 'week'>('none')
     const [models, setModels] = useState<GeminiModel[]>([])
-    const [useGrounding, setUseGrounding] = useState(false)
+    const [useGrounding, setUseGrounding] = useState(settings.aiGroundingDefault !== false)
     const [useThinking, setUseThinking] = useState(true)
 
     // 사용 가능한 모델 목록을 받아 선택 모델의 능력치를 파악한다.
@@ -206,10 +206,12 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
             const isLast = i === chain.length - 1
             const useFn = wantFunctions && supportsFunctionCalling(candidate)
             try {
+                // Gemini 3.x 는 그라운딩 + 함수 호출을 동시 지원한다. 각 후보 모델의 능력에 맞춰 게이팅.
                 const reply = await generateContent(apiKey, candidate, '', {
                     systemInstruction: buildSystemInstruction(settings, 'chat'),
-                    useGrounding: useGrounding && activeModel.supportsGrounding,
+                    useGrounding: useGrounding && supportsGrounding(candidate),
                     useThinking: useThinking && activeModel.supportsThinking,
+                    thinkingLevel: settings.aiThinkingLevels?.interactive,
                     availableModels: models,
                     contents,
                     functionDeclarations: useFn ? CHAT_FUNCTION_DECLARATIONS : undefined,
@@ -244,9 +246,9 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
         setShareData('none') // Reset after sending
 
         try {
-            // 그라운딩(검색)과 함수 호출은 동시에 켜지 않는다: 검색이 켜져 있으면 함수 선언을 생략.
-            const groundingActive = useGrounding && activeModel.supportsGrounding
-            const wantFunctions = !groundingActive
+            // 함수 호출(자연어 자동 기록)은 항상 우선 활성화한다. Gemini 3.x 는 그라운딩과 함께 쓸 수 있어
+            // 검색이 켜져 있어도 함수 선언을 생략하지 않는다 (모델별 지원은 callModelWithRouting 에서 게이팅).
+            const wantFunctions = true
 
             let contents = trimHistory([...history, { role: 'user', parts: [{ text: fullPrompt }] }])
             const functionActivity: FunctionActivityItem[] = []
@@ -338,9 +340,10 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
                         {messages.length === 0 && (
                             <div className="text-center text-[var(--color-text-secondary)] py-12">
                                 <span className="text-5xl block mb-4">✨</span>
-                                <p>Gemini에게 자유롭게 질문해보세요!</p>
-                                <p className="text-sm mt-2">공부 기록을 공유하려면 아래 📊 버튼을 눌러주세요.</p>
-                                <p className="text-sm mt-1 opacity-80">"아까 학원에서 수학 2시간 들었어"라고 말하면 자동으로 기록해드려요.</p>
+                                <p className="font-bold text-[var(--color-text)]">오늘 공부한 걸 그냥 말해보세요</p>
+                                <p className="text-sm mt-2 opacity-90">"학원에서 수학 2시간 듣고 좀 졸았어, 영어 단어도 1시간 했고"</p>
+                                <p className="text-sm mt-1 opacity-70">→ 세션 기록과 오늘 일기까지 알아서 정리해드려요.</p>
+                                <p className="text-xs mt-3 opacity-60">질문·개념 설명도 물어보세요. 📊 버튼으로 기록을 함께 공유할 수 있어요.</p>
                             </div>
                         )}
 
@@ -456,7 +459,7 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
                                         ? 'bg-cyan-500/80 text-white'
                                         : 'bg-[var(--color-surface)] text-[var(--color-text-secondary)] border border-[var(--color-border)]'
                                         }`}
-                                    title="Google 검색으로 최신 정보를 근거 삼아 답합니다 (켜면 기록 조회/저장 함수는 비활성화됩니다)"
+                                    title="Google 검색으로 최신 정보를 근거 삼아 답합니다 (기록 저장/조회와 함께 사용 가능)"
                                 >
                                     <Icon icon="mdi:google" className="text-xs" /> 검색
                                 </button>
@@ -487,7 +490,7 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
                                 value={input}
                                 onChange={(e) => setInput(e.target.value)}
                                 onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage()}
-                                placeholder="메시지를 입력하세요..."
+                                placeholder="오늘 공부한 걸 말하거나 질문해보세요…"
                                 className="flex-1 px-4 py-3 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)]"
                             />
                             <button

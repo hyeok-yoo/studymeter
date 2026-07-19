@@ -36,9 +36,24 @@ export const ROLE_PROFILES: Record<AiRole, RoleProfile> = {
     },
 };
 
-/** 이름 기반 능력 추정: Gemma 계열은 함수 호출·그라운딩 미지원으로 간주. */
+/**
+ * 함수 호출 지원 추정.
+ * Gemma 4+ 는 함수 호출을 지원한다(구세대 Gemma 1~3 은 미지원). Gemini 계열은 지원.
+ */
 export function supportsFunctionCalling(modelId: string): boolean {
-    return !/gemma/i.test(modelId);
+    const oldGemma = /gemma-?[123]\b/i.test(modelId);
+    return !oldGemma;
+}
+
+/**
+ * Google 검색 그라운딩(google_search 서버 도구) 지원 추정.
+ * 오픈 모델(Gemma)은 미지원. Gemini 2.x/3.x 는 지원.
+ */
+export function supportsGrounding(modelId: string): boolean {
+    if (/gemma/i.test(modelId)) return false;
+    // gemini-2.0 미만(1.5 등)은 별도 도구라 보수적으로 제외, 그 외 gemini 계열 허용
+    if (/gemini-1\./i.test(modelId)) return false;
+    return /gemini/i.test(modelId) || /-latest$/i.test(modelId);
 }
 
 // ── 소진(429) 마킹: 태평양 시간 자정 리셋 ──────────────────────────────────

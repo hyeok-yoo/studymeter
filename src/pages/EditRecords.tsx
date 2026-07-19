@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
-import { db, deleteStudySession, updateStudySession, formatDuration, getTodayDate, formatTimeHHMM, findOverlappingSession, adjustOverlappingSession, getLatestEndTime } from '../lib/db'
+import { db, deleteStudySession, updateStudySession, formatDuration, getTodayDate, formatTimeHHMM, findOverlappingSession, adjustOverlappingSession, getLatestEndTime, getEvalScore } from '../lib/db'
 import { useModal } from '../lib/ModalContext'
 import { maybeSyncToday } from '../lib/telemetry'
-import type { Settings, StudySession, DailyRecord } from '../lib/db'
+import type { Settings, StudySession, DailyRecord, EvalTag } from '../lib/db'
+import { getTopTags, getTagsForScope, recordTagUsage, TAG_CATEGORY_LABELS } from '../lib/tags'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Icon } from '@iconify/react'
 
@@ -50,13 +51,25 @@ export default function EditRecords({ settings }: EditRecordsProps) {
     const [inputStartTime, setInputStartTime] = useState('')
     const [inputEndTime, setInputEndTime] = useState('')
 
-    // Evaluation inputs
-    const [focus, setFocus] = useState(5)
-    const [satisfaction, setSatisfaction] = useState(5)
+    // Evaluation inputs (신형: 단일 점수 + 태그)
+    const [score, setScore] = useState<number | null>(null)
+    const [selectedTags, setSelectedTags] = useState<string[]>([])
+    const [showAllTags, setShowAllTags] = useState(false)
     const [showEvalFields, setShowEvalFields] = useState(false)
     const [correct, setCorrect] = useState('')
     const [total, setTotal] = useState('')
     const [memo, setMemo] = useState('')
+
+    const toggleTag = (name: string) => {
+        setSelectedTags(prev => prev.includes(name) ? prev.filter(t => t !== name) : [...prev, name])
+    }
+
+    // 표시할 태그 목록: 기본 상위 8개(선택된 것 우선), 더보기 시 카테고리별 전체
+    const topTags: EvalTag[] = getTopTags(settings, 'session', 8, selectedTags)
+    const allTagsByCategory: Array<[EvalTag['category'], EvalTag[]]> =
+        (Object.keys(TAG_CATEGORY_LABELS) as EvalTag['category'][])
+            .map(cat => [cat, getTagsForScope(settings, 'session').filter(t => t.category === cat)] as [EvalTag['category'], EvalTag[]])
+            .filter(([, tags]) => tags.length > 0)
 
     // Overlap warning state
     const [showOverlapWarning, setShowOverlapWarning] = useState(false)
@@ -114,8 +127,9 @@ export default function EditRecords({ settings }: EditRecordsProps) {
         setInputMinutes('')
         setInputStartTime('')
         setInputEndTime('')
-        setFocus(5)
-        setSatisfaction(5)
+        setScore(null)
+        setSelectedTags([])
+        setShowAllTags(false)
         setShowEvalFields(false)
         setCorrect('')
         setTotal('')
@@ -136,17 +150,20 @@ export default function EditRecords({ settings }: EditRecordsProps) {
         setInputStartTime(formatTimeHHMM(session.startTime))
         setInputEndTime(formatTimeHHMM(session.endTime))
 
-        // Set evaluation values (신형 score 단일 점수 / 구형 focus·satisfaction 모두 대응)
+        // Set evaluation values (신형 score+tags / 구형 focus·satisfaction → getEvalScore로 점수 프리필)
         if (session.evaluation) {
-            setFocus(session.evaluation.focus ?? session.evaluation.score ?? 5)
-            setSatisfaction(session.evaluation.satisfaction ?? session.evaluation.score ?? 5)
+            const evalScore = getEvalScore(session.evaluation)
+            setScore(evalScore !== null ? Math.round(evalScore) : null)
+            setSelectedTags(session.evaluation.tags ?? [])
+            setShowAllTags(false)
             setCorrect(session.evaluation.problemSolving?.correct.toString() || '')
             setTotal(session.evaluation.problemSolving?.total.toString() || '')
             setMemo(session.evaluation.memo || '')
             setShowEvalFields(true)
         } else {
-            setFocus(5)
-            setSatisfaction(5)
+            setScore(null)
+            setSelectedTags([])
+            setShowAllTags(false)
             setCorrect('')
             setTotal('')
             setMemo('')
@@ -226,8 +243,8 @@ export default function EditRecords({ settings }: EditRecordsProps) {
     const saveSession = async (startTime: number, endTime: number, duration: number) => {
         // showEvalFields가 true일 때만 evaluation 저장 (건너뛰기 시 미기록)
         const evaluation = showEvalFields ? {
-            focus,
-            satisfaction,
+            score: score ?? 7,
+            tags: selectedTags,
             ...(correct && total ? {
                 problemSolving: {
                     correct: parseInt(correct) || 0,
@@ -236,6 +253,8 @@ export default function EditRecords({ settings }: EditRecordsProps) {
             } : {}),
             ...(memo.trim() ? { memo: memo.trim() } : {})
         } : undefined
+
+        if (evaluation) recordTagUsage(selectedTags)
 
         if (editingSessionId) {
             await updateStudySession(editingSessionId, {
@@ -511,32 +530,93 @@ export default function EditRecords({ settings }: EditRecordsProps) {
                                             exit={{ height: 0, opacity: 0 }}
                                             className="overflow-hidden space-y-6"
                                         >
-                                            {/* Focus & Satisfaction */}
-                                            <div className="grid grid-cols-1 gap-6">
-                                                <div className="space-y-2">
-                                                    <div className="flex justify-between items-center px-1">
-                                                        <span className="text-[10px] font-black text-indigo-400 uppercase tracking-tighter">집중도</span>
-                                                        <span className="text-sm font-black text-[var(--color-text)]">{focus}/10</span>
-                                                    </div>
-                                                    <input
-                                                        type="range" min="1" max="10" step="1"
-                                                        value={focus}
-                                                        onChange={(e) => setFocus(parseInt(e.target.value))}
-                                                        className="w-full accent-indigo-500 h-1.5 bg-white/5 rounded-full appearance-none cursor-pointer"
-                                                    />
+                                            {/* Score 1-10 (단일 점수) */}
+                                            <div className="space-y-2">
+                                                <div className="flex justify-between items-center px-1">
+                                                    <span className="text-[10px] font-black text-indigo-400 uppercase tracking-tighter">세션 점수</span>
+                                                    <span className="text-sm font-black text-[var(--color-text)]">
+                                                        {score === null ? (
+                                                            <span className="text-[var(--color-text-secondary)] font-bold">미선택 (건너뛰면 7)</span>
+                                                        ) : `${score}/10`}
+                                                    </span>
                                                 </div>
-                                                <div className="space-y-2">
-                                                    <div className="flex justify-between items-center px-1">
-                                                        <span className="text-[10px] font-black text-emerald-400 uppercase tracking-tighter">만족도</span>
-                                                        <span className="text-sm font-black text-[var(--color-text)]">{satisfaction}/10</span>
-                                                    </div>
-                                                    <input
-                                                        type="range" min="1" max="10" step="1"
-                                                        value={satisfaction}
-                                                        onChange={(e) => setSatisfaction(parseInt(e.target.value))}
-                                                        className="w-full accent-emerald-500 h-1.5 bg-white/5 rounded-full appearance-none cursor-pointer"
-                                                    />
+                                                <div className="flex gap-1 h-10">
+                                                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => {
+                                                        const active = score !== null && n <= score
+                                                        return (
+                                                            <button
+                                                                key={n}
+                                                                type="button"
+                                                                onClick={() => setScore(n)}
+                                                                className={`flex-1 rounded-lg text-xs font-black transition-all ${active
+                                                                    ? 'bg-indigo-500 text-white shadow-md scale-[1.04] z-10'
+                                                                    : 'bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-indigo-500/10'
+                                                                    }`}
+                                                            >
+                                                                {n}
+                                                            </button>
+                                                        )
+                                                    })}
                                                 </div>
+                                            </div>
+
+                                            {/* Tag Chips */}
+                                            <div className="space-y-3">
+                                                <span className="text-[10px] font-black text-[var(--color-text-secondary)] uppercase tracking-widest pl-1">태그</span>
+                                                <div className="flex flex-wrap gap-2">
+                                                    {topTags.map(tag => (
+                                                        <button
+                                                            key={tag.name}
+                                                            type="button"
+                                                            onClick={() => toggleTag(tag.name)}
+                                                            className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95 ${selectedTags.includes(tag.name)
+                                                                ? 'bg-indigo-500 text-white shadow-md shadow-indigo-500/20'
+                                                                : 'bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-indigo-500/10'
+                                                                }`}
+                                                        >
+                                                            {tag.name}
+                                                        </button>
+                                                    ))}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setShowAllTags(v => !v)}
+                                                        className="px-3 py-1.5 rounded-full text-xs font-bold bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-indigo-500/10 transition-all"
+                                                    >
+                                                        {showAllTags ? '접기' : '더보기'}
+                                                    </button>
+                                                </div>
+
+                                                <AnimatePresence>
+                                                    {showAllTags && (
+                                                        <motion.div
+                                                            initial={{ height: 0, opacity: 0 }}
+                                                            animate={{ height: 'auto', opacity: 1 }}
+                                                            exit={{ height: 0, opacity: 0 }}
+                                                            className="space-y-3 overflow-hidden pt-1"
+                                                        >
+                                                            {allTagsByCategory.map(([cat, tags]) => (
+                                                                <div key={cat} className="space-y-1.5">
+                                                                    <p className="text-[10px] font-black uppercase tracking-widest text-[var(--color-text-secondary)]">{TAG_CATEGORY_LABELS[cat]}</p>
+                                                                    <div className="flex flex-wrap gap-2">
+                                                                        {tags.map(tag => (
+                                                                            <button
+                                                                                key={tag.name}
+                                                                                type="button"
+                                                                                onClick={() => toggleTag(tag.name)}
+                                                                                className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95 ${selectedTags.includes(tag.name)
+                                                                                    ? 'bg-indigo-500 text-white'
+                                                                                    : 'bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-indigo-500/10'
+                                                                                    }`}
+                                                                            >
+                                                                                {tag.name}
+                                                                            </button>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </motion.div>
+                                                    )}
+                                                </AnimatePresence>
                                             </div>
 
                                             {/* Problem Solving */}

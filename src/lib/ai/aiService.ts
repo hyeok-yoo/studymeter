@@ -17,7 +17,7 @@ import {
     type Settings,
 } from '../db';
 import { generateContent, QuotaExceededError, type GenerateOptions, type GeminiReply } from '../gemini';
-import { buildModelChain, markModelExhausted, ROLE_PROFILES } from './router';
+import { buildModelChain, markModelExhausted, supportsGrounding, ROLE_PROFILES } from './router';
 import { canSpend, recordSpend } from './budget';
 import { buildSystemInstruction } from './prompts';
 import { buildDaySnapshot, buildRecentDaysSnapshot } from './snapshot';
@@ -43,12 +43,16 @@ export async function generateForRole(
 
     const chain = await buildModelChain(role, settings);
     const profile = ROLE_PROFILES[role];
+    // 설정의 역할별 thinking 오버라이드 우선, 없으면 프로파일 기본값
+    const thinkingLevel = settings.aiThinkingLevels?.[role] ?? profile.thinkingLevel;
 
     for (const model of chain) {
         try {
             const reply = await generateContent(settings.geminiApiKey, model, prompt, {
-                thinkingLevel: profile.thinkingLevel,
+                thinkingLevel,
+                // 그라운딩은 지원 모델에서만 (options 로 켠 경우)
                 ...options,
+                useGrounding: options.useGrounding && supportsGrounding(model),
                 noFallback: true,
             });
             recordSpend(kind, reply.usedModel);
@@ -174,6 +178,7 @@ async function generateMorningReportInner(settings: Settings, today: string): Pr
 
         const reply = await generateForRole(settings, 'deep', kind, prompt, {
             systemInstruction: buildSystemInstruction(settings, 'morningReport'),
+            useGrounding: settings.aiGroundingDefault !== false,
         });
         if (!reply?.text) return null;
         return { content: reply.text.trim(), model: reply.usedModel };
