@@ -17,7 +17,7 @@ import {
     type Settings,
 } from '../db';
 import { generateContent, QuotaExceededError, type GenerateOptions, type GeminiReply } from '../gemini';
-import { buildModelChain, markModelExhausted, supportsGrounding, ROLE_PROFILES } from './router';
+import { buildModelChain, markModelExhausted, markModelCooldown, supportsGrounding, ROLE_PROFILES } from './router';
 import { canSpend, recordSpend } from './budget';
 import { buildSystemInstruction } from './prompts';
 import { buildDaySnapshot, buildRecentDaysSnapshot } from './snapshot';
@@ -59,7 +59,9 @@ export async function generateForRole(
             return reply;
         } catch (e) {
             if (e instanceof QuotaExceededError) {
-                markModelExhausted(model);
+                // 일일 소진만 하루 차단. 분당(RPM) 429 는 짧은 쿨다운 후 자동 복구.
+                if (e.scope === 'daily') markModelExhausted(model);
+                else markModelCooldown(model, e.retryAfterMs);
                 continue; // 체인 다음 후보로
             }
             // 쿼터 외 오류(네트워크·모델 미존재 등)도 다음 후보 시도
