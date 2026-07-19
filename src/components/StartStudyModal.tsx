@@ -1,11 +1,13 @@
 import { useState, useMemo } from 'react'
-import { createPortal } from 'react-dom'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import { Icon } from '@iconify/react'
 import type { Settings } from '../lib/db'
 import { updateDailyRecord, findActiveSessionAtTime, adjustOverlappingSession, getTodayDate, db } from '../lib/db'
 import { MODAL_PHRASES, getRandomPhrase } from '../lib/phrases'
 import TestTimerModal from './TestTimerModal'
+import Sheet from './ui/Sheet'
+import Pressable from './ui/Pressable'
+import { spring } from '../lib/motion'
 
 interface StartStudyModalProps {
     settings: Settings
@@ -69,33 +71,27 @@ export default function StartStudyModal({
         onConfirm(selectedSubject, selectedType, minutes * 60 * 1000, selectedSubItem)
     }
 
-    return createPortal(
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
-            {/* Backdrop */}
-            <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="absolute inset-0 bg-black/40 backdrop-blur-xl"
-                onClick={onClose}
-            />
+    const chipBase = 'px-4 py-2 rounded-xl text-sm font-bold'
+    const subChipBase = 'px-3 py-1.5 rounded-lg text-xs font-bold'
 
-            {/* Modal Content */}
-            <motion.div
-                initial={{ scale: 0.9, opacity: 0, y: 20 }}
-                animate={{ scale: 1, opacity: 1, y: 0 }}
-                className="relative liquid-modal max-w-lg w-full p-10 flex flex-col gap-8 shadow-2xl overflow-y-auto no-scrollbar max-h-[90vh]"
-                onClick={(e) => e.stopPropagation()}
-            >
-                <header>
-                    <h2 className="text-3xl font-black gradient-text flex items-center gap-2">
+    return (
+        <>
+            <Sheet open onClose={onClose} ariaLabel="공부 시작">
+                <header className="mb-6">
+                    <h2 className="text-3xl font-black gradient-text flex items-center gap-2 text-display">
                         <Icon icon="mdi:hand-wave-outline" /> 공부를 시작해볼까요?
                     </h2>
                     <p className="text-[var(--color-text-secondary)] font-medium mt-1">{randomPhrase}</p>
                 </header>
 
                 {isFirstVisit && !hasExistingSchedule && (
-                    <div className="flex flex-col gap-4">
-                        <p className="text-xs font-black uppercase tracking-widest text-[var(--color-text-secondary)] opacity-60 font-black">오늘의 기상/취침 입력</p>
+                    <motion.div
+                        className="flex flex-col gap-4 mb-6"
+                        initial={{ opacity: 0, y: 12 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={spring.default}
+                    >
+                        <p className="text-xs font-black uppercase tracking-widest text-[var(--color-text-secondary)] opacity-60">오늘의 기상/취침 입력</p>
                         <div className="grid grid-cols-2 gap-4">
                             <div className="flex flex-col gap-2">
                                 <label className="text-sm font-bold text-[var(--color-text)] flex items-center gap-1">
@@ -105,7 +101,7 @@ export default function StartStudyModal({
                                     type="time"
                                     value={wakeUpTime}
                                     onChange={(e) => setWakeUpTime(e.target.value)}
-                                    className="w-full px-4 py-3 rounded-2xl bg-white/5 border border-white/10 text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] transition-all"
+                                    className="w-full px-4 py-3 rounded-2xl text-[var(--color-text)]"
                                 />
                             </div>
                             <div className="flex flex-col gap-2">
@@ -116,11 +112,11 @@ export default function StartStudyModal({
                                     type="time"
                                     value={bedTime}
                                     onChange={(e) => setBedTime(e.target.value)}
-                                    className="w-full px-4 py-3 rounded-2xl bg-white/5 border border-white/10 text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] transition-all"
+                                    className="w-full px-4 py-3 rounded-2xl text-[var(--color-text)]"
                                 />
                             </div>
                         </div>
-                    </div>
+                    </motion.div>
                 )}
 
                 <div className="flex flex-col gap-6">
@@ -128,47 +124,55 @@ export default function StartStudyModal({
                         <p className="text-xs font-black uppercase tracking-widest text-[var(--color-text-secondary)] opacity-60">어떤 과목을 공부할까요?</p>
                         <div className="flex flex-wrap gap-2">
                             {settings.subjects.map((subject) => (
-                                <button
+                                <Pressable
                                     key={subject.name}
+                                    pressScale={0.95}
                                     onClick={() => {
                                         setSelectedSubject(subject.name)
                                         setSelectedSubItem(undefined)
                                     }}
-                                    className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${selectedSubject === subject.name
+                                    className={`${chipBase} ${selectedSubject === subject.name
                                         ? 'bg-[var(--color-primary)] text-white shadow-lg'
-                                        : 'bg-white/5 text-[var(--color-text)] hover:bg-white/10 border border-[var(--color-border)]'
+                                        : 'glass-card-elevated text-[var(--color-text)]'
                                         }`}
                                 >
                                     {subject.name}
-                                </button>
+                                </Pressable>
                             ))}
                         </div>
 
                         {hasSubItems && (
-                            <div className="flex flex-col gap-2 p-4 bg-indigo-500/5 rounded-2xl border border-indigo-500/10 animate-fade-in">
+                            <motion.div
+                                className="flex flex-col gap-2 p-4 glass-card-elevated"
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={spring.default}
+                            >
                                 <p className="text-[10px] font-black uppercase tracking-wider text-indigo-400 opacity-80">세부 항목 선택 (선택 사항)</p>
                                 <div className="flex flex-wrap gap-1.5">
-                                    <button
+                                    <Pressable
+                                        pressScale={0.94}
                                         onClick={() => setSelectedSubItem(undefined)}
-                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${!selectedSubItem
+                                        className={`${subChipBase} ${!selectedSubItem
                                             ? 'bg-indigo-500 text-white shadow-lg'
-                                            : 'bg-white/5 text-[var(--color-text-secondary)] hover:bg-white/10 hover:text-[var(--color-text)]'}`}
+                                            : 'glass-card-elevated text-[var(--color-text-secondary)]'}`}
                                     >
                                         전체
-                                    </button>
+                                    </Pressable>
                                     {currentSubjectData?.children?.map(child => (
-                                        <button
+                                        <Pressable
                                             key={child}
+                                            pressScale={0.94}
                                             onClick={() => setSelectedSubItem(child)}
-                                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${selectedSubItem === child
+                                            className={`${subChipBase} ${selectedSubItem === child
                                                 ? 'bg-indigo-500 text-white shadow-lg'
-                                                : 'bg-white/5 text-[var(--color-text-secondary)] hover:bg-white/10 hover:text-[var(--color-text)]'}`}
+                                                : 'glass-card-elevated text-[var(--color-text-secondary)]'}`}
                                         >
                                             {child}
-                                        </button>
+                                        </Pressable>
                                     ))}
                                 </div>
-                            </div>
+                            </motion.div>
                         )}
                     </div>
 
@@ -176,46 +180,46 @@ export default function StartStudyModal({
                         <p className="text-xs font-black uppercase tracking-widest text-[var(--color-text-secondary)] opacity-60">공부 유형은?</p>
                         <div className="flex flex-wrap gap-2">
                             {settings.types.map((type) => (
-                                <button
+                                <Pressable
                                     key={type}
+                                    pressScale={0.95}
                                     onClick={() => setSelectedType(type)}
-                                    className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${selectedType === type
+                                    className={`${chipBase} ${selectedType === type
                                         ? 'bg-[var(--color-secondary)] text-white shadow-lg'
-                                        : 'bg-white/5 text-[var(--color-text)] hover:bg-white/10 border border-[var(--color-border)]'
+                                        : 'glass-card-elevated text-[var(--color-text)]'
                                         }`}
                                 >
                                     {type}
-                                </button>
+                                </Pressable>
                             ))}
                         </div>
                     </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4 pt-4">
-                    <button
+                <div className="grid grid-cols-2 gap-4 pt-6">
+                    <Pressable
                         onClick={onClose}
-                        className="px-6 py-4 rounded-2xl text-[var(--color-text)] font-bold transition-all hover:bg-white/5"
+                        pressScale={0.98}
+                        className="px-6 py-4 rounded-2xl text-[var(--color-text)] font-bold glass-card-elevated"
                     >
                         취소
-                    </button>
-                    <button
+                    </Pressable>
+                    <Pressable
                         onClick={handleConfirm}
-                        className="px-6 py-4 rounded-2xl bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-secondary)] text-white font-black shadow-xl active:scale-95 transition-all"
+                        pressScale={0.97}
+                        className="btn btn-primary px-6 py-4 text-base"
                     >
                         시작하기!
-                    </button>
+                    </Pressable>
                 </div>
-            </motion.div>
+            </Sheet>
 
-            <AnimatePresence>
-                {showTestTimer && (
-                    <TestTimerModal
-                        onClose={() => setShowTestTimer(false)}
-                        onConfirm={handleTestTimerConfirm}
-                    />
-                )}
-            </AnimatePresence>
-        </div>,
-        document.body
+            {showTestTimer && (
+                <TestTimerModal
+                    onClose={() => setShowTestTimer(false)}
+                    onConfirm={handleTestTimerConfirm}
+                />
+            )}
+        </>
     )
 }

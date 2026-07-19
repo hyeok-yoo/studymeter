@@ -1,6 +1,8 @@
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef, useMemo, memo } from 'react'
 import { createPortal } from 'react-dom'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts'
+import Pressable from '../components/ui/Pressable'
+import { spring, fadeRise, materialize } from '../lib/motion'
 import { useFocusSync } from '../lib/focusSync'
 import type { FocusFeatures } from '../lib/focusSync'
 import { useFocusNative } from '../lib/useFocusNative'
@@ -531,13 +533,13 @@ export default function Study({ settings }: StudyProps) {
             <header className="flex flex-col gap-6 animate-fade-in">
                 <div className="flex justify-between items-center">
                     <div className="flex items-center gap-3">
-                        <div className="w-2 h-2 rounded-full bg-red-600 animate-pulse"></div>
+                        <div className="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_10px_2px_rgba(239,68,68,0.6)]"></div>
                         <span className="text-sm font-black uppercase tracking-widest opacity-60">Focusing Now</span>
                     </div>
-                    <button onClick={handleEnd} className="px-5 py-2 rounded-full bg-white/10 hover:bg-white/20 font-bold transition-all text-sm">Exit Session</button>
+                    <Pressable onClick={handleEnd} pressScale={0.95} className="px-5 py-2 rounded-full bg-white/10 font-bold text-sm">Exit Session</Pressable>
                 </div>
 
-                <div className="flex gap-4 overflow-x-auto pb-6 no-scrollbar" style={{ filter: 'url(#liquid-goo)' }}>
+                <div className="flex gap-4 overflow-x-auto pb-6 no-scrollbar">
                     <SlidingSelector
                         items={settings.subjects.map(s => s.name)}
                         currentValue={currentSubject}
@@ -562,7 +564,7 @@ export default function Study({ settings }: StudyProps) {
                         <div className="flex gap-2 overflow-x-auto no-scrollbar">
                             <button
                                 onClick={() => handleSubItemChange(undefined)}
-                                className={`px-4 py-2 rounded-xl text-xs font-black transition-all whitespace-nowrap ${!currentSubItem
+                                className={`px-4 py-2 rounded-xl text-xs font-black transition-colors whitespace-nowrap ${!currentSubItem
                                     ? 'bg-purple-600 text-white shadow-[0_0_20px_rgba(147,51,234,0.3)]'
                                     : 'bg-white/5 text-white/40 hover:bg-white/10 hover:text-white/80 border border-white/5'}`}
                             >
@@ -572,7 +574,7 @@ export default function Study({ settings }: StudyProps) {
                                 <button
                                     key={child}
                                     onClick={() => handleSubItemChange(child)}
-                                    className={`px-4 py-2 rounded-xl text-xs font-black transition-all whitespace-nowrap ${currentSubItem === child
+                                    className={`px-4 py-2 rounded-xl text-xs font-black transition-colors whitespace-nowrap ${currentSubItem === child
                                         ? 'bg-purple-600 text-white shadow-[0_0_20px_rgba(147,51,234,0.3)]'
                                         : 'bg-white/5 text-white/40 hover:bg-white/10 hover:text-white/80 border border-white/5'}`}
                                 >
@@ -588,7 +590,7 @@ export default function Study({ settings }: StudyProps) {
             <main className="flex-1 flex flex-col items-center justify-center relative z-0">
                 <div className="absolute inset-0 bg-gradient-to-b from-indigo-500/10 via-transparent to-transparent blur-[120px] pointer-events-none -z-10"></div>
 
-                <div className="relative text-center flex flex-col gap-4">
+                <motion.div className="relative text-center flex flex-col gap-4" variants={fadeRise} initial="initial" animate="animate">
                     <div className="flex items-center justify-center gap-2">
                         <h2 className="text-xl font-bold opacity-40 uppercase tracking-[0.3em]">
                             {currentSubject}{currentSubItem ? ` › ${currentSubItem}` : ''} · {currentType}
@@ -603,7 +605,7 @@ export default function Study({ settings }: StudyProps) {
 
                     {countdownDuration ? (
                         <div className="flex flex-col items-center gap-2">
-                            <span className="text-8xl md:text-[10rem] font-black tracking-tighter tabular-nums text-red-500 drop-shadow-[0_0_50px_rgba(239,68,68,0.3)]">
+                            <span className="text-display text-8xl md:text-[10rem] font-black tabular-nums text-red-500 drop-shadow-[0_0_50px_rgba(239,68,68,0.3)]">
                                 {formatDuration(Math.max(0, countdownDuration - sessionTime))}
                             </span>
                             <div className="flex items-center gap-2 opacity-40">
@@ -611,35 +613,35 @@ export default function Study({ settings }: StudyProps) {
                             </div>
                         </div>
                     ) : (
-                        <span className="text-8xl md:text-[10rem] font-black tracking-tighter tabular-nums gradient-text drop-shadow-2xl">
+                        <span className="text-display text-8xl md:text-[10rem] font-black tabular-nums gradient-text drop-shadow-2xl">
                             {formatDurationWithDecimal(todayTotal + sessionTime)}
                         </span>
                     )}
 
                     {/* 4 Metric Cards */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8 w-full max-w-3xl mx-auto">
-                        <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-4 text-center">
+                        <div className="bg-white/[0.06] border border-white/10 rounded-2xl p-4 text-center">
                             <div className="flex items-center justify-center gap-1.5 mb-1">
                                 <span className="text-[10px] font-black uppercase tracking-widest opacity-40">{currentSubject} 누적</span>
                                 <HelpButton dark title={`${currentSubject} 오늘 누적`} items={`오늘 "${currentSubject}" 과목에서 모든 타입(강의·자습·테스트 등)으로 공부한 총 시간입니다. 과목을 전환해도 이전 세션 시간이 합산됩니다.`} />
                             </div>
                             <span className="text-2xl md:text-3xl font-bold tabular-nums">{formatDuration(todaySubjectTotal + sessionTime)}</span>
                         </div>
-                        <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-4 text-center">
+                        <div className="bg-white/[0.06] border border-white/10 rounded-2xl p-4 text-center">
                             <div className="flex items-center justify-center gap-1.5 mb-1">
                                 <span className="text-[10px] font-black uppercase tracking-widest opacity-40">{currentSubject}+{currentType}</span>
                                 <HelpButton dark title="과목+타입 누적" items={`오늘 "${currentSubject}" 과목에서 "${currentType}" 타입으로만 공부한 시간입니다. 예: 수학 강의만, 영어 자습만 따로 보고 싶을 때 유용합니다.`} />
                             </div>
                             <span className="text-2xl md:text-3xl font-bold tabular-nums text-indigo-300">{formatDuration(todaySubjectTypeTotal + sessionTime)}</span>
                         </div>
-                        <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-4 text-center">
+                        <div className="bg-white/[0.06] border border-white/10 rounded-2xl p-4 text-center">
                             <div className="flex items-center justify-center gap-1.5 mb-1">
                                 <span className="text-[10px] font-black uppercase tracking-widest opacity-40">현재 세션</span>
                                 <HelpButton dark title="현재 세션 시간" items="이번 공부 시작 버튼을 누른 순간부터 지금까지의 경과 시간입니다. 타입이나 과목을 전환하면 세션이 분리되어 다시 0부터 시작합니다." />
                             </div>
                             <span className="text-2xl md:text-3xl font-bold tabular-nums text-cyan-400">{formatDuration(sessionTime)}</span>
                         </div>
-                        <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-4 text-center">
+                        <div className="bg-white/[0.06] border border-white/10 rounded-2xl p-4 text-center">
                             <div className="flex items-center justify-center gap-1.5 mb-1">
                                 <span className="text-[10px] font-black uppercase tracking-widest opacity-40">순공 (자습)</span>
                                 <HelpButton dark title="순공 시간이란?" items={[
@@ -650,7 +652,7 @@ export default function Study({ settings }: StudyProps) {
                             <span className="text-2xl md:text-3xl font-bold tabular-nums text-purple-400">{formatDuration(todaySelfStudyTotal + ((currentType === '자습' || currentType === '테스트') ? sessionTime : 0))}</span>
                         </div>
                     </div>
-                </div>
+                </motion.div>
 
                 {/* Daily Goal Progress Bar */}
                 {settings.dailyGoalMs && (() => {
@@ -665,15 +667,18 @@ export default function Study({ settings }: StudyProps) {
                                 <span style={{ color: pct >= 100 ? '#22c55e' : 'inherit' }}>{pct}%{pct >= 100 ? ' ✓' : ''}</span>
                             </div>
                             <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
-                                <div
-                                    className="h-full rounded-full transition-all duration-1000"
+                                <motion.div
+                                    className="h-full w-full rounded-full"
                                     style={{
-                                        width: `${pct}%`,
+                                        transformOrigin: 'left',
                                         background: pct >= 100
                                             ? 'linear-gradient(90deg, #22c55e, #4ade80)'
                                             : 'linear-gradient(90deg, #6366f1, #a855f7)',
                                         boxShadow: pct >= 100 ? '0 0 8px rgba(34,197,94,0.5)' : '0 0 8px rgba(168,85,247,0.3)'
                                     }}
+                                    initial={false}
+                                    animate={{ scaleX: pct / 100 }}
+                                    transition={spring.default}
                                 />
                             </div>
                         </div>
@@ -687,18 +692,19 @@ export default function Study({ settings }: StudyProps) {
                 <div className="mt-16 flex items-center justify-center gap-10">
                     {/* Thought Parking Button */}
                     <div className="flex flex-col items-center gap-1">
-                        <button
+                        <Pressable
                             onClick={() => setShowParkingDrawer(true)}
+                            pressScale={0.9}
                             className="flex flex-col items-center gap-0.5 group"
                         >
-                            <div className="w-16 h-16 rounded-2xl bg-white/8 hover:bg-blue-500/20 border border-white/10 hover:border-blue-400/40 flex flex-col items-center justify-center gap-0.5 transition-all duration-300 active:scale-90">
+                            <div className="w-16 h-16 rounded-2xl bg-white/[0.08] hover:bg-blue-500/20 border border-white/10 hover:border-blue-400/40 flex flex-col items-center justify-center gap-0.5 transition-colors">
                                 <span className="text-xl font-black text-blue-400 leading-none">P</span>
                                 {parkedNotes.length > 0 && (
                                     <span className="text-[10px] font-black text-blue-300 leading-none">{parkedNotes.length}</span>
                                 )}
                             </div>
                             <span className="text-[9px] font-black uppercase tracking-wider opacity-30 group-hover:opacity-50">주차장</span>
-                        </button>
+                        </Pressable>
                         <HelpButton dark title="생각 주차장 (P)" items={[
                             { description: '공부 중 갑자기 떠오른 관련 없는 생각(할 일, 아이디어 등)을 빠르게 기록해 두는 공간입니다.' },
                             { title: '왜 쓰나요?', description: '생각을 직접 메모 앱으로 전환하면 집중이 깨집니다. 주차장에 버려두면 잊어버릴 걱정 없이 공부에 바로 복귀할 수 있습니다.' },
@@ -706,9 +712,11 @@ export default function Study({ settings }: StudyProps) {
                         ]} />
                     </div>
 
-                    <button
+                    <Pressable
                         onClick={handlePauseResume}
-                        className={`w-28 h-28 rounded-full flex items-center justify-center shadow-2xl transition-all duration-500 hover:scale-110 active:scale-90 cursor-pointer ${isRunning ? 'bg-yellow-400 hover:bg-yellow-300' : 'bg-green-500 hover:bg-green-400'}`}
+                        pressScale={0.9}
+                        hoverLift
+                        className={`w-28 h-28 rounded-full flex items-center justify-center shadow-2xl cursor-pointer transition-colors ${isRunning ? 'bg-yellow-400' : 'bg-green-500'}`}
                     >
                         {isRunning ? (
                             /* Pause Icon - Two vertical bars */
@@ -720,7 +728,7 @@ export default function Study({ settings }: StudyProps) {
                             /* Play Icon - Triangle */
                             <div className="w-0 h-0 border-l-[24px] border-l-white border-t-[16px] border-t-transparent border-b-[16px] border-b-transparent ml-2 pointer-events-none"></div>
                         )}
-                    </button>
+                    </Pressable>
 
                     {/* Spacer to balance layout */}
                     <div className="w-16 h-16" />
@@ -728,7 +736,7 @@ export default function Study({ settings }: StudyProps) {
             </main>
 
             {/* Bottom Insight Bar */}
-            <footer className="h-24 bg-white/5 backdrop-blur-3xl rounded-[2.5rem] border border-white/5 flex items-center px-10 gap-8 animate-slide-up">
+            <footer className="h-24 bg-white/[0.06] rounded-[2.5rem] border border-white/10 flex items-center px-10 gap-8 animate-slide-up">
                 <div className="flex-1 flex flex-col">
                     <span className="text-[10px] font-black uppercase tracking-widest opacity-40 mb-1">Weekly progress</span>
                     <div className="flex items-baseline gap-2">
@@ -748,17 +756,6 @@ export default function Study({ settings }: StudyProps) {
                 </div>
             </footer>
 
-            {/* Liquid Gooey Filter Definition */}
-            <svg className="absolute w-0 h-0" style={{ pointerEvents: 'none' }}>
-                <defs>
-                    <filter id="liquid-goo">
-                        <feGaussianBlur in="SourceGraphic" stdDeviation="15" result="blur" />
-                        <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 25 -12" result="goo" />
-                        <feBlend in="SourceGraphic" in2="goo" />
-                    </filter>
-                </defs>
-            </svg>
-
             {/* Test Completion Notification */}
             <AnimatePresence>
                 {showNotification && (
@@ -768,36 +765,41 @@ export default function Study({ settings }: StudyProps) {
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
-                            className="absolute inset-0 bg-black/40 backdrop-blur-xl"
+                            transition={{ duration: 0.22 }}
+                            className="absolute inset-0"
+                            style={{ background: 'var(--scrim)' }}
                             onClick={() => setShowNotification(false)}
                         />
 
                         {/* Modal content layer */}
                         <motion.div
-                            initial={{ scale: 0.9, opacity: 0, y: 20 }}
-                            animate={{ scale: 1, opacity: 1, y: 0 }}
-                            exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                            variants={materialize}
+                            initial="initial"
+                            animate="animate"
+                            exit="exit"
                             className="relative liquid-modal p-10 flex flex-col items-center gap-6 max-w-sm w-full text-center shadow-2xl"
                         >
                             <Icon icon="mdi:alarm" className="text-6xl mb-2 text-indigo-400" />
-                            <h3 className="text-3xl font-black tracking-tight">테스트 종료!</h3>
+                            <h3 className="text-3xl font-black tracking-tight text-display">테스트 종료!</h3>
                             <p className="font-bold opacity-60">지정한 시간이 모두 지났습니다.<br />수고하셨습니다!</p>
                             <div className="flex flex-col gap-3 w-full mt-4">
-                                <button
+                                <Pressable
                                     onClick={() => setShowNotification(false)}
-                                    className="w-full py-4 bg-indigo-500 hover:bg-indigo-400 text-white rounded-2xl font-black text-lg shadow-xl active:scale-95 transition-all"
+                                    pressScale={0.97}
+                                    className="w-full py-4 bg-indigo-500 text-white rounded-2xl font-black text-lg shadow-xl"
                                 >
                                     확인
-                                </button>
-                                <button
+                                </Pressable>
+                                <Pressable
                                     onClick={() => {
                                         setShowNotification(false)
                                         setCountdownDuration(undefined)
                                     }}
-                                    className="w-full py-4 bg-white/5 hover:bg-white/10 text-[var(--color-text-secondary)] rounded-2xl font-bold active:scale-95 transition-all text-sm"
+                                    pressScale={0.97}
+                                    className="w-full py-4 glass-card-elevated text-[var(--color-text-secondary)] rounded-2xl font-bold text-sm"
                                 >
                                     타이머 끄기
-                                </button>
+                                </Pressable>
                             </div>
                         </motion.div>
                     </div>
@@ -1191,7 +1193,7 @@ type FocusTabName = typeof FOCUS_TABS[number]
 
 type MeasureMode = 'pc' | 'native' | 'web'
 
-function FocusPanel({ drowsinessThresholdSec }: { drowsinessThresholdSec: number }) {
+const FocusPanel = memo(function FocusPanel({ drowsinessThresholdSec }: { drowsinessThresholdSec: number }) {
     const isApp = NativeBridge.isNative()
     const localMode: MeasureMode = isApp ? 'native' : 'web'
     const [mode, setMode] = useState<MeasureMode>(() => {
@@ -1204,7 +1206,7 @@ function FocusPanel({ drowsinessThresholdSec }: { drowsinessThresholdSec: number
     return isApp
         ? <FocusPanelNative onSwitchMode={() => saveMode('pc')} drowsinessThresholdSec={drowsinessThresholdSec} />
         : <FocusPanelWeb onSwitchMode={() => saveMode('pc')} drowsinessThresholdSec={drowsinessThresholdSec} />
-}
+})
 
 function FocusPanelPC({ onSwitchMode }: { onSwitchMode: () => void }) {
     const serverUrl = useMemo(() => localStorage.getItem('focus_server_url') ?? '', [])
@@ -1223,7 +1225,7 @@ function FocusPanelPC({ onSwitchMode }: { onSwitchMode: () => void }) {
     }, [score])
 
     return (
-        <div className="mt-6 w-full max-w-3xl mx-auto rounded-3xl border border-white/10 bg-white/5 backdrop-blur-sm p-5"
+        <div className="mt-6 w-full max-w-3xl mx-auto rounded-3xl border border-white/10 bg-white/[0.06] p-5"
             style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
             <FocusPanelHeader
                 label="PC 연결 측정"
@@ -1362,7 +1364,7 @@ function LocalFocusPanel({ engine, available, supportsCalibration, label, switch
     const statusColor = status === 'running' ? '#22c55e' : status === 'error' ? '#ef4444' : status === 'unavailable' ? '#6b7280' : '#f59e0b'
 
     return (
-        <div className="mt-6 w-full max-w-3xl mx-auto rounded-3xl border border-white/10 bg-white/5 backdrop-blur-sm p-5"
+        <div className="mt-6 w-full max-w-3xl mx-auto rounded-3xl border border-white/10 bg-white/[0.06] p-5"
             style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
             <FocusPanelHeader
                 label={label}
@@ -1585,26 +1587,28 @@ function DrowsinessAlert({ features, running, thresholdSec }: { features: FocusF
         <div className="fixed inset-0 z-[10000] flex items-center justify-center p-6">
             <motion.div
                 initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                transition={{ duration: 0.22 }}
                 className="absolute inset-0 bg-red-950/60 backdrop-blur-md"
             />
             <motion.div
-                initial={{ scale: 0.85, opacity: 0 }}
-                animate={{ scale: [1, 1.03, 1], opacity: 1 }}
-                transition={{ scale: { repeat: Infinity, duration: 1.1 } }}
+                variants={materialize}
+                initial="initial"
+                animate="animate"
                 className="relative liquid-modal p-10 flex flex-col items-center gap-5 max-w-sm w-full text-center shadow-2xl border border-red-500/40"
             >
                 <Icon icon="mdi:sleep" className="text-7xl text-red-400" />
-                <h3 className="text-3xl font-black tracking-tight">졸음이 감지됐어요!</h3>
+                <h3 className="text-3xl font-black tracking-tight text-display">졸음이 감지됐어요!</h3>
                 <p className="font-bold opacity-70 leading-relaxed">
                     눈이 {thresholdSec}초 넘게 감겨 있었어요.<br />눈을 크게 뜨고 잠을 깨워주세요.
                 </p>
                 <p className="text-[11px] font-bold uppercase tracking-widest text-red-300/80">{modeLabel}</p>
-                <button
+                <Pressable
                     onClick={silence}
-                    className="w-full py-4 bg-red-500 hover:bg-red-400 text-white rounded-2xl font-black text-lg shadow-xl active:scale-95 transition-all"
+                    pressScale={0.97}
+                    className="w-full py-4 bg-red-500 text-white rounded-2xl font-black text-lg shadow-xl"
                 >
                     확인 (소리·진동 끄기)
-                </button>
+                </Pressable>
                 <p className="text-[10px] opacity-40">눈을 다시 뜨면 자동으로 닫힙니다</p>
             </motion.div>
         </div>,
@@ -1730,7 +1734,7 @@ function SlidingSelector({ items, currentValue, onChange, activeColor, activeTex
             onPointerUp={handlePointerUp}
             onPointerLeave={handlePointerUp}
             onPointerMove={handlePointerMove}
-            className="flex gap-1 p-1.5 rounded-2xl bg-white/5 backdrop-blur-3xl border border-white/10 relative touch-none"
+            className="flex gap-1 p-1.5 rounded-2xl bg-white/[0.06] border border-white/10 relative touch-none"
         >
             {items.map((item) => (
                 <button
@@ -1743,8 +1747,8 @@ function SlidingSelector({ items, currentValue, onChange, activeColor, activeTex
                         <div className="absolute inset-0 flex items-center justify-center">
                             <motion.div
                                 layoutId={layoutId}
-                                className={`absolute inset-0 ${activeColor} backdrop-blur-md rounded-xl shadow-[0_8px_32px_0_rgba(31,38,135,0.37)] border border-white/20 overflow-hidden`}
-                                transition={{ type: "spring", bounce: 0.25, duration: 0.6 }}
+                                className={`absolute inset-0 ${activeColor} rounded-xl shadow-[0_8px_32px_0_rgba(31,38,135,0.37)] border border-white/20 overflow-hidden`}
+                                transition={spring.momentum}
                             >
                                 {/* Glossy Reflection */}
                                 <div className="absolute inset-0 bg-gradient-to-br from-white/30 to-transparent pointer-events-none"></div>
