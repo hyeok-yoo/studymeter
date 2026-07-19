@@ -137,13 +137,27 @@ export function morningReportKindFor(date: string): 'morning-report' | 'weekly-r
     return new Date(date + 'T12:00:00').getDay() === 1 ? 'weekly-report' : 'morning-report';
 }
 
+// 동시 호출(홈 카드 + 앱 레벨 팝업 등) 시 API 이중 호출을 막는 in-flight 공유 프라미스
+let inflightMorningReport: { date: string; promise: Promise<string | null> } | null = null;
+
 /**
  * 오늘의 아침 리포트를 캐시 우선으로 생성. (그날 첫 실행 시 호출)
  * 반환 null = 생성 불가(키 없음/쿼터/오프라인) → 카드 자체를 숨긴다.
+ * 같은 날짜의 동시 호출은 하나의 생성 프라미스를 공유한다.
  */
 export async function generateMorningReport(settings: Settings): Promise<string | null> {
     if (!isAmbientAiEnabled(settings)) return null;
     const today = getTodayDate();
+
+    if (inflightMorningReport?.date === today) return inflightMorningReport.promise;
+    const promise = generateMorningReportInner(settings, today).finally(() => {
+        if (inflightMorningReport?.date === today) inflightMorningReport = null;
+    });
+    inflightMorningReport = { date: today, promise };
+    return promise;
+}
+
+async function generateMorningReportInner(settings: Settings, today: string): Promise<string | null> {
     const kind = morningReportKindFor(today);
 
     return getCachedOrGenerate(kind, today, async () => {

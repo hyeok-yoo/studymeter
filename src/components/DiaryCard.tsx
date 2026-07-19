@@ -14,6 +14,7 @@ import {
     getDiaryEntry,
     computeDiaryStats,
     collectSessionTags,
+    getDiaryStreak,
 } from '../lib/db'
 import { generateDiaryDraft } from '../lib/ai/aiService'
 import { DiaryEditor, DiaryEntryView } from './DiaryEditModal'
@@ -30,19 +31,22 @@ export default function DiaryCard({ settings }: DiaryCardProps) {
     const [inheritedTags, setInheritedTags] = useState<string[]>([])
     const [draft, setDraft] = useState('')
     const [editing, setEditing] = useState(false)
+    const [streak, setStreak] = useState(0)
 
     useEffect(() => {
         let cancelled = false
         ;(async () => {
-            const [e, s, tags] = await Promise.all([
+            const [e, s, tags, st] = await Promise.all([
                 getDiaryEntry(today),
                 computeDiaryStats(today, settings.dailyGoalMs),
                 collectSessionTags(today),
+                getDiaryStreak(today),
             ])
             if (cancelled) return
             setEntry(e)
             setStats(s)
             setInheritedTags(tags)
+            setStreak(st)
             setLoading(false)
             // 초안은 항상 성공(규칙 기반 폴백). 편집 진입 대비 미리 확보.
             const d = await generateDiaryDraft(settings, today, s)
@@ -53,8 +57,9 @@ export default function DiaryCard({ settings }: DiaryCardProps) {
     }, [today])
 
     const reload = async () => {
-        const e = await getDiaryEntry(today)
+        const [e, st] = await Promise.all([getDiaryEntry(today), getDiaryStreak(today)])
         setEntry(e)
+        setStreak(st)
         setEditing(false)
     }
 
@@ -63,6 +68,11 @@ export default function DiaryCard({ settings }: DiaryCardProps) {
             <div className="flex items-center gap-2 mb-5">
                 <Icon icon="mdi:notebook-heart-outline" className="text-2xl text-indigo-400" />
                 <h2 className="text-lg font-black text-[var(--color-text)]">오늘의 일기</h2>
+                {streak > 0 && (
+                    <span className="text-[11px] font-black px-2 py-0.5 rounded-full bg-orange-500/15 text-orange-400 border border-orange-400/20 flex items-center gap-0.5">
+                        <Icon icon="mdi:fire" className="text-xs" /> {streak}일 연속
+                    </span>
+                )}
                 {entry && !editing && (
                     <span className="ml-auto text-[11px] font-bold text-emerald-400 flex items-center gap-1">
                         <Icon icon="mdi:check-circle" className="text-sm" /> 확정됨

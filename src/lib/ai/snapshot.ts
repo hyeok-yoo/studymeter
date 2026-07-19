@@ -11,6 +11,7 @@ import {
     getEvalScore,
     getDiaryRange,
     type DiaryStats,
+    formatDateYYYYMMDD,
 } from '../db';
 
 function fmtStats(label: string, stats: DiaryStats): string {
@@ -51,7 +52,7 @@ export async function buildRecentDaysSnapshot(endDate: string, days: number, dai
     const lines: string[] = [`[최근 ${days}일 기록 (${endDate} 기준)]`];
     const start = new Date(end);
     start.setDate(start.getDate() - (days - 1));
-    const startStr = start.toISOString().slice(0, 10);
+    const startStr = formatDateYYYYMMDD(start); // 로컬 날짜 기준 (toISOString은 UTC라 KST에서 하루 어긋남)
     const diaries = new Map((await getDiaryRange(startStr, endDate)).map(d => [d.date, d]));
 
     for (let i = 0; i < days; i++) {

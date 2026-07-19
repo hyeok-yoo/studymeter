@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Icon } from '@iconify/react'
 import type { Settings } from '../lib/db'
-import { db, formatDuration, getTodayDate } from '../lib/db'
+import { db, formatDuration, formatDateYYYYMMDD, getTodayDate } from '../lib/db'
 import {
     generateContent,
     fetchGeminiModels,
@@ -148,7 +148,8 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
 
             const sessions = await db.sessions
                 .where('date')
-                .between(monday.toISOString().split('T')[0], sunday.toISOString().split('T')[0], true, true)
+                // 로컬 날짜 기준 (toISOString은 UTC라 KST 자정~09시에 하루 어긋남)
+                .between(formatDateYYYYMMDD(monday), formatDateYYYYMMDD(sunday), true, true)
                 .toArray()
 
             const totalTime = sessions.reduce((sum, s) => sum + s.duration, 0)
