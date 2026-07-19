@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Icon } from '@iconify/react'
-import type { Settings, SubjectItem, AiRole, EvalTag, AiSystemPrompts } from '../lib/db'
+import type { Settings, SubjectItem, AiRole, AiThinkingLevel, EvalTag, AiSystemPrompts } from '../lib/db'
 import { db } from '../lib/db'
 import { exportBackup, importBackup } from '../lib/backup'
 import { useModal } from '../lib/ModalContext'
@@ -98,6 +98,8 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
     const [aiAmbientEnabled, setAiAmbientEnabled] = useState(settings.aiAmbientEnabled ?? true)
     const [morningReportEnabled, setMorningReportEnabled] = useState(settings.morningReportEnabled ?? true)
     const [aiRoleModels, setAiRoleModels] = useState<Partial<Record<AiRole, string>>>(settings.aiRoleModels ?? {})
+    const [aiGroundingDefault, setAiGroundingDefault] = useState(settings.aiGroundingDefault !== false)
+    const [aiThinkingLevels, setAiThinkingLevels] = useState<Partial<Record<AiRole, AiThinkingLevel>>>(settings.aiThinkingLevels ?? {})
     const [aiSystemPromptsState, setAiSystemPromptsState] = useState<Record<PromptKey, string>>(() => {
         const init = {} as Record<PromptKey, string>
         for (const key of Object.keys(PROMPT_LABELS) as PromptKey[]) {
@@ -264,6 +266,13 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
         onSettingsChange({ ...settings, morningReportEnabled: next })
     }
 
+    const handleToggleGrounding = () => {
+        const next = !aiGroundingDefault
+        setAiGroundingDefault(next)
+        db.settings.update(settings.id!, { aiGroundingDefault: next })
+        onSettingsChange({ ...settings, aiGroundingDefault: next })
+    }
+
     // ── 평가 태그 관리 핸들러 ────────────────────────────────────────────────
     const handleToggleTagHidden = (idx: number) => {
         setEvalTagsState(prev => {
@@ -393,6 +402,8 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
             advancedMode,
             aiAmbientEnabled,
             morningReportEnabled,
+            aiGroundingDefault,
+            aiThinkingLevels: Object.keys(aiThinkingLevels).length > 0 ? aiThinkingLevels : undefined,
             aiRoleModels: Object.keys(roleModelOverrides).length > 0 ? roleModelOverrides : undefined,
             aiSystemPrompts: Object.keys(promptOverrides).length > 0 ? promptOverrides : undefined,
             evalTags: evalTagsDirty ? evalTagsState : settings.evalTags,
@@ -830,6 +841,14 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                         </div>
                         <ToggleSwitch enabled={morningReportEnabled} onChange={handleToggleMorningReport} />
                     </div>
+
+                    <div className="pt-3 border-t border-[var(--color-border)] flex items-center justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                            <label className="text-sm font-medium">웹 검색(Google 그라운딩)</label>
+                            <p className="text-xs text-[var(--color-text-secondary)] mt-1">AI가 최신 정보를 Google 검색으로 근거 삼아 답합니다. (지원하는 모델에서만 자동 적용)</p>
+                        </div>
+                        <ToggleSwitch enabled={aiGroundingDefault} onChange={handleToggleGrounding} />
+                    </div>
                 </div>
 
                 {/* 역할별 모델 오버라이드 (고급 모드) */}
@@ -866,8 +885,40 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                                         className="w-full px-4 py-2.5 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)] text-sm font-mono"
                                     />
                                 )}
+                                {/* 역할별 추론(thinking) 강도 */}
+                                <div className="flex items-center gap-2 mt-2">
+                                    <span className="text-[10px] text-[var(--color-text-secondary)] whitespace-nowrap">추론 강도</span>
+                                    <div className="flex gap-1">
+                                        {(['off', 'low', 'medium', 'high'] as AiThinkingLevel[]).map(lv => {
+                                            const active = aiThinkingLevels[role] === lv
+                                            const label = lv === 'off' ? '끔' : lv === 'low' ? '낮음' : lv === 'medium' ? '중간' : '높음'
+                                            return (
+                                                <button
+                                                    key={lv}
+                                                    type="button"
+                                                    onClick={() => setAiThinkingLevels(prev => ({ ...prev, [role]: lv }))}
+                                                    className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all ${active
+                                                        ? 'bg-[var(--color-primary)] text-white'
+                                                        : 'bg-[var(--color-surface)] text-[var(--color-text-secondary)] border border-[var(--color-border)]'}`}
+                                                >
+                                                    {label}
+                                                </button>
+                                            )
+                                        })}
+                                        <button
+                                            type="button"
+                                            onClick={() => setAiThinkingLevels(prev => { const n = { ...prev }; delete n[role]; return n })}
+                                            className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all ${!aiThinkingLevels[role]
+                                                ? 'bg-[var(--color-primary)] text-white'
+                                                : 'bg-[var(--color-surface)] text-[var(--color-text-secondary)] border border-[var(--color-border)]'}`}
+                                        >
+                                            자동
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         ))}
+                        <p className="text-[10px] text-[var(--color-text-secondary)] opacity-70">추론 강도: 높을수록 답변 품질↑·속도↓. Gemini 3 계열은 낮음/중간/높음, 2.5 계열은 예산으로 자동 변환됩니다.</p>
                     </div>
                 )}
 

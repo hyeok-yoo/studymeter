@@ -60,6 +60,9 @@ export interface SubjectItem {
 /** AI 역할: 기능이 모델을 직접 고르지 않고 역할만 선언한다. */
 export type AiRole = 'deep' | 'interactive' | 'ambient';
 
+/** 추론(thinking) 강도. Gemini 3=thinkingLevel, 2.5=thinkingBudget 로 변환된다. */
+export type AiThinkingLevel = 'off' | 'low' | 'medium' | 'high';
+
 /** 평가 태그 정의. 프리셋 + 사용자 커스텀 공용. */
 export interface EvalTag {
     name: string;
@@ -98,6 +101,10 @@ export interface Settings {
     aiAmbientEnabled?: boolean;      // 앰비언트 AI (리포트·답장·코멘트). 기본 true
     /** 역할별 모델 오버라이드. 빈 값/undefined = 자동(별칭 기본값) */
     aiRoleModels?: Partial<Record<AiRole, string>>;
+    /** 역할별 추론(thinking) 강도. undefined = 역할 기본값 */
+    aiThinkingLevels?: Partial<Record<AiRole, AiThinkingLevel>>;
+    /** 웹 검색(Google 그라운딩) 기본 사용. 기본 true (지원 모델에서만 적용) */
+    aiGroundingDefault?: boolean;
     /** 기능별 시스템 프롬프트 오버라이드 */
     aiSystemPrompts?: AiSystemPrompts;
     /** 평가 태그 목록 (undefined = 기본 프리셋 사용) */

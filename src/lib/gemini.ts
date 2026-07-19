@@ -108,8 +108,8 @@ export interface GeminiFunctionDeclaration {
     parameters?: Record<string, unknown>
 }
 
-/** 추론(Thinking) 강도. 역할 프로파일이 결정한다. */
-export type ThinkingLevel = 'off' | 'low' | 'high'
+/** 추론(Thinking) 강도. 역할 프로파일/설정이 결정한다. */
+export type ThinkingLevel = 'off' | 'low' | 'medium' | 'high'
 
 export interface GeminiReply {
     /** 사용자에게 보여줄 최종 답변 (마크다운) */
@@ -192,13 +192,42 @@ function parseCandidate(data: unknown): ParsedCandidate {
 }
 
 /** ThinkingLevel → thinkingConfig 변환. off 는 thinking 을 끈다 (지연 최소화). */
-function thinkingConfigFor(level: ThinkingLevel | undefined, includeThoughts: boolean): Record<string, unknown> | null {
+/** 모델 세대 판별: Gemini 2.5 계열은 thinkingBudget, 그 외(3.x·-latest 별칭)는 thinkingLevel 을 쓴다. */
+function usesLegacyThinkingBudget(model: string): boolean {
+    return /2\.5/.test(model)
+}
+function isGemmaModel(model: string): boolean {
+    return /gemma/i.test(model)
+}
+
+/**
+ * 추론 설정 생성. 모델 세대에 맞는 파라미터를 고른다.
+ *  - Gemini 3.x / -latest 별칭: thinkingLevel ("LOW"|"MEDIUM"|"HIGH")
+ *  - Gemini 2.5: thinkingBudget (0=끔, 512=low, -1=동적)
+ *  - Gemma: 이 경로로 제어하지 않음(생략)
+ * thinkingLevel 과 thinkingBudget 을 함께 보내면 400 이므로 절대 동시 사용하지 않는다.
+ */
+function thinkingConfigFor(
+    level: ThinkingLevel | undefined,
+    includeThoughts: boolean,
+    model: string,
+): Record<string, unknown> | null {
     if (level === undefined && !includeThoughts) return null
     const config: Record<string, unknown> = {}
     if (includeThoughts) config.includeThoughts = true
-    if (level === 'off') config.thinkingBudget = 0
-    else if (level === 'low') config.thinkingBudget = 512
-    // 'high' 는 모델 기본(동적) 예산 사용
+
+    if (level !== undefined && !isGemmaModel(model)) {
+        if (usesLegacyThinkingBudget(model)) {
+            // Gemini 2.5 계열
+            if (level === 'off') config.thinkingBudget = 0
+            else if (level === 'low') config.thinkingBudget = 512
+            else if (level === 'medium') config.thinkingBudget = 4096
+            else config.thinkingBudget = -1 // high → 동적
+        } else {
+            // Gemini 3.x / -latest 별칭 — thinkingLevel. 'off'는 명시적 지원이 없어 최저(LOW)로.
+            config.thinkingLevel = (level === 'off' ? 'low' : level).toUpperCase()
+        }
+    }
     return config
 }
 
@@ -221,6 +250,9 @@ export async function generateContent(
     const requestContents: GeminiContent[] =
         contents ?? [{ role: 'user', parts: [{ text: prompt }] }]
 
+    // 폴백으로 모델이 바뀌면 thinking 파라미터도 그 모델 세대에 맞게 재생성되도록 현재 모델을 추적
+    let currentModel = model
+
     const buildBody = () => {
         const body: Record<string, unknown> = { contents: requestContents }
         if (systemInstruction) {
@@ -230,19 +262,21 @@ export async function generateContent(
         if (useGrounding) tools.push({ google_search: {} })
         if (functionDeclarations?.length) tools.push({ functionDeclarations })
         if (tools.length) body.tools = tools
-        const thinkingConfig = thinkingConfigFor(thinkingLevel, !!useThinking)
+        const thinkingConfig = thinkingConfigFor(thinkingLevel, !!useThinking, currentModel)
         if (thinkingConfig) {
             body.generationConfig = { thinkingConfig }
         }
         return body
     }
 
-    const call = (m: string) =>
-        fetch(`${API_BASE}/models/${m}:generateContent?key=${encodeURIComponent(apiKey)}`, {
+    const call = (m: string) => {
+        currentModel = m
+        return fetch(`${API_BASE}/models/${m}:generateContent?key=${encodeURIComponent(apiKey)}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(buildBody()),
         })
+    }
 
     let usedModel = model
     let fellBack = false

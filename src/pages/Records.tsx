@@ -593,7 +593,7 @@ export default function Records() {
 // ── Annual Contribution Graph ────────────────────────────────────────────────
 
 function getContributionColor(ms: number): string {
-    if (ms === 0) return 'rgba(255,255,255,0.06)'
+    if (ms === 0) return 'rgba(128,128,140,0.12)'
     const h = ms / 3600000
     if (h < 2) return 'rgba(79,70,229,0.35)'
     if (h < 4) return '#312e81'
@@ -706,7 +706,7 @@ function AnnualContributionGraph() {
                 </div>
                 <div className="glass-card p-4 text-center">
                     <p className="text-xs text-[var(--color-text-secondary)] mb-1 uppercase tracking-widest font-bold">현재 연속</p>
-                    <p className="text-3xl font-black" style={{ color: stats.currentStreak > 0 ? '#22c55e' : 'rgba(255,255,255,0.3)' }}>{stats.currentStreak}<span className="text-base font-bold opacity-60">일</span></p>
+                    <p className="text-3xl font-black" style={{ color: stats.currentStreak > 0 ? '#22c55e' : 'var(--color-text-secondary)' }}>{stats.currentStreak}<span className="text-base font-bold opacity-60">일</span></p>
                 </div>
                 <div className="glass-card p-4 text-center">
                     <p className="text-xs text-[var(--color-text-secondary)] mb-1 uppercase tracking-widest font-bold">연간 총합</p>
@@ -732,7 +732,7 @@ function AnnualContributionGraph() {
                             {monthLabels.map(({ label, colIdx }) => (
                                 <span key={label + colIdx} style={{
                                     position: 'absolute', left: `${colIdx * STEP}px`,
-                                    fontSize: '10px', fontWeight: 700, color: 'rgba(255,255,255,0.4)',
+                                    fontSize: '10px', fontWeight: 700, color: 'var(--color-text-secondary)',
                                     whiteSpace: 'nowrap'
                                 }}>{label}</span>
                             ))}
@@ -743,7 +743,7 @@ function AnnualContributionGraph() {
                             {/* Day labels */}
                             <div style={{ display: 'flex', flexDirection: 'column', gap: `${GAP}px`, marginTop: '1px' }}>
                                 {DAY_LABELS.map((label, i) => (
-                                    <div key={i} style={{ width: '16px', height: `${CELL}px`, fontSize: '9px', fontWeight: 700, color: 'rgba(255,255,255,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                                    <div key={i} style={{ width: '16px', height: `${CELL}px`, fontSize: '9px', fontWeight: 700, color: 'var(--color-text-secondary)', opacity: 0.7, display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
                                         {label}
                                     </div>
                                 ))}
@@ -805,7 +805,7 @@ function AnnualContributionGraph() {
 
                 {/* Legend */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '12px', justifyContent: 'flex-end' }}>
-                    <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)', marginRight: '4px' }}>적음</span>
+                    <span style={{ fontSize: '10px', color: 'var(--color-text-secondary)', opacity: 0.7, marginRight: '4px' }}>적음</span>
                     {[0, 3600000, 7200000 * 2, 3600000 * 6, 3600000 * 9].map((ms, i) => (
                         <div key={i} style={{
                             width: `${CELL}px`, height: `${CELL}px`, borderRadius: '3px',
@@ -813,7 +813,7 @@ function AnnualContributionGraph() {
                             boxShadow: getContributionGlow(ms)
                         }} />
                     ))}
-                    <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)', marginLeft: '4px' }}>많음</span>
+                    <span style={{ fontSize: '10px', color: 'var(--color-text-secondary)', opacity: 0.7, marginLeft: '4px' }}>많음</span>
                 </div>
             </div>
         </div>
@@ -897,13 +897,13 @@ function DiaryTab() {
                                 <div className="flex items-center gap-3">
                                     <div className="flex flex-col items-center justify-center w-12 flex-shrink-0">
                                         <span className="text-xl font-black gradient-text tabular-nums">{entry.score}</span>
-                                        <span className="text-[9px] font-bold text-white/30">/ 10</span>
+                                        <span className="text-[9px] font-bold text-[var(--color-text-secondary)]/70">/ 10</span>
                                     </div>
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2 mb-1">
                                             <span className="text-xs font-bold text-[var(--color-text-secondary)]">{entry.date}</span>
                                             {entry.auto && (
-                                                <span className="px-1.5 py-0.5 rounded-full bg-white/10 text-[9px] font-bold text-white/40">자동</span>
+                                                <span className="px-1.5 py-0.5 rounded-full bg-black/[0.05] dark:bg-white/10 text-[9px] font-bold text-[var(--color-text-secondary)]">자동</span>
                                             )}
                                         </div>
                                         {entry.oneLiner && (
@@ -912,15 +912,15 @@ function DiaryTab() {
                                         {entry.dayTags.length > 0 && (
                                             <div className="flex flex-wrap gap-1 mt-1.5">
                                                 {entry.dayTags.slice(0, 4).map(t => (
-                                                    <span key={t} className="px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-300 text-[10px] font-bold">{t}</span>
+                                                    <span key={t} className="px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-400 text-[10px] font-bold">{t}</span>
                                                 ))}
                                                 {entry.dayTags.length > 4 && (
-                                                    <span className="text-[10px] font-bold text-white/30">+{entry.dayTags.length - 4}</span>
+                                                    <span className="text-[10px] font-bold text-[var(--color-text-secondary)]/70">+{entry.dayTags.length - 4}</span>
                                                 )}
                                             </div>
                                         )}
                                     </div>
-                                    <Icon icon="mdi:chevron-right" className="text-lg text-white/20 flex-shrink-0" />
+                                    <Icon icon="mdi:chevron-right" className="text-lg text-[var(--color-text-secondary)]/50 flex-shrink-0" />
                                 </div>
                             </button>
                         ))}
@@ -987,12 +987,12 @@ function DiaryDetailModal({ entry, settings, onClose, onEdited }: {
                             className="relative w-full max-w-lg liquid-modal shadow-2xl overflow-hidden"
                             onClick={(e) => e.stopPropagation()}
                         >
-                            <div className="absolute inset-0 pointer-events-none bg-gradient-to-br from-white/5 to-transparent" />
+                            <div className="absolute inset-0 pointer-events-none bg-gradient-to-br from-indigo-500/5 via-transparent to-transparent" />
                             <div className="relative p-8 space-y-6 max-h-[85vh] overflow-y-auto no-scrollbar">
                                 <div className="flex items-center justify-between">
-                                    <h2 className="text-xl font-black text-white">{entry.date}</h2>
-                                    <button onClick={onClose} className="p-1.5 rounded-full hover:bg-white/10 transition-all">
-                                        <Icon icon="mdi:close" className="text-xl text-white/50" />
+                                    <h2 className="text-xl font-black text-[var(--color-text)]">{entry.date}</h2>
+                                    <button onClick={onClose} className="p-1.5 rounded-full hover:bg-black/[0.06] dark:hover:bg-white/10 transition-all">
+                                        <Icon icon="mdi:close" className="text-xl text-[var(--color-text-secondary)]" />
                                     </button>
                                 </div>
 
@@ -1004,31 +1004,31 @@ function DiaryDetailModal({ entry, settings, onClose, onEdited }: {
 
                                 {/* 세션 타임라인 */}
                                 {sessions.length > 0 && (
-                                    <div className="space-y-2 pt-2 border-t border-white/5">
-                                        <p className="text-xs font-black uppercase tracking-widest text-white/40 pt-2">세션 타임라인</p>
+                                    <div className="space-y-2 pt-2 border-t border-white/10">
+                                        <p className="text-xs font-black uppercase tracking-widest text-[var(--color-text-secondary)] pt-2">세션 타임라인</p>
                                         {sessions.map(s => {
                                             const sc = getEvalScore(s.evaluation)
                                             return (
-                                                <div key={s.id} className="flex items-start gap-3 px-3 py-2.5 rounded-xl bg-white/5">
-                                                    <span className="text-xs font-bold text-white/40 tabular-nums mt-0.5 flex-shrink-0">{formatTimeHHMM(s.startTime)}</span>
+                                                <div key={s.id} className="flex items-start gap-3 px-3 py-2.5 rounded-xl bg-black/[0.03] dark:bg-white/5">
+                                                    <span className="text-xs font-bold text-[var(--color-text-secondary)] tabular-nums mt-0.5 flex-shrink-0">{formatTimeHHMM(s.startTime)}</span>
                                                     <div className="flex-1 min-w-0">
                                                         <div className="flex items-center gap-2 flex-wrap">
                                                             <span className="text-sm font-bold text-[var(--color-text)]">{s.subject}</span>
                                                             {s.subItem && <span className="text-xs text-[var(--color-primary)]">› {s.subItem}</span>}
-                                                            <span className="text-[10px] text-white/40">{formatDurationHourMinute(s.duration)}</span>
+                                                            <span className="text-[10px] text-[var(--color-text-secondary)]">{formatDurationHourMinute(s.duration)}</span>
                                                             {sc !== null && (
-                                                                <span className="text-[10px] font-bold text-indigo-300">{sc}/10</span>
+                                                                <span className="text-[10px] font-bold text-indigo-400">{sc}/10</span>
                                                             )}
                                                         </div>
                                                         {s.evaluation?.tags && s.evaluation.tags.length > 0 && (
                                                             <div className="flex flex-wrap gap-1 mt-1">
                                                                 {s.evaluation.tags.map(t => (
-                                                                    <span key={t} className="px-1.5 py-0.5 rounded-full bg-white/10 text-[9px] font-bold text-white/50">{t}</span>
+                                                                    <span key={t} className="px-1.5 py-0.5 rounded-full bg-black/[0.05] dark:bg-white/10 text-[9px] font-bold text-[var(--color-text-secondary)]">{t}</span>
                                                                 ))}
                                                             </div>
                                                         )}
                                                         {s.evaluation?.memo && (
-                                                            <p className="text-xs text-white/50 italic mt-1 truncate">"{s.evaluation.memo}"</p>
+                                                            <p className="text-xs text-[var(--color-text-secondary)] italic mt-1 truncate">"{s.evaluation.memo}"</p>
                                                         )}
                                                     </div>
                                                 </div>

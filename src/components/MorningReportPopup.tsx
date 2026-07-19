@@ -78,12 +78,12 @@ export default function MorningReportPopup({ settings }: MorningReportPopupProps
                                     <Icon icon={kind === 'weekly-report' ? 'mdi:chart-timeline-variant' : 'mdi:weather-sunset-up'} className="text-xl text-white" />
                                 </div>
                                 <div className="min-w-0">
-                                    <h2 className="text-lg font-black text-white leading-tight">{title}</h2>
-                                    <p className="text-[11px] font-bold text-white/40">홈 화면에서 언제든 다시 볼 수 있어요</p>
+                                    <h2 className="text-lg font-black text-[var(--color-text)] leading-tight">{title}</h2>
+                                    <p className="text-[11px] font-bold text-[var(--color-text-secondary)]">홈 화면에서 언제든 다시 볼 수 있어요</p>
                                 </div>
                             </header>
 
-                            <div className="overflow-y-auto no-scrollbar text-sm text-white/90 pr-1">
+                            <div className="overflow-y-auto no-scrollbar text-sm text-[var(--color-text)]/90 pr-1">
                                 <AiMarkdown>{content}</AiMarkdown>
                             </div>
 
