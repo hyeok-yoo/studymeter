@@ -89,6 +89,28 @@ export interface GroundingSource {
     uri: string
 }
 
+/** 모델이 요청한 함수 호출 */
+export interface GeminiFunctionCall {
+    name: string
+    args: Record<string, unknown>
+}
+
+/** Gemini contents 배열의 한 턴. 함수 호출 루프/멀티턴 대화에 사용. */
+export interface GeminiContent {
+    role: 'user' | 'model'
+    parts: Array<Record<string, unknown>>
+}
+
+/** 함수 선언 (Gemini functionDeclarations 형식 — OpenAPI 스키마 서브셋) */
+export interface GeminiFunctionDeclaration {
+    name: string
+    description: string
+    parameters?: Record<string, unknown>
+}
+
+/** 추론(Thinking) 강도. 역할 프로파일이 결정한다. */
+export type ThinkingLevel = 'off' | 'low' | 'high'
+
 export interface GeminiReply {
     /** 사용자에게 보여줄 최종 답변 (마크다운) */
     text: string
@@ -96,6 +118,10 @@ export interface GeminiReply {
     reasoning?: string
     /** Google 검색 그라운딩 출처들 */
     grounding?: GroundingSource[]
+    /** 모델이 요청한 함수 호출들 (있으면 호출자가 실행 후 continueWithFunctionResults 로 이어간다) */
+    functionCalls?: GeminiFunctionCall[]
+    /** 함수 호출 루프를 잇기 위한, 모델 응답 턴을 포함한 contents 스냅샷 */
+    contents?: GeminiContent[]
     /** 실제로 응답을 생성한 모델명 (자동 전환 시 원래와 다를 수 있음) */
     usedModel: string
     /** 할당량 초과로 더 가벼운 모델로 자동 전환됐는지 */
@@ -109,32 +135,71 @@ export interface GenerateOptions {
     useGrounding?: boolean
     /** 단계적 추론(Thinking) 요약 포함 */
     useThinking?: boolean
+    /** 추론 강도. 지정 시 thinkingBudget 으로 변환된다 (지원 모델에서만 적용). */
+    thinkingLevel?: ThinkingLevel
     /** 429 대체 모델 후보(미리 받아둔 목록) */
     availableModels?: GeminiModel[]
+    /** 함수 선언 목록 (function calling) */
+    functionDeclarations?: GeminiFunctionDeclaration[]
+    /** prompt 대신 전체 contents 를 직접 전달 (멀티턴/함수 루프) */
+    contents?: GeminiContent[]
+    /** 429 자동 폴백 비활성화 (라우터가 체인을 직접 관리할 때) */
+    noFallback?: boolean
+}
+
+/** 쿼터 소진(429)을 라우터가 구분할 수 있게 하는 전용 에러 */
+export class QuotaExceededError extends Error {
+    model: string
+    constructor(model: string) {
+        super(`일일 사용량 초과 (${model})`)
+        this.name = 'QuotaExceededError'
+        this.model = model
+    }
 }
 
 interface ParsedCandidate {
     answer: string
     reasoning: string
     grounding: GroundingSource[]
+    functionCalls: GeminiFunctionCall[]
+    modelParts: Array<Record<string, unknown>>
 }
 
 function parseCandidate(data: unknown): ParsedCandidate {
     const cand = (data as { candidates?: Array<Record<string, unknown>> })?.candidates?.[0]
-    const content = cand?.content as { parts?: Array<{ text?: string; thought?: boolean }> } | undefined
+    const content = cand?.content as { parts?: Array<Record<string, unknown>> } | undefined
     let answer = ''
     let reasoning = ''
+    const functionCalls: GeminiFunctionCall[] = []
+    const modelParts: Array<Record<string, unknown>> = []
     for (const part of content?.parts ?? []) {
+        const fc = part.functionCall as { name?: string; args?: Record<string, unknown> } | undefined
+        if (fc?.name) {
+            functionCalls.push({ name: fc.name, args: fc.args ?? {} })
+            modelParts.push(part)
+            continue
+        }
         if (typeof part.text !== 'string') continue
         if (part.thought) reasoning += part.text
-        else answer += part.text
+        else { answer += part.text; modelParts.push(part) }
     }
     const meta = cand?.groundingMetadata as { groundingChunks?: Array<{ web?: { uri?: string; title?: string } }> } | undefined
     const grounding: GroundingSource[] = []
     for (const chunk of meta?.groundingChunks ?? []) {
         if (chunk.web?.uri) grounding.push({ uri: chunk.web.uri, title: chunk.web.title || chunk.web.uri })
     }
-    return { answer: answer.trim(), reasoning: reasoning.trim(), grounding }
+    return { answer: answer.trim(), reasoning: reasoning.trim(), grounding, functionCalls, modelParts }
+}
+
+/** ThinkingLevel → thinkingConfig 변환. off 는 thinking 을 끈다 (지연 최소화). */
+function thinkingConfigFor(level: ThinkingLevel | undefined, includeThoughts: boolean): Record<string, unknown> | null {
+    if (level === undefined && !includeThoughts) return null
+    const config: Record<string, unknown> = {}
+    if (includeThoughts) config.includeThoughts = true
+    if (level === 'off') config.thinkingBudget = 0
+    else if (level === 'low') config.thinkingBudget = 512
+    // 'high' 는 모델 기본(동적) 예산 사용
+    return config
 }
 
 /**
@@ -148,20 +213,26 @@ export async function generateContent(
     prompt: string,
     options: GenerateOptions = {},
 ): Promise<GeminiReply> {
-    const { systemInstruction, useGrounding, useThinking, availableModels } = options
+    const {
+        systemInstruction, useGrounding, useThinking, thinkingLevel,
+        availableModels, functionDeclarations, contents, noFallback,
+    } = options
+
+    const requestContents: GeminiContent[] =
+        contents ?? [{ role: 'user', parts: [{ text: prompt }] }]
 
     const buildBody = () => {
-        const body: Record<string, unknown> = {
-            contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        }
+        const body: Record<string, unknown> = { contents: requestContents }
         if (systemInstruction) {
             body.systemInstruction = { parts: [{ text: systemInstruction }] }
         }
-        if (useGrounding) {
-            body.tools = [{ google_search: {} }]
-        }
-        if (useThinking) {
-            body.generationConfig = { thinkingConfig: { includeThoughts: true } }
+        const tools: Array<Record<string, unknown>> = []
+        if (useGrounding) tools.push({ google_search: {} })
+        if (functionDeclarations?.length) tools.push({ functionDeclarations })
+        if (tools.length) body.tools = tools
+        const thinkingConfig = thinkingConfigFor(thinkingLevel, !!useThinking)
+        if (thinkingConfig) {
+            body.generationConfig = { thinkingConfig }
         }
         return body
     }
@@ -177,6 +248,10 @@ export async function generateContent(
     let fellBack = false
     let res = await call(model)
 
+    if (res.status === 429 && noFallback) {
+        throw new QuotaExceededError(model)
+    }
+
     if (res.status === 429 && !/flash/i.test(model)) {
         const models = availableModels ?? (await fetchGeminiModels(apiKey).catch(() => []))
         const fallback = models.find((m) => /flash/i.test(m.name) && m.name !== model)
@@ -189,20 +264,35 @@ export async function generateContent(
 
     const data = await res.json()
     if (data.error) {
-        const msg =
-            data.error.code === 429
-                ? '일일 사용량이 초과되었습니다. 내일 다시 시도하거나, Pay-as-you-go 가 활성화된 프로젝트의 API 키를 사용해주세요.'
-                : `API 오류: ${data.error.message}`
-        throw new Error(msg)
+        if (data.error.code === 429) {
+            if (noFallback) throw new QuotaExceededError(usedModel)
+            throw new Error('일일 사용량이 초과되었습니다. 내일 다시 시도하거나, Pay-as-you-go 가 활성화된 프로젝트의 API 키를 사용해주세요.')
+        }
+        throw new Error(`API 오류: ${data.error.message}`)
     }
 
-    const { answer, reasoning, grounding } = parseCandidate(data)
-    if (!answer) throw new Error('응답을 받지 못했습니다.')
+    const { answer, reasoning, grounding, functionCalls, modelParts } = parseCandidate(data)
+    if (!answer && functionCalls.length === 0) throw new Error('응답을 받지 못했습니다.')
     return {
         text: answer,
         reasoning: reasoning || undefined,
         grounding: grounding.length ? grounding : undefined,
+        functionCalls: functionCalls.length ? functionCalls : undefined,
+        contents: [...requestContents, { role: 'model', parts: modelParts }],
         usedModel,
         fellBack,
+    }
+}
+
+/**
+ * 함수 실행 결과를 모델에 돌려주는 후속 턴용 content 를 만든다.
+ * (호출자는 reply.contents + 이 content 로 다시 generateContent 를 호출)
+ */
+export function buildFunctionResponseContent(
+    results: Array<{ name: string; response: Record<string, unknown> }>,
+): GeminiContent {
+    return {
+        role: 'user',
+        parts: results.map(r => ({ functionResponse: { name: r.name, response: r.response } })),
     }
 }

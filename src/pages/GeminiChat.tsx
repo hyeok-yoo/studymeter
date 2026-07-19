@@ -1,13 +1,31 @@
 import { useEffect, useMemo, useState } from 'react'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
 import { Icon } from '@iconify/react'
 import type { Settings } from '../lib/db'
 import { db, formatDuration, getTodayDate } from '../lib/db'
-import { generateContent, fetchGeminiModels, type GeminiModel, type GroundingSource } from '../lib/gemini'
+import {
+    generateContent,
+    fetchGeminiModels,
+    buildFunctionResponseContent,
+    QuotaExceededError,
+    type GeminiModel,
+    type GroundingSource,
+    type GeminiContent,
+    type GeminiReply,
+} from '../lib/gemini'
+import { CHAT_FUNCTION_DECLARATIONS, executeChatFunction } from '../lib/ai/functions'
+import { buildModelChain, supportsFunctionCalling, markModelExhausted } from '../lib/ai/router'
+import { buildSystemInstruction } from '../lib/ai/prompts'
+import AiMarkdown from '../components/AiMarkdown'
 
 interface GeminiChatProps {
     settings: Settings
+}
+
+/** 어시스턴트 메시지 안에서 실행된 함수 호출 하나 (표시용). */
+interface FunctionActivityItem {
+    name: string
+    label: string
+    error?: boolean
 }
 
 interface Message {
@@ -15,17 +33,47 @@ interface Message {
     content: string
     reasoning?: string
     grounding?: GroundingSource[]
+    functionActivity?: FunctionActivityItem[]
 }
 
-// 앱에 내장된 학습 코치 페르소나 + 출력 형식 규칙.
-const SYSTEM_INSTRUCTION = `당신은 학습 관리 앱 "StudyMeter"에 내장된 한국어 학습 코치입니다.
-역할: 공부 계획 수립, 개념 설명, 동기부여, 시간·집중 관리에 대해 학생을 돕습니다.
+/** 대화 히스토리(contents)로 유지할 최대 항목 수. 넘으면 오래된 턴부터 자른다. */
+const MAX_HISTORY_ENTRIES = 40
+/** 함수 호출 루프 최대 라운드(모델 호출 횟수). */
+const MAX_FUNCTION_ROUNDS = 4
 
-답변 규칙:
-- 항상 한국어로, 친근하지만 군더더기 없이 간결하게 답합니다.
-- 답변은 반드시 **마크다운**으로 구조화합니다. 핵심은 굵게, 절차는 번호 목록, 나열은 글머리표, 비교는 표, 코드/수식은 코드블록을 사용합니다.
-- 사용자가 공부 기록 데이터를 함께 주면 그 수치를 근거로 구체적으로 분석하고 실천 가능한 조언을 답니다.
-- 모르면 모른다고 말하고, 추측은 추측이라고 표시합니다. 사족이나 자기소개는 생략합니다.`
+function trimHistory(contents: GeminiContent[]): GeminiContent[] {
+    if (contents.length <= MAX_HISTORY_ENTRIES) return contents
+    let trimmed = contents.slice(contents.length - MAX_HISTORY_ENTRIES)
+    // Gemini contents 는 관례적으로 'user' 턴으로 시작해야 하므로 앞머리를 맞춘다.
+    while (trimmed.length && trimmed[0].role !== 'user') trimmed = trimmed.slice(1)
+    return trimmed
+}
+
+/** 조회/저장 함수 실행 결과를 사람이 읽을 짧은 칩 문구로 변환한다. */
+function describeFunctionActivity(name: string, result: Record<string, unknown>): FunctionActivityItem {
+    const error = typeof result.error === 'string'
+    if (error) {
+        const label = name === 'log_session' ? `기록 실패: ${result.error}`
+            : name === 'save_diary' ? `일기 저장 실패: ${result.error}`
+                : `조회 실패: ${result.error}`
+        return { name, label, error: true }
+    }
+    switch (name) {
+        case 'log_session':
+            return { name, label: `${result.saved ?? '세션'} 기록됨` }
+        case 'save_diary':
+            return { name, label: `일기 저장됨${result.date ? ` (${result.date})` : ''}` }
+        case 'get_study_data':
+            return { name, label: '공부 기록 조회' }
+        case 'get_diary':
+            return { name, label: '일기 조회' }
+        default:
+            return { name, label: name }
+    }
+}
+
+// 조회류 vs 저장류에 따라 칩 아이콘을 다르게 보여준다.
+const WRITE_FUNCTIONS = new Set(['log_session', 'save_diary'])
 
 function deriveActiveCaps(model: GeminiModel | undefined, name: string) {
     if (model) return model
@@ -41,6 +89,7 @@ function deriveActiveCaps(model: GeminiModel | undefined, name: string) {
 
 export default function GeminiChat({ settings }: GeminiChatProps) {
     const [messages, setMessages] = useState<Message[]>([])
+    const [history, setHistory] = useState<GeminiContent[]>([])
     const [input, setInput] = useState('')
     const [loading, setLoading] = useState(false)
     const [shareData, setShareData] = useState<'none' | 'day' | 'week'>('none')
@@ -120,45 +169,120 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
         }
     }
 
+    /**
+     * 역할 기반 라우팅으로 모델을 골라 generateContent 를 호출한다.
+     * - settings.geminiModel 이 지정돼 있으면 그 모델만 사용 (기존 동작 그대로: 내부 429 자동 폴백 허용).
+     * - 없으면 buildModelChain('interactive', settings) 의 후보들을 순서대로 시도하고,
+     *   429(QuotaExceededError) 를 만나면 markModelExhausted 로 표시 후 다음 후보로 넘어간다.
+     * - 그라운딩과 함수 호출은 동시에 전달하지 않는다 (wantFunctions 가 꺼져 있으면 함수 선언 생략).
+     */
+    const callModelWithRouting = async (
+        contents: GeminiContent[],
+        wantFunctions: boolean,
+    ): Promise<GeminiReply> => {
+        const apiKey = settings.geminiApiKey ?? ''
+        if (!apiKey) {
+            throw new Error('API 키가 설정되어 있지 않습니다. 설정 페이지에서 확인해주세요.')
+        }
+        const explicitModel = settings.geminiModel?.trim()
+        let chain: string[]
+        if (explicitModel) {
+            chain = [explicitModel]
+        } else {
+            chain = await buildModelChain('interactive', settings)
+            if (chain.length === 0) {
+                const list = models.length ? models : await fetchGeminiModels(apiKey).catch(() => [])
+                chain = list[0] ? [list[0].name] : []
+            }
+        }
+        if (chain.length === 0) {
+            throw new Error('사용 가능한 모델이 없습니다. 설정에서 API 키와 모델을 확인해주세요.')
+        }
+
+        let lastErr: unknown = null
+        for (let i = 0; i < chain.length; i++) {
+            const candidate = chain[i]
+            const isLast = i === chain.length - 1
+            const useFn = wantFunctions && supportsFunctionCalling(candidate)
+            try {
+                const reply = await generateContent(apiKey, candidate, '', {
+                    systemInstruction: buildSystemInstruction(settings, 'chat'),
+                    useGrounding: useGrounding && activeModel.supportsGrounding,
+                    useThinking: useThinking && activeModel.supportsThinking,
+                    availableModels: models,
+                    contents,
+                    functionDeclarations: useFn ? CHAT_FUNCTION_DECLARATIONS : undefined,
+                    // 후보가 더 남아있으면 우리가 직접 다음 후보로 넘어갈 수 있도록 자동 폴백을 끈다.
+                    // 마지막 후보에서는 generateContent 자체의 1회 자동 폴백(flash 전환)을 허용한다.
+                    noFallback: !isLast,
+                })
+                if (reply.fellBack) markModelExhausted(candidate)
+                return reply
+            } catch (err) {
+                if (err instanceof QuotaExceededError) {
+                    markModelExhausted(candidate)
+                    lastErr = err
+                    continue
+                }
+                throw err
+            }
+        }
+        throw lastErr instanceof Error ? lastErr : new Error('모든 모델의 할당량이 초과되었습니다.')
+    }
+
     const sendMessage = async () => {
         if (!input.trim() || !settings.geminiApiKey || loading) return
 
         setLoading(true)
         const dataSummary = await getStudyDataSummary()
         const fullPrompt = dataSummary + input
+        const userMessage = input
 
-        setMessages(prev => [...prev, { role: 'user', content: input }])
+        setMessages(prev => [...prev, { role: 'user', content: userMessage }])
         setInput('')
         setShareData('none') // Reset after sending
 
         try {
-            // 선택된 모델이 없으면 API 에서 사용 가능한 첫 모델을 사용 (모델명 하드코딩 없음)
-            let modelName = settings.geminiModel
-            if (!modelName) {
-                const list = models.length ? models : await fetchGeminiModels(settings.geminiApiKey).catch(() => [])
-                modelName = list[0]?.name ?? ''
-            }
-            if (!modelName) {
-                setMessages(prev => [...prev, { role: 'assistant', content: '❌ 사용 가능한 모델이 없습니다. 설정에서 API 키와 모델을 확인해주세요.' }])
-                return
+            // 그라운딩(검색)과 함수 호출은 동시에 켜지 않는다: 검색이 켜져 있으면 함수 선언을 생략.
+            const groundingActive = useGrounding && activeModel.supportsGrounding
+            const wantFunctions = !groundingActive
+
+            let contents = trimHistory([...history, { role: 'user', parts: [{ text: fullPrompt }] }])
+            const functionActivity: FunctionActivityItem[] = []
+            let reply: GeminiReply | null = null
+
+            for (let round = 0; round < MAX_FUNCTION_ROUNDS; round++) {
+                reply = await callModelWithRouting(contents, wantFunctions)
+                if (!reply.functionCalls?.length) break
+                // 마지막 라운드에서도 함수 호출을 요청했다면, 더 이어갈 라운드가 없으니 여기서 종료.
+                if (round === MAX_FUNCTION_ROUNDS - 1) break
+
+                contents = reply.contents ?? contents
+                const responses: Array<{ name: string; response: Record<string, unknown> }> = []
+                for (const fc of reply.functionCalls) {
+                    const fnResult = await executeChatFunction(fc.name, fc.args, settings)
+                    responses.push({ name: fc.name, response: fnResult })
+                    functionActivity.push(describeFunctionActivity(fc.name, fnResult))
+                }
+                contents = [...contents, buildFunctionResponseContent(responses)]
             }
 
-            const reply = await generateContent(settings.geminiApiKey, modelName, fullPrompt, {
-                systemInstruction: SYSTEM_INSTRUCTION,
-                useGrounding: useGrounding && activeModel.supportsGrounding,
-                useThinking: useThinking && activeModel.supportsThinking,
-                availableModels: models,
-            })
+            if (!reply) throw new Error('응답을 받지 못했습니다.')
 
-            const content = reply.fellBack
-                ? reply.text + '\n\n> 💡 선택한 모델의 할당량이 초과되어 더 가벼운 모델로 자동 전환해 답변했습니다.'
-                : reply.text
+            setHistory(trimHistory(reply.contents ?? contents))
+
+            let content = reply.text
+            if (!content && functionActivity.length) content = '(요청하신 작업을 완료했습니다.)'
+            if (reply.fellBack) {
+                content += '\n\n> 💡 선택한 모델의 할당량이 초과되어 더 가벼운 모델로 자동 전환해 답변했습니다.'
+            }
 
             setMessages(prev => [...prev, {
                 role: 'assistant',
                 content,
-                reasoning: reply.reasoning,
-                grounding: reply.grounding,
+                reasoning: reply!.reasoning,
+                grounding: reply!.grounding,
+                functionActivity: functionActivity.length ? functionActivity : undefined,
             }])
         } catch (err) {
             const msg = err instanceof Error ? err.message : '오류가 발생했습니다. API 키를 확인해주세요.'
@@ -215,6 +339,7 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
                                 <span className="text-5xl block mb-4">✨</span>
                                 <p>Gemini에게 자유롭게 질문해보세요!</p>
                                 <p className="text-sm mt-2">공부 기록을 공유하려면 아래 📊 버튼을 눌러주세요.</p>
+                                <p className="text-sm mt-1 opacity-80">"아까 학원에서 수학 2시간 들었어"라고 말하면 자동으로 기록해드려요.</p>
                             </div>
                         )}
 
@@ -238,14 +363,29 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
                                                         <Icon icon="mdi:brain" className="text-sm text-purple-400" />
                                                         추론 과정 보기
                                                     </summary>
-                                                    <div className="md-content text-xs opacity-80 px-3 pb-3 pt-1 border-t border-white/5">
-                                                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.reasoning}</ReactMarkdown>
-                                                    </div>
+                                                    <AiMarkdown className="text-xs opacity-80 px-3 pb-3 pt-1 border-t border-white/5">
+                                                        {msg.reasoning}
+                                                    </AiMarkdown>
                                                 </details>
                                             )}
-                                            <div className="md-content">
-                                                <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
-                                            </div>
+                                            {msg.functionActivity && msg.functionActivity.length > 0 && (
+                                                <div className="flex flex-wrap gap-1.5 mb-2">
+                                                    {msg.functionActivity.map((fa, fi) => (
+                                                        <span
+                                                            key={fi}
+                                                            className={`text-[10px] font-medium px-2 py-1 rounded-full border flex items-center gap-1 ${fa.error
+                                                                ? 'bg-red-500/15 text-red-400 border-red-400/30'
+                                                                : 'bg-white/5 text-[var(--color-text-secondary)] border-white/10'
+                                                                }`}
+                                                        >
+                                                            <span>{fa.error ? '⚠️' : WRITE_FUNCTIONS.has(fa.name) ? '🔧' : '📂'}</span>
+                                                            <span>{fa.name}</span>
+                                                            <span className="opacity-70">— {fa.label}</span>
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            )}
+                                            <AiMarkdown>{msg.content}</AiMarkdown>
                                             {msg.grounding && msg.grounding.length > 0 && (
                                                 <div className="mt-3 pt-2 border-t border-white/10">
                                                     <p className="text-[10px] font-bold text-[var(--color-text-secondary)] opacity-60 mb-1.5 flex items-center gap-1">
@@ -315,7 +455,7 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
                                         ? 'bg-cyan-500/80 text-white'
                                         : 'bg-[var(--color-surface)] text-[var(--color-text-secondary)] border border-[var(--color-border)]'
                                         }`}
-                                    title="Google 검색으로 최신 정보를 근거 삼아 답합니다"
+                                    title="Google 검색으로 최신 정보를 근거 삼아 답합니다 (켜면 기록 조회/저장 함수는 비활성화됩니다)"
                                 >
                                     <Icon icon="mdi:google" className="text-xs" /> 검색
                                 </button>

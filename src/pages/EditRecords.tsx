@@ -136,10 +136,10 @@ export default function EditRecords({ settings }: EditRecordsProps) {
         setInputStartTime(formatTimeHHMM(session.startTime))
         setInputEndTime(formatTimeHHMM(session.endTime))
 
-        // Set evaluation values
+        // Set evaluation values (신형 score 단일 점수 / 구형 focus·satisfaction 모두 대응)
         if (session.evaluation) {
-            setFocus(session.evaluation.focus)
-            setSatisfaction(session.evaluation.satisfaction)
+            setFocus(session.evaluation.focus ?? session.evaluation.score ?? 5)
+            setSatisfaction(session.evaluation.satisfaction ?? session.evaluation.score ?? 5)
             setCorrect(session.evaluation.problemSolving?.correct.toString() || '')
             setTotal(session.evaluation.problemSolving?.total.toString() || '')
             setMemo(session.evaluation.memo || '')

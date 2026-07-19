@@ -5,7 +5,9 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
+import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.os.Build;
 import android.os.Handler;
@@ -13,6 +15,9 @@ import android.os.IBinder;
 import android.os.Looper;
 import android.content.pm.ServiceInfo;
 import android.util.Log;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
@@ -22,11 +27,16 @@ public class StudyNotificationService extends Service {
     public static final String CHANNEL_ID = "study_session_channel";
     private static final int NOTIFICATION_ID = 1001;
 
+    // 알림 액션 영속화 저장소 (WebView가 frozen일 때 소급 반영용)
+    public static final String PENDING_PREFS = "StudyMeterPendingActions";
+    public static final String PENDING_KEY = "queue";
+
     private Handler handler;
     private Runnable updateRunnable;
     private String currentSubject = "공부";
     private long sessionStartTime;
     private boolean isRunning = true;
+    private long pauseStartTime = 0;        // 마지막 PAUSE 시각 (네이티브 즉시 처리 시 경과시간 보정용)
     private long baseTotalStudyMs = 0;      // 현재 세션을 제외한 오늘 총 누적 공부 시간
     private long baseSubjectStudyMs = 0;    // 현재 세션을 제외한 현재 과목 누적 공부 시간
 
@@ -78,12 +88,20 @@ public class StudyNotificationService extends Service {
             baseTotalStudyMs = totalFromJs - currentElapsedAtCall;
             baseSubjectStudyMs = subjectFromJs - currentElapsedAtCall;
 
+            // startForegroundService() 계약 준수: UPDATE도 항상 startForeground를 호출한다.
+            // (호출하지 않으면 서비스가 foreground가 아닌 상태에서 재시작될 때
+            //  "startForegroundService did not then call startForeground" 크래시가 발생함)
+            NotificationManager mgr = getSystemService(NotificationManager.class);
+            if (mgr != null && mgr.getNotificationChannel(CHANNEL_ID) == null) {
+                ensureNotificationChannel();
+            }
+            long initElapsed = System.currentTimeMillis() - sessionStartTime;
+            startForegroundNotification(initElapsed);
+
             if (isRunning) {
                 startUpdating();
             } else {
                 stopUpdating();
-                long elapsed = System.currentTimeMillis() - sessionStartTime;
-                updateNotification(elapsed);
             }
 
         } else if ("STOP".equals(action)) {
@@ -91,19 +109,68 @@ public class StudyNotificationService extends Service {
             stopForeground(true);
             stopSelf();
         } else if ("PAUSE".equals(action)) {
+            // 네이티브 즉시 처리: 틱을 멈추고 그 시점 경과시간으로 알림을 고정 갱신한다.
+            // (WebView가 frozen이어도 알림 시계가 계속 흐르지 않도록)
+            long at = System.currentTimeMillis();
+            if (isRunning) {
+                isRunning = false;
+                pauseStartTime = at;
+                stopUpdating();
+                long elapsed = at - sessionStartTime;
+                updateNotification(elapsed); // 버튼도 "계속하기"로 전환됨
+            }
+            persistAction("pause", at);
             if (NowBarPlugin.instance != null) {
                 NowBarPlugin.instance.notifyTimerAction("pause");
             }
         } else if ("RESUME".equals(action)) {
+            // 네이티브 즉시 처리: 일시정지됐던 시간만큼 sessionStartTime(크로노 base)을 보정하고 틱 재개
+            long at = System.currentTimeMillis();
+            if (!isRunning) {
+                if (pauseStartTime > 0) {
+                    sessionStartTime += (at - pauseStartTime);
+                }
+                pauseStartTime = 0;
+                isRunning = true;
+                startUpdating();
+            }
+            persistAction("resume", at);
             if (NowBarPlugin.instance != null) {
                 NowBarPlugin.instance.notifyTimerAction("resume");
             }
         } else if ("STOP_SESSION".equals(action)) {
+            // 네이티브 즉시 처리: 틱 중단 + 알림 즉시 제거 (앱을 열 때까지 남지 않도록)
+            long at = System.currentTimeMillis();
+            isRunning = false;
+            stopUpdating();
+            persistAction("stop", at);
             if (NowBarPlugin.instance != null) {
                 NowBarPlugin.instance.notifyTimerAction("stop");
             }
+            stopForeground(true);
+            stopSelf();
         }
         return START_NOT_STICKY;
+    }
+
+    /**
+     * 알림 액션을 타임스탬프와 함께 SharedPreferences에 append.
+     * JS가 thaw될 때 consumePendingActions()로 큐를 읽어 버튼 누른 시각 기준으로 소급 반영한다.
+     */
+    private void persistAction(String action, long at) {
+        try {
+            SharedPreferences prefs = getSharedPreferences(PENDING_PREFS, Context.MODE_PRIVATE);
+            String existing = prefs.getString(PENDING_KEY, "[]");
+            JSONArray arr = new JSONArray(existing);
+            JSONObject obj = new JSONObject();
+            obj.put("action", action);
+            obj.put("at", at);
+            arr.put(obj);
+            prefs.edit().putString(PENDING_KEY, arr.toString()).apply();
+            Log.d(TAG, "persistAction " + action + " @" + at);
+        } catch (Exception e) {
+            Log.e(TAG, "persistAction failed", e);
+        }
     }
 
     private void startUpdating() {

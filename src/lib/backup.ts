@@ -16,10 +16,12 @@ import {
     type DailyRecord,
     type Settings,
     type ThoughtNote,
+    type DiaryEntry,
 } from './db';
 
 export const BACKUP_FORMAT = 'studymeter-backup';
-export const BACKUP_VERSION = 1;
+// v2: diaryEntries 추가 (AI 캐시는 재생성 가능하므로 제외)
+export const BACKUP_VERSION = 2;
 
 /** 함께 백업하는 localStorage 키들 (집중 측정 서버 주소 등) */
 const LOCAL_STORAGE_KEYS = ['focus_server_url'] as const;
@@ -34,6 +36,8 @@ export interface BackupFile {
         dailyRecords: DailyRecord[];
         settings: Settings[];
         thoughtNotes: ThoughtNote[];
+        /** v2+ (v1 백업에는 없음) */
+        diaryEntries?: DiaryEntry[];
     };
     preferences: Record<string, string>;
 }
@@ -43,15 +47,17 @@ export interface ImportSummary {
     dailyRecords: number;
     settings: number;
     thoughtNotes: number;
+    diaryEntries: number;
 }
 
 /** 현재 DB + 환경설정을 BackupFile 객체로 수집한다. */
 export async function collectBackup(appVersion: string): Promise<BackupFile> {
-    const [sessions, dailyRecords, settings, thoughtNotes] = await Promise.all([
+    const [sessions, dailyRecords, settings, thoughtNotes, diaryEntries] = await Promise.all([
         db.sessions.toArray(),
         db.dailyRecords.toArray(),
         db.settings.toArray(),
         db.thoughtNotes.toArray(),
+        db.diaryEntries.toArray(),
     ]);
 
     const preferences: Record<string, string> = {};
@@ -65,7 +71,7 @@ export async function collectBackup(appVersion: string): Promise<BackupFile> {
         version: BACKUP_VERSION,
         exportedAt: new Date().toISOString(),
         appVersion,
-        data: { sessions, dailyRecords, settings, thoughtNotes },
+        data: { sessions, dailyRecords, settings, thoughtNotes, diaryEntries },
         preferences,
     };
 }
@@ -151,18 +157,21 @@ export async function importBackup(jsonText: string): Promise<ImportSummary> {
     }
 
     const { sessions, dailyRecords, settings, thoughtNotes } = backup.data;
+    const diaryEntries = backup.data.diaryEntries ?? []; // v1 백업 호환
 
-    await db.transaction('rw', db.sessions, db.dailyRecords, db.settings, db.thoughtNotes, async () => {
+    await db.transaction('rw', [db.sessions, db.dailyRecords, db.settings, db.thoughtNotes, db.diaryEntries], async () => {
         await Promise.all([
             db.sessions.clear(),
             db.dailyRecords.clear(),
             db.settings.clear(),
             db.thoughtNotes.clear(),
+            db.diaryEntries.clear(),
         ]);
         await db.sessions.bulkAdd(sessions);
         await db.dailyRecords.bulkAdd(dailyRecords);
         await db.settings.bulkAdd(settings);
         await db.thoughtNotes.bulkAdd(thoughtNotes);
+        await db.diaryEntries.bulkAdd(diaryEntries);
     });
 
     // 환경설정(localStorage) 복원
@@ -178,5 +187,6 @@ export async function importBackup(jsonText: string): Promise<ImportSummary> {
         dailyRecords: dailyRecords.length,
         settings: settings.length,
         thoughtNotes: thoughtNotes.length,
+        diaryEntries: diaryEntries.length,
     };
 }

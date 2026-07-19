@@ -2,13 +2,28 @@ import Dexie, { type EntityTable } from 'dexie';
 
 // 세션 기록 인터페이스
 export interface SessionEvaluation {
-    focus: number;        // 집중도 1-10
-    satisfaction: number; // 만족도 1-10
+    /** 통합 세션 점수 1-10 (신규 방식). 구 데이터는 focus/satisfaction 만 있을 수 있다. */
+    score?: number;
+    /** 세션 태그 ('졸음', '완전 몰입' 등) */
+    tags?: string[];
+    focus?: number;       // (레거시) 집중도 1-10
+    satisfaction?: number; // (레거시) 만족도 1-10
     problemSolving?: {    // 문제풀이 (선택)
         correct: number;
         total: number;
     };
     memo?: string;        // 간단 메모 (선택)
+}
+
+/** 신/구 평가 데이터에서 통합 점수(1-10)를 얻는다. 없으면 null. */
+export function getEvalScore(e: SessionEvaluation | undefined): number | null {
+    if (!e) return null;
+    if (typeof e.score === 'number') return e.score;
+    if (typeof e.focus === 'number' && typeof e.satisfaction === 'number') {
+        return Math.round(((e.focus + e.satisfaction) / 2) * 10) / 10;
+    }
+    if (typeof e.focus === 'number') return e.focus;
+    return null;
 }
 
 export interface StudySession {
@@ -21,6 +36,7 @@ export interface StudySession {
     duration: number; // 밀리초
     subItem?: string; // 하위 항목 (예: 국어 > 독서)
     evaluation?: SessionEvaluation; // 세션 평가
+    drowsyCount?: number; // 세션 중 카메라가 감지한 졸음 경고 횟수
 }
 
 // 일일 기록 인터페이스
@@ -39,6 +55,31 @@ export interface SubjectItem {
     children?: string[]; // 하위 항목들
 }
 
+// ── AI 역할/태그 관련 타입 ───────────────────────────────────────────────────
+
+/** AI 역할: 기능이 모델을 직접 고르지 않고 역할만 선언한다. */
+export type AiRole = 'deep' | 'interactive' | 'ambient';
+
+/** 평가 태그 정의. 프리셋 + 사용자 커스텀 공용. */
+export interface EvalTag {
+    name: string;
+    category: 'obstacle' | 'condition' | 'good' | 'context' | 'day';
+    /** 노출 범위: 세션 평가 / 하루 일기 / 양쪽 */
+    scope: 'session' | 'day' | 'both';
+    hidden?: boolean;  // 사용자가 숨김
+    custom?: boolean;  // 사용자가 추가함
+}
+
+/** 기능별 시스템 프롬프트 오버라이드 (undefined = 기본 프롬프트 사용) */
+export interface AiSystemPrompts {
+    base?: string;          // 공통 페르소나 (모든 기능 앞에 붙음)
+    chat?: string;          // 채팅 코치
+    morningReport?: string; // 아침/주간 리포트
+    diaryDraft?: string;    // 일기 한마디 초안
+    diaryReply?: string;    // 일기 AI 답장
+    sessionComment?: string;// 세션 종료 코멘트
+}
+
 // 설정 인터페이스
 export interface Settings {
     id?: number;
@@ -52,6 +93,53 @@ export interface Settings {
     isManualModel?: boolean; // Whether to use manual model name input
     dailyGoalMs?: number; // 일일 목표 공부 시간 (ms)
     drowsinessThresholdSec?: number; // 졸음 판단 기준: 눈 감김 지속 시간(초). 기본 15
+    // ── AI 통합 설정 ────────────────────────────────────────────────
+    advancedMode?: boolean;          // 고급 모드 (모델/프롬프트 편집 노출)
+    aiAmbientEnabled?: boolean;      // 앰비언트 AI (리포트·답장·코멘트). 기본 true
+    /** 역할별 모델 오버라이드. 빈 값/undefined = 자동(별칭 기본값) */
+    aiRoleModels?: Partial<Record<AiRole, string>>;
+    /** 기능별 시스템 프롬프트 오버라이드 */
+    aiSystemPrompts?: AiSystemPrompts;
+    /** 평가 태그 목록 (undefined = 기본 프리셋 사용) */
+    evalTags?: EvalTag[];
+    morningReportHour?: number;      // 아침 리포트 알림 시각 (0-23). 기본 7
+    morningReportEnabled?: boolean;  // 아침 리포트 알림. 기본 true
+}
+
+// ── 일기 인터페이스 ─────────────────────────────────────────────────────────
+
+/** 하루 일기의 자동 집계 스냅샷 (확정 시점에 고정) */
+export interface DiaryStats {
+    totalMs: number;
+    selfStudyMs: number;
+    goalPct: number | null;   // 목표 미설정 시 null
+    sessionCount: number;
+    avgScore: number | null;  // 세션 평균 점수 (평가 없으면 null)
+    drowsyCount: number;
+    bySubject: Array<{ subject: string; ms: number }>;
+}
+
+export interface DiaryEntry {
+    date: string;             // YYYY-MM-DD (Primary Key, 3am 기준)
+    score: number;            // 오늘 점수 1-10
+    dayTags: string[];        // 하루 태그 (세션 승계 + 하루 전용)
+    oneLiner?: string;        // 나의 한마디
+    oneLinerSource?: 'ai' | 'ai-edited' | 'user' | 'voice';
+    aiReply?: string;         // AI 답장 (마크다운)
+    auto: boolean;            // 사용자가 확정하지 않아 자동 확정됐는지
+    stats: DiaryStats;
+    createdAt: number;
+    updatedAt: number;
+}
+
+/** 앰비언트 AI 생성물 캐시. kind+date 로 하루 1회 생성을 보장한다. */
+export interface AiArtifact {
+    id?: number;
+    kind: string;             // 'morning-report' | 'weekly-report' | 'diary-draft' | 'diary-reply' | 'session-comment' | ...
+    date: string;             // 기준 날짜 (YYYY-MM-DD)
+    content: string;          // 마크다운
+    model: string;            // 생성 모델
+    createdAt: number;
 }
 
 // 세션 중 주차된 생각 인터페이스
@@ -70,6 +158,8 @@ class StudyMeterDB extends Dexie {
     dailyRecords!: EntityTable<DailyRecord, 'date'>;
     settings!: EntityTable<Settings, 'id'>;
     thoughtNotes!: EntityTable<ThoughtNote, 'id'>;
+    diaryEntries!: EntityTable<DiaryEntry, 'date'>;
+    aiArtifacts!: EntityTable<AiArtifact, 'id'>;
 
     constructor() {
         super('StudyMeterDB');
@@ -85,6 +175,15 @@ class StudyMeterDB extends Dexie {
             dailyRecords: 'date',
             settings: '++id',
             thoughtNotes: '++id, date, sessionStartTime'
+        });
+
+        this.version(3).stores({
+            sessions: '++id, date, subject, type, startTime',
+            dailyRecords: 'date',
+            settings: '++id',
+            thoughtNotes: '++id, date, sessionStartTime',
+            diaryEntries: 'date',
+            aiArtifacts: '++id, date, [kind+date]'
         });
     }
 }
@@ -348,4 +447,122 @@ export async function markThoughtsReviewed(ids: number[]): Promise<void> {
 export async function getUnreviewedThoughtNotes(): Promise<ThoughtNote[]> {
     const all = await db.thoughtNotes.toArray();
     return all.filter(n => !n.reviewed).sort((a, b) => b.createdAt - a.createdAt);
+}
+
+// ── 일기 헬퍼 ───────────────────────────────────────────────────────────────
+
+/** 특정 날짜의 자동 집계 스냅샷을 계산한다. */
+export async function computeDiaryStats(date: string, dailyGoalMs?: number): Promise<DiaryStats> {
+    const sessions = await db.sessions.where('date').equals(date).toArray();
+    const totalMs = sessions.reduce((sum, s) => sum + s.duration, 0);
+    const selfStudyMs = sessions
+        .filter(s => s.type === '자습' || s.type === '테스트')
+        .reduce((sum, s) => sum + s.duration, 0);
+    const scores = sessions
+        .map(s => getEvalScore(s.evaluation))
+        .filter((v): v is number => v !== null);
+    const drowsyCount = sessions.reduce((sum, s) => sum + (s.drowsyCount ?? 0), 0);
+    const bySubjectMap = new Map<string, number>();
+    for (const s of sessions) {
+        bySubjectMap.set(s.subject, (bySubjectMap.get(s.subject) ?? 0) + s.duration);
+    }
+    return {
+        totalMs,
+        selfStudyMs,
+        goalPct: dailyGoalMs && dailyGoalMs > 0 ? Math.round((totalMs / dailyGoalMs) * 100) : null,
+        sessionCount: sessions.length,
+        avgScore: scores.length ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10 : null,
+        drowsyCount,
+        bySubject: Array.from(bySubjectMap.entries())
+            .map(([subject, ms]) => ({ subject, ms }))
+            .sort((a, b) => b.ms - a.ms),
+    };
+}
+
+/** 세션 태그를 하루 태그로 승계 (중복 제거). */
+export async function collectSessionTags(date: string): Promise<string[]> {
+    const sessions = await db.sessions.where('date').equals(date).toArray();
+    const tags = new Set<string>();
+    for (const s of sessions) {
+        for (const t of s.evaluation?.tags ?? []) tags.add(t);
+    }
+    return Array.from(tags);
+}
+
+/**
+ * 일기 점수 자동 제안 (1-10).
+ * 세션 평균 점수를 기본으로, 목표 달성률로 보정하고 졸음 횟수만큼 감점한다.
+ */
+export function suggestDiaryScore(stats: DiaryStats): number {
+    let score: number;
+    if (stats.avgScore !== null) {
+        score = stats.avgScore;
+    } else if (stats.goalPct !== null) {
+        score = 3 + (Math.min(stats.goalPct, 120) / 120) * 7;
+    } else if (stats.totalMs > 0) {
+        score = 6;
+    } else {
+        score = 5;
+    }
+    if (stats.goalPct !== null) {
+        if (stats.goalPct >= 100) score += 1;
+        else if (stats.goalPct < 50) score -= 1;
+    }
+    score -= Math.min(2, stats.drowsyCount * 0.5);
+    return Math.max(1, Math.min(10, Math.round(score)));
+}
+
+export async function getDiaryEntry(date: string): Promise<DiaryEntry | undefined> {
+    return db.diaryEntries.get(date);
+}
+
+export async function saveDiaryEntry(entry: DiaryEntry): Promise<void> {
+    await db.diaryEntries.put(entry);
+}
+
+export async function getDiaryRange(startDate: string, endDate: string): Promise<DiaryEntry[]> {
+    return db.diaryEntries.where('date').between(startDate, endDate, true, true).toArray();
+}
+
+/**
+ * 어제까지의 미확정 날짜들을 자동 확정한다 (일기 공백일 방지).
+ * 세션이 하나라도 있는데 일기가 없는 날만 대상으로 한다.
+ */
+export async function autoFinalizeMissedDiaries(dailyGoalMs?: number): Promise<number> {
+    const today = getTodayDate();
+    const dates = (await db.sessions.orderBy('date').uniqueKeys()) as string[];
+    let finalized = 0;
+    for (const date of dates) {
+        if (date >= today) continue;
+        const existing = await db.diaryEntries.get(date);
+        if (existing) continue;
+        const stats = await computeDiaryStats(date, dailyGoalMs);
+        const now = Date.now();
+        await db.diaryEntries.put({
+            date,
+            score: suggestDiaryScore(stats),
+            dayTags: await collectSessionTags(date),
+            auto: true,
+            stats,
+            createdAt: now,
+            updatedAt: now,
+        });
+        finalized++;
+    }
+    return finalized;
+}
+
+// ── AI 생성물 캐시 헬퍼 ─────────────────────────────────────────────────────
+
+export async function getAiArtifact(kind: string, date: string): Promise<AiArtifact | undefined> {
+    return db.aiArtifacts.where('[kind+date]').equals([kind, date]).first();
+}
+
+export async function putAiArtifact(artifact: Omit<AiArtifact, 'id'>): Promise<void> {
+    const existing = await getAiArtifact(artifact.kind, artifact.date);
+    if (existing) {
+        await db.aiArtifacts.update(existing.id!, { ...artifact });
+    } else {
+        await db.aiArtifacts.add(artifact);
+    }
 }

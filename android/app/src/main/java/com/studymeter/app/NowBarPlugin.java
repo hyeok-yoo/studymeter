@@ -1,7 +1,14 @@
 package com.studymeter.app;
 
+import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.util.Log;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
@@ -30,6 +37,36 @@ public class NowBarPlugin extends Plugin {
         JSObject ret = new JSObject();
         ret.put("action", action);
         notifyListeners("timerAction", ret);
+    }
+
+    /**
+     * 서비스가 영속화한 대기 액션 큐를 반환하고 즉시 비운다(원자적 소비).
+     * WebView가 frozen인 동안 눌린 알림 버튼들을 앱 재개 시 소급 반영하기 위한 경로.
+     */
+    @PluginMethod
+    public void consumePendingActions(PluginCall call) {
+        JSObject ret = new JSObject();
+        JSArray actions = new JSArray();
+        try {
+            SharedPreferences prefs = getContext().getSharedPreferences(
+                    StudyNotificationService.PENDING_PREFS, Context.MODE_PRIVATE);
+            String existing = prefs.getString(StudyNotificationService.PENDING_KEY, "[]");
+            // 읽는 즉시 큐를 비워 이중 적용을 방지한다(같은 프로세스 메인스레드에서만 접근).
+            prefs.edit().remove(StudyNotificationService.PENDING_KEY).apply();
+
+            JSONArray arr = new JSONArray(existing);
+            for (int i = 0; i < arr.length(); i++) {
+                JSONObject o = arr.getJSONObject(i);
+                JSObject item = new JSObject();
+                item.put("action", o.getString("action"));
+                item.put("at", o.getLong("at"));
+                actions.put(item);
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "consumePendingActions failed", e);
+        }
+        ret.put("actions", actions);
+        call.resolve(ret);
     }
 
     @PluginMethod

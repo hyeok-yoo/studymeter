@@ -7,9 +7,13 @@ import {
     isFirstVisitToday,
     getTodayTotalStudyTime,
     getTodayStudyTimeBySubject,
-    formatDuration
+    formatDuration,
+    autoFinalizeMissedDiaries
 } from '../lib/db'
 import StartStudyModal from '../components/StartStudyModal'
+import MorningReportCard from '../components/MorningReportCard'
+import DiaryCard from '../components/DiaryCard'
+import { scheduleMorningReportNotification } from '../lib/morningNotification'
 import PWAInstallPrompt, {
     IOSInstallGuide,
     getCapturedPrompt,
@@ -87,6 +91,13 @@ export default function Home({ settings }: HomeProps) {
         loadData()
     }, [])
 
+    // 지난 날짜 일기 자동 확정 + 아침 리포트 알림 예약 (마운트 1회, idempotent)
+    useEffect(() => {
+        autoFinalizeMissedDiaries(settings.dailyGoalMs).catch(() => { /* ignore */ })
+        scheduleMorningReportNotification(settings).catch(() => { /* ignore */ })
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
+
     return (
         <div className="flex flex-col gap-10">
             {/* Header with High Contrast */}
@@ -101,6 +112,9 @@ export default function Home({ settings }: HomeProps) {
 
             {/* PWA 설치 권유 배너 */}
             <PWAInstallPrompt />
+
+            {/* 아침 브리핑 / 주간 리뷰 */}
+            <MorningReportCard settings={settings} />
 
             {/* Hero Stats Card */}
             <section className="glass-card p-8 md:p-12 flex flex-col items-center justify-center text-center relative overflow-hidden group border-none dark:bg-white/5 bg-white/40">
@@ -153,6 +167,9 @@ export default function Home({ settings }: HomeProps) {
                     </div>
                 </div>
             </section>
+
+            {/* 오늘의 일기 (3초 일기) */}
+            <DiaryCard settings={settings} />
 
             {/* Main Actions */}
             <div className={`grid gap-6 ${showAddBtn ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-1 md:grid-cols-3'}`}>

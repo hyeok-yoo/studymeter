@@ -31,6 +31,7 @@ import { HelpButton } from '../components/HelpButton'
 import { maybeSyncToday } from '../lib/telemetry'
 import { useDrowsiness } from '../lib/useDrowsiness'
 import { playTimerEndSound, startDrowsyAlarm, type AlarmModality } from '../lib/alarm'
+import { incrementSessionDrowsyCount, consumeSessionDrowsyCount } from '../lib/drowsyCounter'
 
 interface StudyProps {
     settings: Settings
@@ -83,6 +84,8 @@ export default function Study({ settings }: StudyProps) {
     const intervalRef = useRef<number | null>(null)
     const [isLoaded, setIsLoaded] = useState(false)
     const isSavingRef = useRef(false)
+    const endingRef = useRef(false)                  // 종료 처리 진행/완료 여부 (handleEnd 중복 실행 가드)
+    const reconcileRef = useRef<() => void>(() => {}) // 최신 reconcile 함수 보관 (stale closure 방지)
     const STORAGE_KEY = 'studymeter_active_session'
 
     // 현재 경과 시간 계산 (절대 시각 기반)
@@ -136,6 +139,8 @@ export default function Study({ settings }: StudyProps) {
                 originalStartTimeRef.current = Date.now()
                 totalPausedMsRef.current = 0
                 pausedAtTimeRef.current = null
+                // 이전 세션에서 남았을 수 있는 대기 액션 큐를 폐기(소급 반영 대상 아님)
+                await NativeBridge.consumePendingActions()
             }
 
             const total = await getTodayTotalStudyTime()
@@ -209,7 +214,7 @@ export default function Study({ settings }: StudyProps) {
     useEffect(() => {
         if (!isLoaded || !NativeBridge.isNative()) return;
 
-        if (isEnding) {
+        if (isEnding || endingRef.current) {
             NativeBridge.stopNowBar();
             notificationStartedRef.current = false;
             return;
@@ -246,42 +251,38 @@ export default function Study({ settings }: StudyProps) {
         // 몰입형 모드 진입
         NativeBridge.hideStatusBar();
 
-        // 네이티브 타이머 액션(알림 버튼) 리스너 등록
+        // 네이티브 타이머 액션(알림 버튼) 리스너 등록.
+        // 직접 상태를 조작하지 않고, 영속화된 큐를 소급 반영하는 단일 reconcile 경로로 위임한다.
         let listenerHandle: Awaited<ReturnType<typeof NativeBridge.addTimerActionListener>> = null;
         const setupNativeListener = async () => {
-            listenerHandle = await NativeBridge.addTimerActionListener((action) => {
-                if (action === 'pause') {
-                    setIsRunning(prev => {
-                        if (prev) {
-                            pausedAtTimeRef.current = Date.now()
-                            return false
-                        }
-                        return prev
-                    })
-                } else if (action === 'resume') {
-                    setIsRunning(prev => {
-                        if (!prev) {
-                            if (pausedAtTimeRef.current !== null) {
-                                totalPausedMsRef.current += Date.now() - pausedAtTimeRef.current
-                                pausedAtTimeRef.current = null
-                            }
-                            return true
-                        }
-                        return prev
-                    })
-                } else if (action === 'stop') {
-                    handleEnd()
-                }
+            listenerHandle = await NativeBridge.addTimerActionListener(() => {
+                reconcileRef.current()
             })
         }
         setupNativeListener()
+
+        // 앱이 다시 보일 때(백그라운드→포그라운드)에도 동일 경로로 소급 반영
+        const onVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                reconcileRef.current()
+            }
+        }
+        document.addEventListener('visibilitychange', onVisibilityChange)
 
         return () => {
             if (listenerHandle) {
                 listenerHandle.remove()
             }
+            document.removeEventListener('visibilitychange', onVisibilityChange)
         }
-    }, [currentSubject, currentSubItem, currentType])
+    }, [])
+
+    // 마운트(로드 완료) 시 대기 큐 소급 반영 — 앱이 닫힌 동안 눌린 버튼 처리
+    useEffect(() => {
+        if (isLoaded) {
+            reconcileRef.current()
+        }
+    }, [isLoaded])
 
     const loadWeeklyStats = async () => {
         const today = new Date()
@@ -341,14 +342,18 @@ export default function Study({ settings }: StudyProps) {
         if (showEval) setIsEnding(true)
 
         try {
+            const drowsyCount = consumeSessionDrowsyCount()
+            // 일시정지 상태(=소급 종료 포함)면 endTime을 정지 시각으로 → 앱 연 시각이 아니라 버튼 누른 시각 반영
+            const endTime = pausedAtTimeRef.current !== null ? pausedAtTimeRef.current : now
             const session: StudySession = {
                 date: getDateFromTimestamp(originalStartTimeRef.current), // 날짜 무결성: 원래 시작 시각 기준
                 subject: currentSubject,
                 subItem: currentSubItem,
                 type: currentType,
                 startTime: originalStartTimeRef.current,
-                endTime: now,
-                duration: actualDuration
+                endTime: endTime,
+                duration: actualDuration,
+                ...(drowsyCount > 0 ? { drowsyCount } : {})
             }
             const id = await db.sessions.add(session)
             localStorage.removeItem(STORAGE_KEY)
@@ -447,15 +452,57 @@ export default function Study({ settings }: StudyProps) {
     }
 
     const handleEnd = async () => {
+        if (endingRef.current) return // 중복 실행 가드 (알림 종료 + Exit 버튼 동시 등)
+        endingRef.current = true
         setIsEnding(true)
         NativeBridge.stopNowBar()
         const sessionId = await saveSession(true)
         if (sessionId) {
             setShowEvalModal(true)
         } else {
+            // 저장할 세션이 없으면(1초 미만 등) 모달을 열지 않고 즉시 이탈
             navigate('/')
         }
     }
+
+    // ── 알림 액션 소급 반영(reconcile) ─────────────────────────────────────────
+    // 알림 버튼(PAUSE/RESUME/STOP)을 "기록된 시각(at)" 기준으로 소급 적용하는 단일 경로.
+    // 큐 consume이 원자적이므로 리스너/마운트/visibility 중복 호출에도 이중 적용되지 않는다.
+    const applyPendingAction = (action: string, at: number) => {
+        if (action === 'pause') {
+            if (pausedAtTimeRef.current === null) {
+                pausedAtTimeRef.current = at
+                setIsRunning(false)
+            }
+        } else if (action === 'resume') {
+            if (pausedAtTimeRef.current !== null) {
+                totalPausedMsRef.current += at - pausedAtTimeRef.current
+                pausedAtTimeRef.current = null
+                setIsRunning(true)
+            }
+        } else if (action === 'stop') {
+            // 종료 시각을 버튼 누른 시각으로 고정 → duration/endTime이 at 기준으로 계산됨
+            if (pausedAtTimeRef.current === null) {
+                pausedAtTimeRef.current = at
+            }
+            handleEnd()
+        }
+    }
+
+    const reconcilePendingActions = async () => {
+        if (!NativeBridge.isNative()) return
+        if (endingRef.current) return
+        const actions = await NativeBridge.consumePendingActions()
+        if (!actions.length) return
+        // 기록 순서 보장을 위해 타임스탬프 오름차순 정렬
+        actions.sort((a, b) => a.at - b.at)
+        for (const a of actions) {
+            if (endingRef.current) break
+            applyPendingAction(a.action, a.at)
+        }
+    }
+    // 최신 클로저를 ref에 보관 → 한 번만 등록된 리스너/visibility 핸들러가 항상 최신 로직 호출
+    reconcileRef.current = reconcilePendingActions
 
     const handleEvalSave = async (evaluation: SessionEvaluation) => {
         if (lastSessionId) {
@@ -1507,6 +1554,7 @@ function DrowsinessAlert({ features, running, thresholdSec }: { features: FocusF
             stopAlarmRef.current = null
             return
         }
+        incrementSessionDrowsyCount() // 일기 자동 통계용: 졸음 경고 발생 횟수 기록
         let cancelled = false
         ;(async () => {
             const mode = await NativeBridge.getRingerMode()
