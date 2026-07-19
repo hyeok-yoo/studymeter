@@ -28,7 +28,7 @@ export default function MorningReportCard({ settings }: MorningReportCardProps) 
     const title = kind === 'weekly-report' ? '주간 리뷰' : '오늘의 브리핑'
 
     useEffect(() => {
-        if (!isAmbientAiEnabled(settings)) {
+        if (!isAmbientAiEnabled(settings) || settings.morningReportEnabled === false) {
             setHidden(true)
             setLoading(false)
             return

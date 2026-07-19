@@ -13,7 +13,6 @@ import {
 import StartStudyModal from '../components/StartStudyModal'
 import MorningReportCard from '../components/MorningReportCard'
 import DiaryCard from '../components/DiaryCard'
-import { scheduleMorningReportNotification } from '../lib/morningNotification'
 import PWAInstallPrompt, {
     IOSInstallGuide,
     getCapturedPrompt,
@@ -91,10 +90,10 @@ export default function Home({ settings }: HomeProps) {
         loadData()
     }, [])
 
-    // 지난 날짜 일기 자동 확정 + 아침 리포트 알림 예약 (마운트 1회, idempotent)
+    // 지난 날짜 일기 자동 확정 (마운트 1회). 아침 리포트는 홈 진입 시
+    // MorningReportCard 가 캐시 우선으로 생성하므로 별도 백그라운드 예약이 없다.
     useEffect(() => {
         autoFinalizeMissedDiaries(settings.dailyGoalMs).catch(() => { /* ignore */ })
-        scheduleMorningReportNotification(settings).catch(() => { /* ignore */ })
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 

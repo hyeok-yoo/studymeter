@@ -960,7 +960,7 @@ function FocusTab({ score, etaS, scoreHistory }: { score: number | null; etaS: n
                                 <Tooltip
                                     contentStyle={{ background: 'rgba(0,0,0,0.7)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', fontSize: '10px' }}
                                     labelFormatter={() => ''}
-                                    formatter={(val: number | undefined) => [val != null ? val.toFixed(1) : '--', '']}
+                                    formatter={(val) => [typeof val === 'number' ? val.toFixed(1) : '--', '']}
                                 />
                                 <ReferenceLine y={70} stroke="rgba(34,197,94,0.3)" strokeDasharray="3 3" />
                                 <ReferenceLine y={40} stroke="rgba(245,158,11,0.3)" strokeDasharray="3 3" />
