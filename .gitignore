@@ -27,6 +27,10 @@ build_log.txt
 *.sln
 *.sw?
 
-# native/: 자체 .git을 가진 임베디드 저장소 + Gradle 빌드 산출물(APK 274MB 등) — 별도 관리
-native/
+# native/(RN 앱)는 커밋 대상 — node_modules/빌드 산출물은 native/.gitignore 가 무시
+native/node_modules/
+native/android/
+native/ios/
+native/.expo/
+native/dist/
 *.apk
