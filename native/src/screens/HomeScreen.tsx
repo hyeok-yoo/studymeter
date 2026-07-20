@@ -12,7 +12,8 @@
  */
 import { useCallback, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -29,16 +30,20 @@ import {
 import type { DiaryEntry } from '../data/schema';
 import { SubjectChip } from './home/SubjectChip';
 import { TodayDiaryCard } from './home/TodayDiaryCard';
+import { StartStudySheet } from './study/StartStudySheet';
+import type { RootStackParamList, StudyParams } from './study/types';
 
 type SubjectTime = { subject: string; total: number };
 
 export function HomeScreen() {
   const theme = useTheme();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   const [userName, setUserName] = useState('학생');
   const [todayMs, setTodayMs] = useState(0);
   const [subjects, setSubjects] = useState<SubjectTime[]>([]);
   const [diary, setDiary] = useState<DiaryEntry | undefined>(undefined);
+  const [showStart, setShowStart] = useState(false);
 
   // 홈 탭에 진입할 때마다 최신 데이터로 새로고침(기록/편집 후 돌아오는 경우 반영).
   useFocusEffect(
@@ -81,9 +86,17 @@ export function HomeScreen() {
   }, [todayMs]);
 
   const onStart = () => {
-    // 촉각 피드백 — 실제 타이머 로직은 이후 단계에서.
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setShowStart(true);
   };
+
+  const onStartConfirm = useCallback(
+    (params: StudyParams) => {
+      setShowStart(false);
+      navigation.navigate('Study', params);
+    },
+    [navigation]
+  );
 
   return (
     <SafeAreaView
@@ -158,6 +171,13 @@ export function HomeScreen() {
           <TodayDiaryCard entry={diary} />
         </Animated.View>
       </ScrollView>
+
+      {/* 공부 시작 선택 시트 */}
+      <StartStudySheet
+        visible={showStart}
+        onClose={() => setShowStart(false)}
+        onConfirm={onStartConfirm}
+      />
     </SafeAreaView>
   );
 }
