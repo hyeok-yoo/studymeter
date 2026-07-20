@@ -12,7 +12,7 @@ import { Icon } from '@iconify/react'
 import type { DiaryEntry, DiaryStats, Settings, EvalTag } from '../lib/db'
 import { suggestDiaryScore, saveDiaryEntry, formatDurationHourMinute, computeDiaryStats, getDiaryEntry } from '../lib/db'
 import { getTopTags, getTagsForScope, recordTagUsage, TAG_CATEGORY_LABELS } from '../lib/tags'
-import { isAmbientAiEnabled, generateDiaryReply } from '../lib/ai/aiService'
+import { isAmbientAiEnabled, generateDiaryReply, regenerateDiaryDraft, regenerateDiaryReply } from '../lib/ai/aiService'
 import AiMarkdown from './AiMarkdown'
 import Sheet from './ui/Sheet'
 import Pressable from './ui/Pressable'
@@ -67,7 +67,26 @@ export function DiaryStatsRow({ stats }: { stats: DiaryStats }) {
 
 // ── 확정 일기 컴팩트 뷰 ──────────────────────────────────────────────────────
 
-export function DiaryEntryView({ entry, onEdit }: { entry: DiaryEntry; onEdit?: () => void }) {
+export function DiaryEntryView({ entry, onEdit, settings, onChanged }: {
+    entry: DiaryEntry
+    onEdit?: () => void
+    /** 전달 시 AI 답장 "다시 생성" 버튼 노출 */
+    settings?: Settings
+    onChanged?: () => void | Promise<void>
+}) {
+    const [replyLoading, setReplyLoading] = useState(false)
+
+    const handleRegenerateReply = async () => {
+        if (!settings || replyLoading) return
+        setReplyLoading(true)
+        try {
+            const fresh = await regenerateDiaryReply(settings, entry)
+            if (fresh) await onChanged?.()
+        } finally {
+            setReplyLoading(false)
+        }
+    }
+
     return (
         <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -106,6 +125,18 @@ export function DiaryEntryView({ entry, onEdit }: { entry: DiaryEntry; onEdit?: 
                     <div className="flex items-center gap-2 mb-1.5">
                         <Icon icon="mdi:sparkles" className="text-sm text-amber-400" />
                         <span className="text-[10px] font-black uppercase tracking-widest text-[var(--color-text-secondary)]">AI 답장</span>
+                        {settings && isAmbientAiEnabled(settings) && (
+                            <button
+                                type="button"
+                                onClick={handleRegenerateReply}
+                                disabled={replyLoading}
+                                className="ml-auto flex items-center gap-1 text-[10px] font-bold text-[var(--color-text-secondary)] opacity-70 hover:opacity-100 disabled:opacity-40 transition-opacity"
+                                aria-label="AI 답장 다시 생성"
+                            >
+                                <Icon icon="mdi:refresh" className={`text-xs ${replyLoading ? 'animate-spin' : ''}`} />
+                                {replyLoading ? '생성 중…' : '다시 생성'}
+                            </button>
+                        )}
                     </div>
                     <div className="text-sm text-[var(--color-text)] opacity-90">
                         <AiMarkdown>{entry.aiReply}</AiMarkdown>
@@ -145,6 +176,9 @@ export function DiaryEditor({
     const [editingText, setEditingText] = useState(false)
     const [listening, setListening] = useState(false)
     const [saving, setSaving] = useState(false)
+    // "다시 생성"으로 초안이 바뀔 수 있어 프롭과 별개의 로컬 초안을 유지한다
+    const [draft, setDraft] = useState(initialDraft)
+    const [draftLoading, setDraftLoading] = useState(false)
     const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
 
     useEffect(() => () => { try { recognitionRef.current?.stop() } catch { /* ignore */ } }, [])
@@ -155,9 +189,26 @@ export function DiaryEditor({
         if (!initialDraft) return
         // 비동기 도착한 초안을 미입력 상태에서만 1회 채움 — cascading 없음. (의도적 예외)
         // eslint-disable-next-line react-hooks/set-state-in-effect
+        setDraft(initialDraft)
         setOneLiner(prev => (prev === '' && source === 'ai' && !editingText ? initialDraft : prev))
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [initialDraft])
+
+    const handleRegenerateDraft = async () => {
+        if (draftLoading) return
+        setDraftLoading(true)
+        try {
+            const fresh = await regenerateDiaryDraft(settings, date, stats)
+            if (fresh) {
+                setDraft(fresh)
+                setOneLiner(fresh)
+                setSource('ai')
+                setEditingText(false)
+            }
+        } finally {
+            setDraftLoading(false)
+        }
+    }
 
     const toggleTag = (name: string) => {
         setSelectedTags(prev => prev.includes(name) ? prev.filter(t => t !== name) : [...prev, name])
@@ -190,14 +241,14 @@ export function DiaryEditor({
     }
 
     const useDraftAsIs = () => {
-        setOneLiner(initialDraft)
+        setOneLiner(draft)
         setSource('ai')
         setEditingText(false)
     }
 
     const handleTextChange = (v: string) => {
         setOneLiner(v)
-        setSource(initialDraft.trim() ? 'ai-edited' : 'user')
+        setSource(draft.trim() ? 'ai-edited' : 'user')
     }
 
     const topTags: EvalTag[] = getTopTags(settings, 'day', 8, selectedTags)
@@ -380,13 +431,24 @@ export function DiaryEditor({
                         </Pressable>
                     ) : (
                         <>
-                            {initialDraft.trim() && oneLiner !== initialDraft && (
+                            {draft.trim() && oneLiner !== draft && (
                                 <Pressable
                                     type="button"
                                     onClick={useDraftAsIs}
                                     className="px-3.5 py-2 rounded-full text-xs font-bold bg-black/[0.04] dark:bg-white/5 text-[var(--color-text-secondary)] hover:bg-black/[0.08] dark:hover:bg-white/10"
                                 >
                                     초안 그대로
+                                </Pressable>
+                            )}
+                            {isAmbientAiEnabled(settings) && (
+                                <Pressable
+                                    type="button"
+                                    onClick={handleRegenerateDraft}
+                                    disabled={draftLoading}
+                                    className="px-3.5 py-2 rounded-full text-xs font-bold bg-black/[0.04] dark:bg-white/5 text-[var(--color-text-secondary)] hover:bg-black/[0.08] dark:hover:bg-white/10 disabled:opacity-50"
+                                >
+                                    <Icon icon="mdi:refresh" className={`inline text-sm mr-1 ${draftLoading ? 'animate-spin' : ''}`} />
+                                    {draftLoading ? '생성 중…' : 'AI 초안 다시'}
                                 </Pressable>
                             )}
                             <Pressable

@@ -11,9 +11,10 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Icon } from '@iconify/react'
 import type { Settings } from '../lib/db'
 import { getTodayDate, getAiArtifact } from '../lib/db'
-import { isAmbientAiEnabled, generateMorningReport, morningReportKindFor } from '../lib/ai/aiService'
+import { isAmbientAiEnabled, generateMorningReport, regenerateMorningReport, morningReportKindFor } from '../lib/ai/aiService'
 import AiMarkdown from './AiMarkdown'
 import { fadeRise } from '../lib/motion'
+import Pressable from './ui/Pressable'
 
 interface MorningReportCardProps {
     settings: Settings
@@ -23,6 +24,18 @@ export default function MorningReportCard({ settings }: MorningReportCardProps) 
     const [content, setContent] = useState<string | null>(null)
     const [loading, setLoading] = useState(true)
     const [hidden, setHidden] = useState(false)
+    const [regenerating, setRegenerating] = useState(false)
+
+    const handleRegenerate = async () => {
+        if (regenerating || loading) return
+        setRegenerating(true)
+        try {
+            const fresh = await regenerateMorningReport(settings)
+            if (fresh) setContent(fresh)
+        } finally {
+            setRegenerating(false)
+        }
+    }
 
     const today = getTodayDate()
     const kind = morningReportKindFor(today)
@@ -70,6 +83,19 @@ export default function MorningReportCard({ settings }: MorningReportCardProps) 
                     <Icon icon={kind === 'weekly-report' ? 'mdi:chart-timeline-variant' : 'mdi:weather-sunset-up'} className="text-lg text-white" />
                 </div>
                 <h2 className="text-base font-black text-[var(--color-text)]">{title}</h2>
+                {!loading && content && (
+                    <Pressable
+                        type="button"
+                        onClick={handleRegenerate}
+                        disabled={regenerating}
+                        pressScale={0.92}
+                        className="ml-auto flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-black/[0.04] dark:bg-white/5 text-[11px] font-bold text-[var(--color-text-secondary)] disabled:opacity-50"
+                        aria-label={`${title} 다시 생성`}
+                    >
+                        <Icon icon="mdi:refresh" className={`text-sm ${regenerating ? 'animate-spin' : ''}`} />
+                        {regenerating ? '생성 중…' : '다시 생성'}
+                    </Pressable>
+                )}
             </div>
 
             <AnimatePresence mode="wait">

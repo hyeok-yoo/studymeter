@@ -592,3 +592,8 @@ export async function putAiArtifact(artifact: Omit<AiArtifact, 'id'>): Promise<v
         await db.aiArtifacts.add(artifact);
     }
 }
+
+/** 캐시 삭제 — "다시 생성" 버튼이 캐시를 비우고 재생성할 때 사용. */
+export async function deleteAiArtifact(kind: string, date: string): Promise<void> {
+    await db.aiArtifacts.where('[kind+date]').equals([kind, date]).delete();
+}
