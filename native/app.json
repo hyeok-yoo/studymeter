@@ -8,10 +8,10 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.studymeter.native"
+      "bundleIdentifier": "com.studymeter.rn"
     },
     "android": {
-      "package": "com.studymeter.native",
+      "package": "com.studymeter.rn",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
