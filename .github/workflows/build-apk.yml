@@ -3,6 +3,9 @@ name: Build APK
 on:
   push:
     branches: [ main ]
+    # native/(React Native 앱)만 바뀐 푸시에서는 웹(Capacitor) APK 재빌드 불필요
+    paths-ignore:
+      - 'native/**'
   pull_request:
     branches: [ main ]
   workflow_dispatch:

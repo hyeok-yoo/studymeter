@@ -3,6 +3,9 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches: [main]
+    # native/(React Native 앱)만 바뀐 푸시에서는 웹 배포 불필요
+    paths-ignore:
+      - 'native/**'
   workflow_dispatch:
 
 permissions:
