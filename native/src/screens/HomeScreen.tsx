@@ -1,15 +1,41 @@
 /**
- * HomeScreen — 홈 셸. "오늘의 집중 시간" 히어로 숫자(더미) + 공부 시작 버튼.
- * 1단계 골격이므로 데이터는 하드코딩 0h 0m.
+ * HomeScreen — 홈 셸. "오늘의 집중 시간" 히어로 숫자 + 공부 시작 버튼.
+ * 2단계: 히어로 숫자를 dao.getTodayTotalStudyTime() 실데이터로 연결(DB 비면 0h 0m).
  */
+import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { DisplayText, GlassCard, PressableScale } from '../components';
 import { useTheme } from '../theme/ThemeProvider';
+import { initDatabase } from '../data/db';
+import { getTodayTotalStudyTime } from '../data/dao';
 
 export function HomeScreen() {
   const theme = useTheme();
+
+  // 오늘 총 공부 시간(ms). DB 초기화 후 조회하고, 비어 있으면 0 → 0h 0m.
+  const [todayMs, setTodayMs] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        await initDatabase();
+        const ms = await getTodayTotalStudyTime();
+        if (!cancelled) setTodayMs(ms);
+      } catch {
+        if (!cancelled) setTodayMs(0);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const totalMinutes = Math.floor(todayMs / 60000);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
 
   const onStart = () => {
     // 촉각 피드백 — 실제 타이머 로직은 이후 단계에서.
@@ -27,9 +53,9 @@ export function HomeScreen() {
         <GlassCard style={styles.hero}>
           <Text style={[styles.label, { color: theme.colors.textSecondary }]}>오늘의 집중 시간</Text>
           <View style={styles.timeRow}>
-            <DisplayText size={64}>0</DisplayText>
+            <DisplayText size={64}>{String(hours)}</DisplayText>
             <Text style={[styles.unit, { color: theme.colors.textSecondary }]}>h</Text>
-            <DisplayText size={64}>0</DisplayText>
+            <DisplayText size={64}>{String(minutes)}</DisplayText>
             <Text style={[styles.unit, { color: theme.colors.textSecondary }]}>m</Text>
           </View>
         </GlassCard>
