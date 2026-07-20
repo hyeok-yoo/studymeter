@@ -7,10 +7,13 @@
  * 모든 생성물은 마크다운으로 취급하고 AiMarkdown 컴포넌트로 렌더링한다.
  */
 import {
+    deleteAiArtifact,
     formatDurationHourMinute,
     getAiArtifact,
+    getDiaryEntry,
     getTodayDate,
     putAiArtifact,
+    saveDiaryEntry,
     type AiRole,
     type DiaryEntry,
     type DiaryStats,
@@ -113,6 +116,28 @@ export async function generateDiaryDraft(settings: Settings, date: string, stats
     return content ?? ruleBasedDiaryDraft(stats);
 }
 
+/**
+ * "다시 생성" — 캐시를 비우고 새 초안을 만든다.
+ * 실패(쿼터/오프라인) 시 규칙 기반 폴백이 아니라 null 을 돌려서
+ * 호출 측이 기존 내용을 유지할 수 있게 한다.
+ */
+export async function regenerateDiaryDraft(
+    settings: Settings, date: string, stats: DiaryStats,
+): Promise<string | null> {
+    if (!isAmbientAiEnabled(settings)) return null;
+    const old = await getAiArtifact('diary-draft', date);
+    await deleteAiArtifact('diary-draft', date);
+    const fresh = await generateDiaryDraft(settings, date, stats);
+    // generateDiaryDraft 는 실패 시 규칙 기반 문구를 반환한다 — 캐시가 여전히
+    // 비어 있으면 AI 생성이 실패한 것이므로 이전 캐시를 복원하고 null.
+    const nowCached = await getAiArtifact('diary-draft', date);
+    if (!nowCached) {
+        if (old) await putAiArtifact(old);
+        return null;
+    }
+    return fresh;
+}
+
 // ── 일기: AI 답장 ───────────────────────────────────────────────────────────
 
 export async function generateDiaryReply(settings: Settings, entry: DiaryEntry): Promise<string | null> {
@@ -134,6 +159,26 @@ export async function generateDiaryReply(settings: Settings, entry: DiaryEntry):
         if (!reply?.text) return null;
         return { content: reply.text.trim(), model: reply.usedModel };
     });
+}
+
+/**
+ * AI 답장 "다시 생성" — 캐시를 비우고 새 답장을 만들어 일기에 병합·저장한다.
+ * 성공 시 새 답장 텍스트, 실패 시 이전 캐시 복원 후 null.
+ */
+export async function regenerateDiaryReply(settings: Settings, entry: DiaryEntry): Promise<string | null> {
+    if (!isAmbientAiEnabled(settings)) return null;
+    const old = await getAiArtifact('diary-reply', entry.date);
+    await deleteAiArtifact('diary-reply', entry.date);
+    const fresh = await generateDiaryReply(settings, entry);
+    if (!fresh) {
+        if (old) await putAiArtifact(old);
+        return null;
+    }
+    const current = await getDiaryEntry(entry.date);
+    if (current) {
+        await saveDiaryEntry({ ...current, aiReply: fresh, updatedAt: Date.now() });
+    }
+    return fresh;
 }
 
 // ── 아침 리포트 ─────────────────────────────────────────────────────────────
@@ -185,6 +230,24 @@ async function generateMorningReportInner(settings: Settings, today: string): Pr
         if (!reply?.text) return null;
         return { content: reply.text.trim(), model: reply.usedModel };
     });
+}
+
+/**
+ * 아침 브리핑/주간 리뷰 "다시 생성" — 오늘 캐시를 비우고 새로 만든다.
+ * 실패 시 이전 캐시를 복원하고 null (호출 측은 기존 내용 유지).
+ */
+export async function regenerateMorningReport(settings: Settings): Promise<string | null> {
+    if (!isAmbientAiEnabled(settings)) return null;
+    const today = getTodayDate();
+    const kind = morningReportKindFor(today);
+    const old = await getAiArtifact(kind, today);
+    await deleteAiArtifact(kind, today);
+    const fresh = await generateMorningReport(settings);
+    if (!fresh) {
+        if (old) await putAiArtifact(old);
+        return old?.content ?? null;
+    }
+    return fresh;
 }
 
 // ── 세션 종료 코멘트 ────────────────────────────────────────────────────────

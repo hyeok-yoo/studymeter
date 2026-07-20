@@ -95,7 +95,7 @@ export default function DiaryCard({ settings }: DiaryCardProps) {
                     </motion.div>
                 ) : entry && !editing ? (
                     <motion.div key="entry" variants={fadeRise} initial="initial" animate="animate" exit="exit">
-                        <DiaryEntryView entry={entry} onEdit={() => setEditing(true)} />
+                        <DiaryEntryView entry={entry} onEdit={() => setEditing(true)} settings={settings} onChanged={reload} />
                     </motion.div>
                 ) : (
                     <motion.div key="editor" variants={fadeRise} initial="initial" animate="animate" exit="exit">

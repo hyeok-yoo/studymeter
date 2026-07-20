@@ -1,11 +1,11 @@
 import { useState, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { motion } from 'framer-motion'
 import { Icon } from '@iconify/react'
 import type { Settings } from '../lib/db'
 import { updateDailyRecord, findActiveSessionAtTime, adjustOverlappingSession, getTodayDate, db } from '../lib/db'
 import { MODAL_PHRASES, getRandomPhrase } from '../lib/phrases'
 import TestTimerModal from './TestTimerModal'
-import Sheet from './ui/Sheet'
 import Pressable from './ui/Pressable'
 import { spring } from '../lib/motion'
 
@@ -74,9 +74,33 @@ export default function StartStudyModal({
     const chipBase = 'px-4 py-2 rounded-xl text-sm font-bold'
     const subChipBase = 'px-3 py-1.5 rounded-lg text-xs font-bold'
 
-    return (
+    return createPortal(
         <>
-            <Sheet open onClose={onClose} ariaLabel="공부 시작">
+            {/* 가운데 플로팅 팝업 — 뒤 화면은 블러+딤, 팝업 표면은 불투명 */}
+            <div className="fixed inset-0 flex items-center justify-center p-5" style={{ zIndex: 9500 }}>
+                {/* Scrim: 나머지 화면 전체 블러 처리 */}
+                <motion.div
+                    className="absolute inset-0"
+                    style={{
+                        background: 'var(--scrim)',
+                        backdropFilter: 'blur(14px) saturate(140%)',
+                        WebkitBackdropFilter: 'blur(14px) saturate(140%)',
+                    }}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 0.22 }}
+                    onClick={onClose}
+                />
+
+                <motion.div
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="공부 시작"
+                    className="relative w-full max-w-2xl max-h-[88dvh] overflow-y-auto overscroll-contain rounded-[32px] p-6 md:p-8 bg-white dark:bg-[#0d1526] border border-black/[0.06] dark:border-white/12 shadow-[0_32px_80px_-16px_rgba(0,0,0,0.45)]"
+                    initial={{ opacity: 0, scale: 0.94, y: 18 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    transition={spring.default}
+                >
                 <header className="mb-6">
                     <h2 className="text-3xl font-black gradient-text flex items-center gap-2 text-display">
                         <Icon icon="mdi:hand-wave-outline" /> 공부를 시작해볼까요?
@@ -212,7 +236,8 @@ export default function StartStudyModal({
                         시작하기!
                     </Pressable>
                 </div>
-            </Sheet>
+                </motion.div>
+            </div>
 
             {showTestTimer && (
                 <TestTimerModal
@@ -220,6 +245,7 @@ export default function StartStudyModal({
                     onConfirm={handleTestTimerConfirm}
                 />
             )}
-        </>
+        </>,
+        document.body,
     )
 }

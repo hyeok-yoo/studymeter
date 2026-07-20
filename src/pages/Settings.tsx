@@ -315,6 +315,8 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
         const next = !advancedMode
         setAdvancedMode(next)
         db.settings.update(settings.id!, { advancedMode: next })
+        // Study 탭의 졸음·자세 상세 지표도 같은 스위치로 통합 (구 개발자 도구 토글)
+        localStorage.setItem('sm_advanced_features', next ? 'true' : 'false')
         onSettingsChange({ ...settings, advancedMode: next })
     }
 
@@ -900,11 +902,11 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                                 <div className="flex items-center gap-2">
                                     <label className="text-sm font-medium text-[var(--color-text)]">고급 모드</label>
                                     <HelpButton title="고급 모드" items={[
-                                        { description: '역할별 AI 모델 오버라이드, 시스템 프롬프트 편집, AI 사용량 표시를 노출합니다.' },
+                                        { description: '역할별 AI 모델 오버라이드, 시스템 프롬프트 편집, AI 사용량 표시를 노출하고, Study 탭에 졸음·자세 상세 지표를 표시합니다.' },
                                         { title: '누구를 위한 기능?', description: '기본값만으로도 충분히 잘 동작합니다. 세부적으로 모델을 고르거나 프롬프트를 튜닝하고 싶을 때만 켜세요.' },
                                     ]} />
                                 </div>
-                                <p className="text-xs text-[var(--color-text-secondary)] mt-1">역할별 모델·시스템 프롬프트 편집 노출</p>
+                                <p className="text-xs text-[var(--color-text-secondary)] mt-1">역할별 모델·프롬프트 편집 + 졸음·자세 상세 지표</p>
                             </div>
                             <ToggleSwitch enabled={advancedMode} onChange={handleToggleAdvancedMode} />
                         </SettingsRow>

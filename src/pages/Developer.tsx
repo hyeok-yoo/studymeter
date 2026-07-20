@@ -11,7 +11,6 @@ import Pressable from '../components/ui/Pressable'
 const GITHUB_URL = 'https://github.com/hyeok-yoo'
 const SPONSORS_URL = 'https://github.com/sponsors/hyeok-yoo'
 
-const ADVANCED_FEATURES_KEY = 'sm_advanced_features'
 const DEVTOOLS_MODE_KEY = 'sm_devtools_mode' // 'local' | 'server'
 
 const SKILLS = [
@@ -84,28 +83,6 @@ function SegmentedControl<T extends string>({
                 )
             })}
         </div>
-    )
-}
-
-// ── 작은 토글 스위치 (Settings.tsx 와 동일 패턴 — 즉시 눌림 피드백 + 스프링) ──────────
-function ToggleSwitch({ enabled, onChange }: { enabled: boolean; onChange: () => void }) {
-    return (
-        <motion.button
-            type="button"
-            role="switch"
-            aria-checked={enabled}
-            onClick={onChange}
-            whileTap={{ scale: 0.92 }}
-            transition={spring.snappy}
-            className="relative flex-shrink-0 w-12 h-7 rounded-full transition-colors duration-300"
-            style={{ background: enabled ? 'var(--color-primary)' : 'rgba(120,120,128,0.24)' }}
-        >
-            <motion.div
-                className="absolute top-1 left-1 w-5 h-5 rounded-full bg-white shadow-md"
-                animate={{ x: enabled ? 20 : 0 }}
-                transition={spring.snappy}
-            />
-        </motion.button>
     )
 }
 
@@ -309,8 +286,7 @@ function DeveloperTools() {
                 </motion.div>
             </AnimatePresence>
 
-            {/* 고급 모드 토글 (모드와 무관) */}
-            <AdvancedModeToggle />
+            {/* 고급 모드는 설정 페이지의 "고급 모드" 토글로 통합됨 */}
         </div>
     )
 }
@@ -873,28 +849,3 @@ function formatMtime(mtime: number): string {
     }
 }
 
-// ── 고급 모드 토글 ────────────────────────────────────────────────────────────
-
-function AdvancedModeToggle() {
-    const [enabled, setEnabled] = useState<boolean>(() => localStorage.getItem(ADVANCED_FEATURES_KEY) === 'true')
-
-    const toggle = () => {
-        const next = !enabled
-        setEnabled(next)
-        localStorage.setItem(ADVANCED_FEATURES_KEY, next ? 'true' : 'false')
-    }
-
-    return (
-        <section className="pt-2 border-t border-white/10">
-            <div className="flex items-center justify-between gap-4 pt-4">
-                <div className="flex-1 min-w-0">
-                    <h3 className="text-sm font-black text-[var(--color-text)]">고급 모드</h3>
-                    <p className="text-xs text-[var(--color-text-secondary)] opacity-60 mt-0.5 leading-snug">
-                        Study 탭에 졸음·자세 상세 지표 표시
-                    </p>
-                </div>
-                <ToggleSwitch enabled={enabled} onChange={toggle} />
-            </div>
-        </section>
-    )
-}

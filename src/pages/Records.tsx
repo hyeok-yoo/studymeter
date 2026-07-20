@@ -1030,7 +1030,7 @@ function DiaryDetailModal({ entry, settings, onClose, onEdited }: {
                                     <p className="text-lg font-bold text-[var(--color-text)] leading-relaxed">"{entry.oneLiner}"</p>
                                 )}
 
-                                <DiaryEntryView entry={entry} onEdit={openEditor} />
+                                <DiaryEntryView entry={entry} onEdit={openEditor} settings={settings} onChanged={onEdited} />
 
                                 {/* 세션 타임라인 */}
                                 {sessions.length > 0 && (
