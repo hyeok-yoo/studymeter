@@ -62,12 +62,16 @@ jobs:
           mkdir -p ~/.android
           cp android/app/debug.keystore ~/.android/debug.keystore
 
-      - name: Build debug APK
-        run: cd native/android && ./gradlew assembleDebug --no-daemon
+      # debug 빌드는 JS 번들을 APK에 넣지 않고 Metro 개발 서버를 찾는다
+      # ("Unable to load script" 크래시). release 빌드는 Hermes 번들을 내장해
+      # 단독 실행 가능하며, RN 템플릿 기본값대로 debug 키스토어로 서명된다
+      # (위에서 고정 키스토어를 복사했으므로 서명은 빌드마다 동일).
+      - name: Build release APK (self-contained JS bundle)
+        run: cd native/android && ./gradlew assembleRelease --no-daemon
 
       - name: Upload APK
         uses: actions/upload-artifact@v7
         with:
           name: studymeter-native-build-${{ github.run_number }}
-          path: native/android/app/build/outputs/apk/debug/app-debug.apk
+          path: native/android/app/build/outputs/apk/release/app-release.apk
           retention-days: 30
