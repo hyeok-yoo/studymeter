@@ -27,11 +27,14 @@ import {
   getSettings,
   getTodayDate,
 } from '../data/dao';
-import type { DiaryEntry } from '../data/schema';
+import type { DiaryEntry, Settings } from '../data/schema';
 import { SubjectChip } from './home/SubjectChip';
 import { TodayDiaryCard } from './home/TodayDiaryCard';
 import { StartStudySheet } from './study/StartStudySheet';
 import type { RootStackParamList, StudyParams } from './study/types';
+import { MorningReportCard } from '../components/MorningReportCard';
+import { DiaryEditorSheet, collectSessionTags, computeDiaryStats } from '../components/diary';
+import { generateDiaryDraft, isAmbientAiEnabled } from '../ai';
 
 type SubjectTime = { subject: string; total: number };
 
@@ -44,6 +47,10 @@ export function HomeScreen() {
   const [subjects, setSubjects] = useState<SubjectTime[]>([]);
   const [diary, setDiary] = useState<DiaryEntry | undefined>(undefined);
   const [showStart, setShowStart] = useState(false);
+  const [settings, setSettings] = useState<Settings | undefined>(undefined);
+  const [showDiarySheet, setShowDiarySheet] = useState(false);
+  const [diaryDraft, setDiaryDraft] = useState<string | undefined>(undefined);
+  const [diaryTags, setDiaryTags] = useState<string[]>([]);
 
   // 홈 탭에 진입할 때마다 최신 데이터로 새로고침(기록/편집 후 돌아오는 경우 반영).
   useFocusEffect(
@@ -66,6 +73,7 @@ export function HomeScreen() {
               .sort((a, b) => b.total - a.total)
           );
           setUserName(settings?.userName?.trim() || '학생');
+          setSettings(settings);
           setDiary(todayDiary);
         } catch {
           if (cancelled) return;
@@ -98,6 +106,32 @@ export function HomeScreen() {
     [navigation]
   );
 
+  // 일기 카드 탭 → 편집 시트. 세션 태그 승계 + (가능하면) AI 초안을 비동기로 준비.
+  const openDiarySheet = useCallback(() => {
+    if (!settings) return;
+    setShowDiarySheet(true);
+    const today = getTodayDate();
+    void (async () => {
+      try {
+        const tags = await collectSessionTags(today);
+        setDiaryTags(tags);
+        if (!diary?.oneLiner && isAmbientAiEnabled(settings)) {
+          const stats = await computeDiaryStats(today, settings.dailyGoalMs);
+          const draft = await generateDiaryDraft(settings, today, stats);
+          setDiaryDraft(draft || undefined);
+        }
+      } catch {
+        /* 초안 실패는 조용히 무시 — 규칙 기반 폴백이 시트 안에 있다 */
+      }
+    })();
+  }, [settings, diary]);
+
+  const onDiarySaved = useCallback(async () => {
+    setShowDiarySheet(false);
+    const fresh = await getDiaryEntry(getTodayDate()).catch(() => undefined);
+    setDiary(fresh);
+  }, []);
+
   return (
     <SafeAreaView
       edges={['top', 'left', 'right']}
@@ -115,6 +149,11 @@ export function HomeScreen() {
           <Text style={[styles.subGreeting, { color: theme.colors.textSecondary }]}>
             오늘도 한 걸음씩 나아가 볼까요?
           </Text>
+        </Animated.View>
+
+        {/* 1.5 아침 브리핑 / 주간 리뷰 (앰비언트 AI 켜져 있을 때만 내용 표시) */}
+        <Animated.View entering={FadeInDown.springify().delay(30)}>
+          <MorningReportCard settings={settings} />
         </Animated.View>
 
         {/* 2. 히어로 — 오늘의 집중 시간 */}
@@ -168,7 +207,7 @@ export function HomeScreen() {
 
         {/* 5. 오늘의 일기 카드 */}
         <Animated.View entering={FadeInDown.springify().delay(180)}>
-          <TodayDiaryCard entry={diary} />
+          <TodayDiaryCard entry={diary} onPress={openDiarySheet} />
         </Animated.View>
       </ScrollView>
 
@@ -178,6 +217,20 @@ export function HomeScreen() {
         onClose={() => setShowStart(false)}
         onConfirm={onStartConfirm}
       />
+
+      {/* 오늘 일기 편집 시트 */}
+      {settings && (
+        <DiaryEditorSheet
+          visible={showDiarySheet}
+          onClose={() => setShowDiarySheet(false)}
+          date={getTodayDate()}
+          settings={settings}
+          existing={diary}
+          draft={diaryDraft}
+          inheritedTags={diaryTags}
+          onSaved={onDiarySaved}
+        />
+      )}
     </SafeAreaView>
   );
 }
