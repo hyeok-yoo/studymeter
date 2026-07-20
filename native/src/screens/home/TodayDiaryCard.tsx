@@ -14,14 +14,16 @@ import type { DiaryEntry } from '../../data/schema';
 
 type TodayDiaryCardProps = {
   entry?: DiaryEntry;
+  /** 탭 시 일기 편집 시트 열기 */
+  onPress?: () => void;
 };
 
-export function TodayDiaryCard({ entry }: TodayDiaryCardProps) {
+export function TodayDiaryCard({ entry, onPress: onPressProp }: TodayDiaryCardProps) {
   const theme = useTheme();
 
   const onPress = () => {
-    // 편집 UI 는 다음 단계 — 지금은 촉각 피드백만.
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    onPressProp?.();
   };
 
   return (
