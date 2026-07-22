@@ -6,8 +6,10 @@
  * (package.json 의 version 과 맞춰 두면 관리가 편하다.)
  */
 
+import { db } from './db';
+
 /** 현재 앱 버전. 이 값이 바뀐 뒤 최초 실행 시 체인지로그가 뜬다. */
-export const APP_VERSION = '1.6.0';
+export const APP_VERSION = '1.7.0';
 
 export interface ChangelogItem {
     /** iconify 아이콘 (mdi:*) — 없으면 기본 점 표시 */
@@ -24,6 +26,16 @@ export interface ChangelogEntry {
 
 /** 최신이 맨 앞. */
 export const CHANGELOG: ChangelogEntry[] = [
+    {
+        version: '1.7.0',
+        date: '2026-07-22',
+        title: '더 깔끔하게, 종이 일기 그대로',
+        items: [
+            { icon: 'mdi:view-dashboard-outline', text: '홈 화면을 정리했어요 — 매일 쓰는 것만 앞에 두고, 주간 회고·학습 복기는 접이식 섹션으로 옮겨 한결 깔끔해졌어요.' },
+            { icon: 'mdi:camera', text: '종이 일기를 사진·스캔으로 그대로 올릴 수 있어요 — 손으로 쓴 일기를 찍어 올리면 기록에 사진 그대로 남습니다.' },
+            { icon: 'mdi:bug-check', text: '업데이트 후 "새로워진 점" 안내가 제대로 뜨도록 고쳤어요.' },
+        ],
+    },
     {
         version: '1.6.0',
         date: '2026-07-22',
@@ -65,22 +77,47 @@ function isOlder(a: string, b: string): boolean {
 }
 
 /**
- * 지금 체인지로그를 보여줘야 하는지 판단하고, 보여줄 항목을 반환한다.
- *  - 최초 설치(저장된 버전 없음): 표시하지 않고 조용히 현재 버전을 기록 (업데이트가 아니므로).
- *  - 저장된 버전 < 현재 버전: 그 사이(현재 버전 포함)의 항목들을 보여준다.
- *  - 같거나 최신: 표시하지 않음.
- * 반환이 빈 배열이면 모달을 띄우지 않는다.
+ * 이 기기에 이미 앱을 써 온 흔적이 있는지 (기존 사용자 여부).
+ * 체인지로그 도입 이전부터 써 온 사용자는 저장된 버전이 없지만 "신규 설치"가 아니다.
+ * 이름 등록·공부 세션·일기 중 하나라도 있으면 기존 사용자로 본다.
  */
-export function pendingChangelog(): ChangelogEntry[] {
+async function hasExistingData(): Promise<boolean> {
+    try {
+        if (typeof localStorage !== 'undefined' && localStorage.getItem('studymeter_telemetry_name')) return true;
+    } catch { /* ignore */ }
+    try {
+        if ((await db.sessions.count()) > 0) return true;
+        if ((await db.diaryEntries.count()) > 0) return true;
+    } catch { /* ignore */ }
+    return false;
+}
+
+/**
+ * 지금 체인지로그를 보여줘야 하는지 판단하고, 보여줄 항목을 반환한다.
+ *  - 저장된 버전 == 현재: 표시 안 함.
+ *  - 저장된 버전 < 현재: 그 사이(현재 버전 포함)의 항목들을 보여준다.
+ *  - 저장된 버전 없음:
+ *      · 기존 사용자(데이터 있음): 업데이트로 보고 최신 항목을 1회 보여준다.
+ *        (예전엔 여기서 조용히 삼켜서 아무도 못 봤던 버그를 수정함.)
+ *      · 진짜 신규 설치(데이터 없음): 표시하지 않고 현재 버전만 조용히 기록.
+ * 반환이 빈 배열이면 모달을 띄우지 않는다. (모달 닫을 때 markVersionSeen 호출)
+ */
+export async function pendingChangelog(): Promise<ChangelogEntry[]> {
     const seen = getLastSeenVersion();
 
-    // 최초 설치 — 업데이트가 아니므로 체인지로그를 띄우지 않고 현재 버전만 기록.
+    if (seen === APP_VERSION) return [];
+
     if (seen === null) {
+        if (await hasExistingData()) {
+            // 기존 사용자에게 최신 릴리스 항목을 보여준다.
+            return CHANGELOG.slice(0, 1);
+        }
+        // 진짜 신규 설치 — 업데이트가 아니므로 현재 버전만 기록하고 넘어간다.
         markVersionSeen();
         return [];
     }
 
-    if (seen === APP_VERSION || !isOlder(seen, APP_VERSION)) return [];
+    if (!isOlder(seen, APP_VERSION)) return [];
 
     // 마지막으로 본 버전보다 새로운 항목만 (여러 버전 건너뛴 경우 모두 보여준다).
     return CHANGELOG.filter(e => isOlder(seen, e.version));

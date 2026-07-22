@@ -142,6 +142,7 @@ export interface DiaryEntry {
     dayTags: string[];        // 하루 태그 (세션 승계 + 하루 전용)
     oneLiner?: string;        // 나의 한마디
     oneLinerSource?: 'ai' | 'ai-edited' | 'user' | 'voice';
+    photos?: string[];        // 종이 일기 스캔/사진 (압축된 base64 data URL). 기록에 원본 그대로 표시.
     aiReply?: string;         // AI 답장 (마크다운)
     auto: boolean;            // 사용자가 확정하지 않아 자동 확정됐는지
     stats: DiaryStats;

@@ -5,8 +5,9 @@
  * 있으면 1회 표시한 뒤 현재 버전을 "봤음"으로 기록한다 (다음 업데이트 전까지 재노출 없음).
  * 아침 브리핑 팝업과 같은 시각 언어(liquid-modal, materialize)를 쓴다.
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Icon } from '@iconify/react'
 import { pendingChangelog, markVersionSeen, APP_VERSION, type ChangelogEntry } from '../lib/changelog'
@@ -16,21 +17,24 @@ import { materialize, staggerContainer, staggerItem } from '../lib/motion'
 export default function ChangelogModal() {
     const [entries, setEntries] = useState<ChangelogEntry[]>([])
     const [open, setOpen] = useState(false)
+    const location = useLocation()
+    const decidedRef = useRef(false)
 
     useEffect(() => {
-        // 마운트 시 1회 판단. 최초 설치면 빈 배열 → 표시 안 함.
-        // 마이크로태스크로 미뤄 effect 본문의 동기 setState(케스케이딩 렌더)를 피한다.
+        // 공부(집중) 화면에서는 방해하지 않는다 — 화면을 벗어난 뒤 판단한다.
+        if (decidedRef.current || location.pathname === '/study') return
         let cancelled = false
-        Promise.resolve().then(() => {
+        ;(async () => {
+            const pending = await pendingChangelog()
             if (cancelled) return
-            const pending = pendingChangelog()
+            decidedRef.current = true
             if (pending.length > 0) {
                 setEntries(pending)
                 setOpen(true)
             }
-        })
+        })()
         return () => { cancelled = true }
-    }, [])
+    }, [location.pathname])
 
     const close = () => {
         markVersionSeen(APP_VERSION)

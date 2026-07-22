@@ -15,6 +15,8 @@ import { fadeRise, staggerItem } from '../lib/motion'
 
 interface LearningNotesCardProps {
     settings: Settings
+    /** true면 외곽 glass-card 래퍼와 헤더(아이콘+제목) 없이 내용만 렌더링 (HomeSection 안에서 사용) */
+    bare?: boolean
 }
 
 function formatDateShort(date: string): string {
@@ -22,7 +24,7 @@ function formatDateShort(date: string): string {
     return `${d.getMonth() + 1}.${d.getDate()}`
 }
 
-export default function LearningNotesCard({ settings }: LearningNotesCardProps) {
+export default function LearningNotesCard({ settings, bare = false }: LearningNotesCardProps) {
     const [query, setQuery] = useState('')
     const [notes, setNotes] = useState<LearningNote[]>([])
     const [loading, setLoading] = useState(true)
@@ -67,14 +69,16 @@ export default function LearningNotesCard({ settings }: LearningNotesCardProps) 
         setNotes(prev => prev.filter(n => n.id !== id))
     }
 
-    return (
-        <motion.section variants={staggerItem} className="glass-card p-6 md:p-8">
-            <div className="flex items-center gap-2 mb-1.5">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-500 to-orange-600 flex items-center justify-center shadow-lg shadow-amber-500/20 flex-shrink-0">
-                    <Icon icon="mdi:lightbulb-on-outline" className="text-lg text-white" />
+    const content = (
+        <>
+            {!bare && (
+                <div className="flex items-center gap-2 mb-1.5">
+                    <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-500 to-orange-600 flex items-center justify-center shadow-lg shadow-amber-500/20 flex-shrink-0">
+                        <Icon icon="mdi:lightbulb-on-outline" className="text-lg text-white" />
+                    </div>
+                    <h2 className="text-lg font-black text-[var(--color-text)]">학습 복기</h2>
                 </div>
-                <h2 className="text-lg font-black text-[var(--color-text)]">학습 복기</h2>
-            </div>
+            )}
             <p className="text-[11px] text-[var(--color-text-secondary)] opacity-50 mb-4 italic">
                 세션을 마칠 때 남긴 "배운 것"을 검색하고 다시 떠올려 보세요. AI 채팅에서도 같은 기록을 찾아 활용할 수 있어요.
             </p>
@@ -150,6 +154,14 @@ export default function LearningNotesCard({ settings }: LearningNotesCardProps) 
                     )}
                 </AnimatePresence>
             </div>
+        </>
+    )
+
+    if (bare) return content
+
+    return (
+        <motion.section variants={staggerItem} className="glass-card p-6 md:p-8">
+            {content}
         </motion.section>
     )
 }

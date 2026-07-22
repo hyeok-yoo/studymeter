@@ -14,6 +14,8 @@ import { fadeRise, staggerItem, spring } from '../lib/motion'
 
 interface WeeklyDiaryCardProps {
     settings: Settings
+    /** true면 외곽 glass-card 래퍼와 헤더(아이콘+제목) 없이 내용만 렌더링 (HomeSection 안에서 사용) */
+    bare?: boolean
 }
 
 function formatRange(weekStart: string): string {
@@ -23,7 +25,7 @@ function formatRange(weekStart: string): string {
     return `${fmt(monday)} (월) ~ ${fmt(sunday)} (일)`
 }
 
-export default function WeeklyDiaryCard({ settings }: WeeklyDiaryCardProps) {
+export default function WeeklyDiaryCard({ settings, bare = false }: WeeklyDiaryCardProps) {
     const aiReady = !!settings.geminiApiKey
     const weekStart = getWeekKey()
     const [loading, setLoading] = useState(true)
@@ -68,19 +70,28 @@ export default function WeeklyDiaryCard({ settings }: WeeklyDiaryCardProps) {
         }
     }
 
-    return (
-        <motion.section variants={staggerItem} className="glass-card p-6 md:p-8">
-            <div className="flex items-center gap-2 mb-1.5">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-sky-500 to-blue-600 flex items-center justify-center shadow-lg shadow-sky-500/20 flex-shrink-0">
-                    <Icon icon="mdi:book-open-variant-outline" className="text-lg text-white" />
+    const content_ = (
+        <>
+            {!bare && (
+                <div className="flex items-center gap-2 mb-1.5">
+                    <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-sky-500 to-blue-600 flex items-center justify-center shadow-lg shadow-sky-500/20 flex-shrink-0">
+                        <Icon icon="mdi:book-open-variant-outline" className="text-lg text-white" />
+                    </div>
+                    <h2 className="text-lg font-black text-[var(--color-text)]">이번 주 회고</h2>
+                    {existing?.content && (
+                        <span className="ml-auto text-[11px] font-bold text-emerald-400 flex items-center gap-1">
+                            <Icon icon="mdi:check-circle" className="text-sm" /> 작성됨
+                        </span>
+                    )}
                 </div>
-                <h2 className="text-lg font-black text-[var(--color-text)]">이번 주 회고</h2>
-                {existing?.content && (
-                    <span className="ml-auto text-[11px] font-bold text-emerald-400 flex items-center gap-1">
+            )}
+            {bare && existing?.content && (
+                <div className="flex justify-end mb-1.5">
+                    <span className="text-[11px] font-bold text-emerald-400 flex items-center gap-1">
                         <Icon icon="mdi:check-circle" className="text-sm" /> 작성됨
                     </span>
-                )}
-            </div>
+                </div>
+            )}
             <p className="text-xs text-[var(--color-text-secondary)] opacity-70 mb-1">{formatRange(weekStart)}</p>
             <p className="text-[11px] text-[var(--color-text-secondary)] opacity-50 mb-4 italic">
                 주로 일요일 밤이나 월요일 아침에 쓰지만, 언제든 자유롭게 남길 수 있어요.
@@ -160,6 +171,14 @@ export default function WeeklyDiaryCard({ settings }: WeeklyDiaryCardProps) {
                     </div>
                 </div>
             )}
+        </>
+    )
+
+    if (bare) return content_
+
+    return (
+        <motion.section variants={staggerItem} className="glass-card p-6 md:p-8">
+            {content_}
         </motion.section>
     )
 }

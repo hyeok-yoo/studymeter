@@ -17,6 +17,7 @@ import DdayWidget from '../components/DdayWidget'
 import ChecklistCard from '../components/ChecklistCard'
 import WeeklyDiaryCard from '../components/WeeklyDiaryCard'
 import LearningNotesCard from '../components/LearningNotesCard'
+import HomeSection from '../components/HomeSection'
 import PWAInstallPrompt, {
     IOSInstallGuide,
     getCapturedPrompt,
@@ -195,39 +196,19 @@ export default function Home({ settings }: HomeProps) {
                 </div>
             </motion.section>
 
-            {/* Main Actions */}
+            {/* Main Actions — 공부 시작하기가 주된 CTA, 필요 시 설치 버튼이 옆에 붙는다 */}
             <motion.div
                 variants={staggerItem}
-                className={`grid gap-6 ${showAddBtn ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-1 md:grid-cols-3'}`}
+                className={`grid gap-4 ${showAddBtn ? 'grid-cols-1 sm:grid-cols-[2fr_1fr]' : 'grid-cols-1'}`}
             >
                 <Pressable
                     pressScale={0.98}
                     hoverLift
                     onClick={() => setShowModal(true)}
-                    className={`btn btn-primary text-xl font-black py-8 flex flex-col gap-2 group overflow-hidden relative ${showAddBtn ? 'col-span-2 md:col-span-1' : ''}`}
+                    className="btn btn-primary text-xl font-black py-8 flex flex-col gap-2 group overflow-hidden relative"
                 >
                     <Icon icon="mdi:play-circle-outline" className="text-4xl group-hover:scale-110 transition-transform duration-500" />
                     <span>공부 시작하기</span>
-                </Pressable>
-
-                <Pressable
-                    pressScale={0.98}
-                    hoverLift
-                    onClick={() => navigate('/records')}
-                    className="btn btn-glass text-lg font-bold py-8 flex flex-col gap-2 relative"
-                >
-                    <Icon icon="mdi:chart-bar" className="text-3xl text-indigo-400" />
-                    <span>학습 기록 분석</span>
-                </Pressable>
-
-                <Pressable
-                    pressScale={0.98}
-                    hoverLift
-                    onClick={() => navigate('/edit-records')}
-                    className="btn btn-glass text-lg font-bold py-8 flex flex-col gap-2 relative"
-                >
-                    <Icon icon="mdi:pencil-outline" className="text-3xl text-purple-400" />
-                    <span>학습 기록 편집</span>
                 </Pressable>
 
                 {/* 홈 화면 추가 버튼 — 웹 브라우저에서만 표시 */}
@@ -241,7 +222,7 @@ export default function Home({ settings }: HomeProps) {
                             whileHover={{ y: -2 }}
                             transition={spring.snappy}
                             onClick={handleAddToHome}
-                            className="btn btn-glass text-lg font-bold py-8 flex flex-col gap-2 border border-indigo-400/30 bg-indigo-500/10 hover:bg-indigo-500/20 relative overflow-hidden"
+                            className="btn btn-glass text-lg font-bold py-8 flex flex-col items-center justify-center gap-2 border border-indigo-400/30 bg-indigo-500/10 hover:bg-indigo-500/20 relative overflow-hidden"
                         >
                             <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-purple-500/5 pointer-events-none" />
                             <Icon
@@ -249,7 +230,7 @@ export default function Home({ settings }: HomeProps) {
                                 className="text-3xl text-indigo-400 relative z-10"
                             />
                             <span className="relative z-10 text-indigo-300">홈 화면에 추가</span>
-                            <span className="text-[10px] font-medium text-indigo-400/60 relative z-10 -mt-1">
+                            <span className="text-[10px] font-medium text-indigo-400/60 relative z-10 -mt-1 text-center">
                                 {addBtnIOS ? 'Safari → 공유 → 홈 화면에 추가' : '앱처럼 설치하기'}
                             </span>
                         </motion.button>
@@ -260,14 +241,27 @@ export default function Home({ settings }: HomeProps) {
             {/* 체크리스트 (오늘/이번 주/이번 달) */}
             <ChecklistCard />
 
-            {/* 이번 주 회고 */}
-            <WeeklyDiaryCard settings={settings} />
-
             {/* 오늘의 일기 (3초 일기) */}
             <DiaryCard settings={settings} />
 
-            {/* 학습 복기 */}
-            <LearningNotesCard settings={settings} />
+            {/* 매일 필수는 아니지만 항상 접근 가능한 기능들 — 접힌 상태로 시작 */}
+            <HomeSection
+                title="이번 주 회고"
+                icon="mdi:notebook-heart"
+                storageKey="home_section_weekly"
+                accent="from-sky-500 to-blue-600"
+            >
+                <WeeklyDiaryCard settings={settings} bare />
+            </HomeSection>
+
+            <HomeSection
+                title="학습 복기"
+                icon="mdi:brain"
+                storageKey="home_section_notes"
+                accent="from-amber-500 to-orange-600"
+            >
+                <LearningNotesCard settings={settings} bare />
+            </HomeSection>
 
             {/* iOS 설치 가이드 모달 */}
             <IOSInstallGuide isOpen={showIOSGuide} onClose={() => setShowIOSGuide(false)} />

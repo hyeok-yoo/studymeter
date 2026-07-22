@@ -7,16 +7,99 @@
  * DiaryStatsRow: 자동 통계 4종(순공·목표%·세션수·졸음) 한 줄.
  */
 import { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Icon } from '@iconify/react'
 import type { DiaryEntry, DiaryStats, Settings, EvalTag } from '../lib/db'
 import { suggestDiaryScore, saveDiaryEntry, formatDurationHourMinute, computeDiaryStats, getDiaryEntry } from '../lib/db'
 import { getTopTags, getTagsForScope, recordTagUsage, TAG_CATEGORY_LABELS } from '../lib/tags'
 import { isAmbientAiEnabled, generateDiaryReply, regenerateDiaryDraft, regenerateDiaryReply } from '../lib/ai/aiService'
+import { compressImages } from '../lib/image'
 import AiMarkdown from './AiMarkdown'
 import Sheet from './ui/Sheet'
 import Pressable from './ui/Pressable'
 import { spring } from '../lib/motion'
+
+// ── 사진(종이 일기 스캔) ─────────────────────────────────────────────────────
+
+/** 사진 전체 보기 라이트박스. */
+function PhotoLightbox({ src, onClose }: { src: string | null; onClose: () => void }) {
+    useEffect(() => {
+        if (!src) return
+        const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+        window.addEventListener('keydown', onKey)
+        return () => window.removeEventListener('keydown', onKey)
+    }, [src, onClose])
+
+    return createPortal(
+        <AnimatePresence>
+            {src && (
+                <motion.div
+                    initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                    className="fixed inset-0 z-[9300] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4"
+                    onClick={onClose}
+                >
+                    <motion.img
+                        src={src}
+                        alt="일기 사진"
+                        initial={{ scale: 0.92 }} animate={{ scale: 1 }} exit={{ scale: 0.92 }}
+                        transition={spring.snappy}
+                        className="max-w-full max-h-full rounded-xl object-contain shadow-2xl"
+                        onClick={(e) => e.stopPropagation()}
+                    />
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        aria-label="닫기"
+                        className="absolute top-[calc(1rem+env(safe-area-inset-top))] right-4 w-11 h-11 rounded-full bg-white/15 hover:bg-white/25 text-white flex items-center justify-center backdrop-blur-md"
+                    >
+                        <Icon icon="mdi:close" className="text-2xl" />
+                    </button>
+                </motion.div>
+            )}
+        </AnimatePresence>,
+        document.body,
+    )
+}
+
+/** 사진 썸네일 묶음. onRemove 를 주면 편집(삭제 가능) 모드. */
+export function DiaryPhotoThumbs({ photos, onRemove, size = 'md' }: {
+    photos: string[]
+    onRemove?: (index: number) => void
+    size?: 'sm' | 'md'
+}) {
+    const [lightbox, setLightbox] = useState<string | null>(null)
+    if (!photos.length) return null
+    const dim = size === 'sm' ? 'w-14 h-14' : 'w-20 h-20'
+    return (
+        <>
+            <div className="flex flex-wrap gap-2">
+                {photos.map((p, i) => (
+                    <div key={i} className="relative">
+                        <button
+                            type="button"
+                            onClick={() => setLightbox(p)}
+                            className={`block ${dim} rounded-xl overflow-hidden border border-black/10 dark:border-white/10 bg-black/[0.03] dark:bg-white/5`}
+                        >
+                            <img src={p} alt={`일기 사진 ${i + 1}`} className="w-full h-full object-cover" loading="lazy" />
+                        </button>
+                        {onRemove && (
+                            <button
+                                type="button"
+                                onClick={() => onRemove(i)}
+                                aria-label="사진 삭제"
+                                className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center shadow-md"
+                            >
+                                <Icon icon="mdi:close" className="text-xs" />
+                            </button>
+                        )}
+                    </div>
+                ))}
+            </div>
+            <PhotoLightbox src={lightbox} onClose={() => setLightbox(null)} />
+        </>
+    )
+}
 
 // ── 음성 입력 (Web Speech API) ───────────────────────────────────────────────
 
@@ -120,6 +203,10 @@ export function DiaryEntryView({ entry, onEdit, settings, onChanged }: {
                 <p className="text-[var(--color-text)] font-semibold leading-relaxed">"{entry.oneLiner}"</p>
             )}
 
+            {entry.photos && entry.photos.length > 0 && (
+                <DiaryPhotoThumbs photos={entry.photos} />
+            )}
+
             {entry.aiReply && (
                 <div className="p-4 rounded-2xl bg-gradient-to-br from-indigo-500/10 to-purple-500/5 border border-indigo-500/15">
                     <div className="flex items-center gap-2 mb-1.5">
@@ -180,6 +267,11 @@ export function DiaryEditor({
     const [draft, setDraft] = useState(initialDraft)
     const [draftLoading, setDraftLoading] = useState(false)
     const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
+    // 종이 일기 스캔/사진 (압축된 base64 data URL)
+    const [photos, setPhotos] = useState<string[]>(existing?.photos ?? [])
+    const [uploading, setUploading] = useState(false)
+    const pickRef = useRef<HTMLInputElement | null>(null)
+    const cameraRef = useRef<HTMLInputElement | null>(null)
 
     useEffect(() => () => { try { recognitionRef.current?.stop() } catch { /* ignore */ } }, [])
 
@@ -213,6 +305,18 @@ export function DiaryEditor({
     const toggleTag = (name: string) => {
         setSelectedTags(prev => prev.includes(name) ? prev.filter(t => t !== name) : [...prev, name])
     }
+
+    const handleAddPhotos = async (files: FileList | null) => {
+        if (!files || files.length === 0) return
+        setUploading(true)
+        try {
+            const compressed = await compressImages(Array.from(files))
+            if (compressed.length) setPhotos(prev => [...prev, ...compressed])
+        } finally {
+            setUploading(false)
+        }
+    }
+    const removePhoto = (i: number) => setPhotos(prev => prev.filter((_, idx) => idx !== i))
 
     const startVoice = () => {
         const SR = getSpeechRecognition()
@@ -270,6 +374,7 @@ export function DiaryEditor({
             dayTags: selectedTags,
             oneLiner: trimmed || undefined,
             oneLinerSource: trimmed ? source : undefined,
+            photos: photos.length ? photos : undefined,
             aiReply: existing?.aiReply,
             auto: false,
             stats: freshStats,
@@ -474,6 +579,60 @@ export function DiaryEditor({
                         </>
                     )}
                 </div>
+            </div>
+
+            {/* 종이 일기 / 사진 */}
+            <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                    <p className="text-xs font-black uppercase tracking-widest text-[var(--color-text-secondary)]">종이 일기 · 사진</p>
+                    {photos.length > 0 && (
+                        <span className="text-[10px] font-bold text-[var(--color-text-secondary)]/70">{photos.length}장</span>
+                    )}
+                </div>
+
+                {photos.length > 0 && <DiaryPhotoThumbs photos={photos} onRemove={removePhoto} />}
+
+                {/* 숨은 파일 입력: 촬영(카메라) / 불러오기(갤러리·파일) */}
+                <input
+                    ref={cameraRef}
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    className="hidden"
+                    onChange={(e) => { handleAddPhotos(e.target.files); e.target.value = '' }}
+                />
+                <input
+                    ref={pickRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => { handleAddPhotos(e.target.files); e.target.value = '' }}
+                />
+
+                <div className="flex flex-wrap gap-2">
+                    <Pressable
+                        type="button"
+                        onClick={() => cameraRef.current?.click()}
+                        disabled={uploading}
+                        className="px-3.5 py-2 rounded-full text-xs font-bold bg-black/[0.04] dark:bg-white/5 text-[var(--color-text-secondary)] hover:bg-black/[0.08] dark:hover:bg-white/10 disabled:opacity-50"
+                    >
+                        <Icon icon={uploading ? 'mdi:loading' : 'mdi:camera-outline'} className={`inline text-sm mr-1 ${uploading ? 'animate-spin' : ''}`} />
+                        촬영
+                    </Pressable>
+                    <Pressable
+                        type="button"
+                        onClick={() => pickRef.current?.click()}
+                        disabled={uploading}
+                        className="px-3.5 py-2 rounded-full text-xs font-bold bg-black/[0.04] dark:bg-white/5 text-[var(--color-text-secondary)] hover:bg-black/[0.08] dark:hover:bg-white/10 disabled:opacity-50"
+                    >
+                        <Icon icon={uploading ? 'mdi:loading' : 'mdi:image-multiple-outline'} className={`inline text-sm mr-1 ${uploading ? 'animate-spin' : ''}`} />
+                        {uploading ? '처리 중…' : '불러오기'}
+                    </Pressable>
+                </div>
+                <p className="text-[10px] text-[var(--color-text-secondary)]/60 leading-relaxed">
+                    손으로 쓴 일기를 찍거나 스캔해 올리면 기록에 사진 그대로 남습니다.
+                </p>
             </div>
 
             {/* 확정 버튼 */}

@@ -948,6 +948,21 @@ function DiaryTab() {
                                             </div>
                                         )}
                                     </div>
+                                    {entry.photos && entry.photos.length > 0 && (
+                                        <div className="relative flex-shrink-0">
+                                            <img
+                                                src={entry.photos[0]}
+                                                alt="일기 사진"
+                                                className="w-12 h-12 rounded-lg object-cover border border-black/10 dark:border-white/10"
+                                                loading="lazy"
+                                            />
+                                            {entry.photos.length > 1 && (
+                                                <span className="absolute -bottom-1 -right-1 px-1.5 py-0.5 rounded-full bg-black/70 text-white text-[9px] font-black leading-none">
+                                                    +{entry.photos.length - 1}
+                                                </span>
+                                            )}
+                                        </div>
+                                    )}
                                     <Icon icon="mdi:chevron-right" className="text-lg text-[var(--color-text-secondary)]/50 flex-shrink-0" />
                                 </div>
                               </Pressable>
