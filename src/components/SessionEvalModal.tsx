@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Icon } from '@iconify/react'
 import type { SessionEvaluation, ThoughtNote, Settings, EvalTag } from '../lib/db'
-import { db, markThoughtsReviewed, getTodayDate } from '../lib/db'
+import { db, markThoughtsReviewed, getTodayDate, addLearningNote } from '../lib/db'
+import { attachEmbedding } from '../lib/ai/rag'
 import { getTopTags, getTagsForScope, recordTagUsage, TAG_CATEGORY_LABELS } from '../lib/tags'
 import { isAmbientAiEnabled, generateSessionComment } from '../lib/ai/aiService'
 import AiMarkdown from './AiMarkdown'
@@ -37,6 +38,7 @@ export default function SessionEvalModal({
     const [correct, setCorrect] = useState('')
     const [total, setTotal] = useState('')
     const [memo, setMemo] = useState('')
+    const [learned, setLearned] = useState('')
     const [saving, setSaving] = useState(false)
     const [aiComment, setAiComment] = useState<string | null>(null)
     const dismissRef = useRef<(() => void) | null>(null)
@@ -53,6 +55,7 @@ export default function SessionEvalModal({
         setCorrect('')
         setTotal('')
         setMemo('')
+        setLearned('')
         setSaving(false)
         setAiComment(null)
 
@@ -116,6 +119,21 @@ export default function SessionEvalModal({
         }
 
         recordTagUsage(selectedTags)
+
+        // 학습 복기 노트: 입력이 있으면 저장. 임베딩 생성은 fire-and-forget (저장을 막지 않음, 실패 무시).
+        const learnedTrimmed = learned.trim()
+        if (learnedTrimmed) {
+            addLearningNote({
+                date: getTodayDate(),
+                subject,
+                subItem,
+                content: learnedTrimmed,
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+            }).then((id) => {
+                if (settings) attachEmbedding(settings, id).catch(() => { /* ignore */ })
+            }).catch(() => { /* ignore */ })
+        }
 
         // AI 한 줄 코멘트: 최대 3.5초 대기 → 오면 잠깐 보여준 뒤 저장. 절대 저장을 막지 않음.
         if (settings && isAmbientAiEnabled(settings)) {
@@ -328,6 +346,20 @@ export default function SessionEvalModal({
                                     rows={2}
                                     className="w-full px-5 py-4 rounded-[1.5rem] bg-black/[0.03] dark:bg-white/5 border border-white/10 text-[var(--color-text)] placeholder:text-[var(--color-text-secondary)]/30 resize-none outline-none focus:border-indigo-400/40 focus:bg-black/[0.05] dark:focus:bg-white/[0.08] transition-all font-medium"
                                 />
+
+                                {/* 학습 복기용 노트 — 나중에 검색·복기하거나 AI가 참고할 수 있음 */}
+                                <div className="space-y-1.5">
+                                    <p className="text-[10px] font-black text-[var(--color-text-secondary)] uppercase tracking-widest px-1">
+                                        이 세션에서 배운 것 (복기용, 선택)
+                                    </p>
+                                    <textarea
+                                        value={learned}
+                                        onChange={(e) => setLearned(e.target.value)}
+                                        placeholder="예: 이차함수 최댓값 구하는 법을 완전꼴로 정리했다"
+                                        rows={2}
+                                        className="w-full px-5 py-4 rounded-[1.5rem] bg-black/[0.03] dark:bg-white/5 border border-white/10 text-[var(--color-text)] placeholder:text-[var(--color-text-secondary)]/30 resize-none outline-none focus:border-amber-400/40 focus:bg-black/[0.05] dark:focus:bg-white/[0.08] transition-all font-medium"
+                                    />
+                                </div>
                             </motion.div>
                         )}
                     </AnimatePresence>

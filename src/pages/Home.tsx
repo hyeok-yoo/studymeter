@@ -13,6 +13,10 @@ import {
 import StartStudyModal from '../components/StartStudyModal'
 import MorningReportCard from '../components/MorningReportCard'
 import DiaryCard from '../components/DiaryCard'
+import DdayWidget from '../components/DdayWidget'
+import ChecklistCard from '../components/ChecklistCard'
+import WeeklyDiaryCard from '../components/WeeklyDiaryCard'
+import LearningNotesCard from '../components/LearningNotesCard'
 import PWAInstallPrompt, {
     IOSInstallGuide,
     getCapturedPrompt,
@@ -121,6 +125,9 @@ export default function Home({ settings }: HomeProps) {
 
             {/* 아침 브리핑 / 주간 리뷰 */}
             <MorningReportCard settings={settings} />
+
+            {/* D-day */}
+            <DdayWidget settings={settings} />
 
             {/* Hero Stats Card */}
             <motion.section
@@ -250,8 +257,17 @@ export default function Home({ settings }: HomeProps) {
                 </AnimatePresence>
             </motion.div>
 
+            {/* 체크리스트 (오늘/이번 주/이번 달) */}
+            <ChecklistCard />
+
+            {/* 이번 주 회고 */}
+            <WeeklyDiaryCard settings={settings} />
+
             {/* 오늘의 일기 (3초 일기) */}
             <DiaryCard settings={settings} />
+
+            {/* 학습 복기 */}
+            <LearningNotesCard settings={settings} />
 
             {/* iOS 설치 가이드 모달 */}
             <IOSInstallGuide isOpen={showIOSGuide} onClose={() => setShowIOSGuide(false)} />

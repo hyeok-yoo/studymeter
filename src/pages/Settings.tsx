@@ -2,8 +2,8 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Icon } from '@iconify/react'
-import type { Settings, SubjectItem, AiRole, AiThinkingLevel, EvalTag, AiSystemPrompts } from '../lib/db'
-import { db } from '../lib/db'
+import type { Settings, SubjectItem, AiRole, AiThinkingLevel, EvalTag, AiSystemPrompts, Dday } from '../lib/db'
+import { db, getDefaultDdays, getTodayDate } from '../lib/db'
 import { exportBackup, importBackup } from '../lib/backup'
 import { useModal } from '../lib/ModalContext'
 import { useFocusSync } from '../lib/focusSync'
@@ -150,6 +150,7 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
     const [drowsinessSec, setDrowsinessSec] = useState(
         String(settings.drowsinessThresholdSec ?? 15)
     )
+    const [ddays, setDdays] = useState<Dday[]>(settings.ddays ?? getDefaultDdays())
     const [saved, setSaved] = useState(false)
     const [geminiModels, setGeminiModels] = useState<GeminiModel[]>([])
     const [loadingModels, setLoadingModels] = useState(false)
@@ -437,6 +438,26 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
         setLocalSubjects(newSubjects)
     }
 
+    // ── D-day 관리 ────────────────────────────────────────────────────────────
+    const handleAddDday = () => {
+        const id = `dday-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`
+        setDdays(prev => [...prev, { id, label: '', date: getTodayDate(), emoji: '📌' }])
+    }
+
+    const handleRemoveDday = async (idx: number) => {
+        const confirmed = await showConfirm('D-day 삭제', `'${ddays[idx].label || '제목 없음'}' 항목을 삭제하시겠습니까?`)
+        if (!confirmed) return
+        setDdays(prev => prev.filter((_, i) => i !== idx))
+    }
+
+    const handleDdayChange = (idx: number, patch: Partial<Dday>) => {
+        setDdays(prev => {
+            const next = [...prev]
+            next[idx] = { ...next[idx], ...patch }
+            return next
+        })
+    }
+
     const handleSave = async () => {
         const goalHours = parseFloat(dailyGoalHours)
         const drowsySec = parseInt(drowsinessSec, 10)
@@ -475,6 +496,7 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
             aiRoleModels: Object.keys(roleModelOverrides).length > 0 ? roleModelOverrides : undefined,
             aiSystemPrompts: Object.keys(promptOverrides).length > 0 ? promptOverrides : undefined,
             evalTags: evalTagsDirty ? evalTagsState : settings.evalTags,
+            ddays: ddays.filter(d => d.label.trim() && d.date),
         }
 
         await db.settings.put(newSettings)
@@ -666,6 +688,66 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                                 <span className="text-[var(--color-text-secondary)] font-medium">초 이상 지속 시</span>
                             </div>
                         </div>
+                    </div>
+                </motion.div>
+
+                {/* D-day 관리 */}
+                <motion.div variants={staggerItem}>
+                    <div className="flex items-center justify-between px-1.5 mb-2">
+                        <div className="flex items-center gap-2">
+                            <SectionLabel>D-day</SectionLabel>
+                            <HelpButton title="D-day" items={[
+                                { description: '수능·모의고사·시험 등 목표일까지 남은 날짜를 홈 화면 상단에 항상 보여줍니다.' },
+                                { title: '개수 제한 없음', description: '기본 3개(수능·모의평가·기말고사)가 채워져 있지만, 자유롭게 추가·수정·삭제할 수 있습니다.' },
+                                { title: '이모지', description: '항목을 구분하기 쉽도록 이모지를 하나 붙일 수 있습니다. (선택)' },
+                            ]} />
+                        </div>
+                        <Pressable
+                            onClick={handleAddDday}
+                            className="text-xs px-3 py-1.5 rounded-lg bg-indigo-500/10 text-indigo-500 font-bold"
+                        >
+                            + D-day 추가
+                        </Pressable>
+                    </div>
+
+                    <div className="glass-card p-6 space-y-3">
+                        {ddays.length === 0 && (
+                            <p className="text-xs text-[var(--color-text-secondary)] opacity-50 italic text-center py-2">
+                                등록된 D-day가 없습니다. 위 버튼으로 추가해 보세요.
+                            </p>
+                        )}
+                        {ddays.map((d, idx) => (
+                            <div key={d.id} className="glass-card-elevated p-4 flex flex-wrap items-center gap-2.5">
+                                <input
+                                    type="text"
+                                    value={d.emoji ?? ''}
+                                    onChange={(e) => handleDdayChange(idx, { emoji: e.target.value })}
+                                    placeholder="🎯"
+                                    maxLength={4}
+                                    className="w-12 px-2 py-2.5 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)] text-center text-lg"
+                                />
+                                <input
+                                    type="text"
+                                    value={d.label}
+                                    onChange={(e) => handleDdayChange(idx, { label: e.target.value })}
+                                    placeholder="예: 수능"
+                                    className="flex-1 min-w-[7rem] px-3 py-2.5 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)] text-sm font-medium"
+                                />
+                                <input
+                                    type="date"
+                                    value={d.date}
+                                    onChange={(e) => handleDdayChange(idx, { date: e.target.value })}
+                                    className="px-3 py-2.5 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)] text-sm"
+                                />
+                                <Pressable
+                                    onClick={() => handleRemoveDday(idx)}
+                                    pressScale={0.94}
+                                    className="text-[10px] px-2.5 py-2 rounded-md bg-red-500/10 text-red-500 hover:bg-red-500/20 flex items-center gap-1"
+                                >
+                                    <Icon icon="mdi:trash-can-outline" className="text-sm" /> 삭제
+                                </Pressable>
+                            </div>
+                        ))}
                     </div>
                 </motion.div>
 
