@@ -5,6 +5,9 @@ import Layout from './components/Layout'
 import { NativeBridge } from './lib/NativeBridge'
 const NameRegistrationModal = lazy(() => import('./components/NameRegistrationModal'))
 const MorningReportPopup = lazy(() => import('./components/MorningReportPopup'))
+const UserMessagePopup = lazy(() => import('./components/UserMessagePopup'))
+const FounderInbox = lazy(() => import('./components/FounderInbox'))
+const ChangelogModal = lazy(() => import('./components/ChangelogModal'))
 
 // telemetry (Firebase) 모듈은 앱 렌더링을 막지 않도록 동적으로 로드
 const telemetryPromise = import('./lib/telemetry')
@@ -168,6 +171,21 @@ function App() {
       {/* 그날 첫 아침 브리핑 준비 완료 시 전역 팝업 (공부 화면 포함 어디서든 1회) */}
       <Suspense fallback={null}>
         {settings && <MorningReportPopup settings={settings} />}
+      </Suspense>
+
+      {/* 관리자 → 사용자 메시지 팝업 (일반 사용자 화면). 내부에서 소유자/미설정 self-gate */}
+      <Suspense fallback={null}>
+        <UserMessagePopup />
+      </Suspense>
+
+      {/* 파운더(소유자) 인박스: 사용자 답장 확인·답장. 내부에서 소유자 아니면 렌더 안 함 */}
+      <Suspense fallback={null}>
+        <FounderInbox />
+      </Suspense>
+
+      {/* 업데이트 후 최초 실행 시 체인지로그 (내부에서 최초 설치/재노출 여부 self-gate) */}
+      <Suspense fallback={null}>
+        <ChangelogModal />
       </Suspense>
 
       <Suspense fallback={null}>
