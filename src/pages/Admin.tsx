@@ -13,8 +13,12 @@ import {
   changeOwnerPassword,
   markOwnerAdmin,
   syncAllHistory,
+  getMessagesForUser,
+  sendMessageToUser,
+  markUserMessagesRead,
   type TelemetryUser,
   type AdminSession,
+  type ChatMessage,
 } from '../lib/telemetry'
 import { formatDuration, formatDurationHourMinute, formatTimeHHMM, getTodayDate } from '../lib/db'
 
@@ -466,6 +470,7 @@ function DeleteConfirmModal({
 const SUBJECT_COLORS = ['#6366f1', '#a855f7', '#06b6d4', '#10b981', '#f59e0b', '#ef4444']
 
 function UserDetailModal({ user, onClose }: { user: TelemetryUser; onClose: () => void }) {
+  const [tab, setTab] = useState<'records' | 'messages'>('records')
   const [sessions, setSessions] = useState<AdminSession[] | null>(null)
   const [selectedDate, setSelectedDate] = useState(getTodayDate())
 
@@ -542,6 +547,26 @@ function UserDetailModal({ user, onClose }: { user: TelemetryUser; onClose: () =
           </button>
         </div>
 
+        {/* 탭 (기록 / 메시지) */}
+        <div className="px-5 pt-3 flex gap-2">
+          {([['records', '공부 기록', 'mdi:bookshelf'], ['messages', '메시지', 'mdi:message-text']] as const).map(([key, label, icon]) => (
+            <button
+              key={key}
+              onClick={() => setTab(key)}
+              className={`flex-1 py-2 rounded-xl text-sm font-bold flex items-center justify-center gap-1.5 transition-all ${
+                tab === key ? 'bg-[var(--color-primary)] text-white' : 'bg-white/5 text-[var(--color-text-secondary)] hover:bg-white/10'
+              }`}
+            >
+              <Icon icon={icon} className="text-base" />
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {tab === 'messages' ? (
+          <AdminMessageThread deviceId={user.id} name={user.name} />
+        ) : (
+        <>
         {/* 날짜 네비게이션 */}
         <div className="px-5 py-3 border-b border-white/10 flex items-center justify-center gap-2">
           <button onClick={() => shiftDate(-1)} className="p-1.5 rounded-lg hover:bg-white/10 transition-all">
@@ -676,7 +701,103 @@ function UserDetailModal({ user, onClose }: { user: TelemetryUser; onClose: () =
             </>
           )}
         </div>
+        </>
+        )}
       </motion.div>
+    </div>
+  )
+}
+
+// ── 관리자: 특정 사용자와의 메시지 스레드 + 전송 ────────────────────────────
+
+function AdminMessageThread({ deviceId, name }: { deviceId: string; name: string }) {
+  const [thread, setThread] = useState<ChatMessage[] | null>(null)
+  const [text, setText] = useState('')
+  const [sending, setSending] = useState(false)
+
+  const applyThread = useCallback((msgs: ChatMessage[]) => {
+    setThread(msgs)
+    const unreadIds = msgs.filter((m) => m.from === 'user' && !m.readByAdmin).map((m) => m.id)
+    if (unreadIds.length > 0) markUserMessagesRead(deviceId, unreadIds).catch(() => {})
+  }, [deviceId])
+
+  useEffect(() => {
+    let cancelled = false
+    getMessagesForUser(deviceId)
+      .then((msgs) => { if (!cancelled) applyThread(msgs) })
+      .catch(() => { if (!cancelled) setThread([]) })
+    return () => { cancelled = true }
+  }, [deviceId, applyThread])
+
+  async function handleSend() {
+    const body = text.trim()
+    if (!body || sending) return
+    setSending(true)
+    try {
+      await sendMessageToUser(deviceId, body)
+      setText('')
+      applyThread(await getMessagesForUser(deviceId))
+    } finally {
+      setSending(false)
+    }
+  }
+
+  function timeLabel(m: ChatMessage): string {
+    try {
+      return m.createdAt?.toDate?.().toLocaleString('ko-KR', {
+        month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+      }) ?? ''
+    } catch { return '' }
+  }
+
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-2.5">
+        {thread === null ? (
+          <div className="text-center py-16 text-[var(--color-text-secondary)] opacity-50">
+            <Icon icon="mdi:loading" className="text-4xl animate-spin" />
+          </div>
+        ) : thread.length === 0 ? (
+          <div className="text-center py-16 text-[var(--color-text-secondary)] opacity-50">
+            <Icon icon="mdi:message-outline" className="text-4xl mb-2" />
+            <p className="text-sm">{name}님에게 첫 메시지를 보내보세요.</p>
+          </div>
+        ) : (
+          thread.map((m) => {
+            const mine = m.from === 'admin'
+            return (
+              <div key={m.id} className={`flex flex-col gap-1 ${mine ? 'items-end' : 'items-start'}`}>
+                <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 ${
+                  mine
+                    ? 'rounded-tr-sm bg-gradient-to-br from-indigo-500 to-purple-600 text-white'
+                    : 'rounded-tl-sm bg-white/8 border border-white/10 text-[var(--color-text)]'
+                }`}>
+                  <p className="text-sm whitespace-pre-wrap break-words">{m.text}</p>
+                </div>
+                <span className="text-[10px] text-[var(--color-text-secondary)] opacity-50 px-1">{timeLabel(m)}</span>
+              </div>
+            )
+          })
+        )}
+      </div>
+      <div className="p-4 border-t border-white/10 flex items-end gap-2">
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder={`${name}님에게 메시지…`}
+          rows={1}
+          maxLength={2000}
+          className="flex-1 px-4 py-3 rounded-2xl bg-white/10 border border-white/20 text-sm text-[var(--color-text)] placeholder-[var(--color-text-secondary)]/50 focus:outline-none focus:border-[var(--color-primary)] resize-none max-h-32"
+        />
+        <button
+          onClick={handleSend}
+          disabled={sending || !text.trim()}
+          className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center text-white shadow-lg shadow-indigo-500/25 disabled:opacity-40 flex-shrink-0"
+          aria-label="보내기"
+        >
+          <Icon icon={sending ? 'mdi:loading' : 'mdi:send'} className={`text-xl ${sending ? 'animate-spin' : ''}`} />
+        </button>
+      </div>
     </div>
   )
 }

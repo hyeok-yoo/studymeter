@@ -5,6 +5,12 @@ import {
   setDoc,
   getDoc,
   collection,
+  collectionGroup,
+  addDoc,
+  query,
+  where,
+  orderBy,
+  limit,
   getDocs,
   updateDoc,
   deleteDoc,
@@ -439,6 +445,167 @@ export async function syncAllHistory(): Promise<number> {
     }
   }
   return uploaded
+}
+
+// ── 관리자 ↔ 사용자 양방향 메시지 ────────────────────────────────────────────
+//
+// 경로: users/{deviceId}/messages/{autoId}
+//   from        : 'admin' | 'user'  (보낸 주체)
+//   text        : 메시지 본문 (<= 2000자)
+//   name        : 보낸 사람 표시 이름 (사용자→관리자 메시지에 저장, 인박스 표시용)
+//   createdAt   : serverTimestamp()
+//   readByUser  : 사용자가 읽었는가
+//   readByAdmin : 관리자가 읽었는가
+//
+// 무거운 실시간 리스너 대신 폴링으로 동작한다. Firebase 미설정/오프라인 시엔
+// 조용히 no-op / 빈 배열을 반환한다.
+
+export interface ChatMessage {
+  id: string
+  deviceId: string
+  from: 'admin' | 'user'
+  text: string
+  name?: string
+  createdAt: Timestamp | null
+  readByUser: boolean
+  readByAdmin: boolean
+}
+
+// 소유자(관리자) → 특정 사용자에게 메시지 전송
+export async function sendMessageToUser(deviceId: string, text: string): Promise<void> {
+  if (!isConfigured() || !isOwner()) return
+  const body = text.trim()
+  if (!body) return
+  try {
+    await addDoc(collection(getDb(), 'users', deviceId, 'messages'), {
+      from: 'admin',
+      text: body.slice(0, 2000),
+      createdAt: serverTimestamp(),
+      readByUser: false,
+      readByAdmin: true,
+    })
+  } catch {
+    // 오프라인 등 → 무시
+  }
+}
+
+// 현재 사용자(본인) → 관리자에게 메시지(답장) 전송
+export async function sendMessageFromUser(text: string): Promise<void> {
+  if (!isConfigured()) return
+  const deviceId = getDeviceId()
+  if (!deviceId) return
+  const body = text.trim()
+  if (!body) return
+  try {
+    await addDoc(collection(getDb(), 'users', deviceId, 'messages'), {
+      from: 'user',
+      text: body.slice(0, 2000),
+      name: getRegisteredName(),
+      createdAt: serverTimestamp(),
+      readByUser: true,
+      readByAdmin: false,
+    })
+  } catch {
+    // 오프라인 등 → 무시
+  }
+}
+
+function mapMessageDoc(
+  id: string,
+  deviceId: string,
+  data: Record<string, unknown>,
+): ChatMessage {
+  return {
+    id,
+    deviceId,
+    from: data.from === 'admin' ? 'admin' : 'user',
+    text: (data.text as string) ?? '',
+    name: data.name as string | undefined,
+    createdAt: (data.createdAt as Timestamp | undefined) ?? null,
+    readByUser: data.readByUser === true,
+    readByAdmin: data.readByAdmin === true,
+  }
+}
+
+// 특정 사용자의 메시지 스레드 (오래된 순). 관리자/인박스 답장 화면에서 사용.
+export async function getMessagesForUser(deviceId: string): Promise<ChatMessage[]> {
+  if (!isConfigured() || !deviceId) return []
+  try {
+    const q = query(
+      collection(getDb(), 'users', deviceId, 'messages'),
+      orderBy('createdAt', 'asc'),
+    )
+    const snap = await getDocs(q)
+    return snap.docs.map((d) => mapMessageDoc(d.id, deviceId, d.data()))
+  } catch {
+    return []
+  }
+}
+
+// 현재 사용자: 아직 읽지 않은 관리자 메시지 (오래된 순)
+export async function getUnreadAdminMessages(): Promise<ChatMessage[]> {
+  if (!isConfigured()) return []
+  const deviceId = getDeviceId()
+  if (!deviceId) return []
+  try {
+    const q = query(
+      collection(getDb(), 'users', deviceId, 'messages'),
+      where('from', '==', 'admin'),
+      where('readByUser', '==', false),
+    )
+    const snap = await getDocs(q)
+    return snap.docs
+      .map((d) => mapMessageDoc(d.id, deviceId, d.data()))
+      .sort((a, b) => (a.createdAt?.toMillis?.() ?? 0) - (b.createdAt?.toMillis?.() ?? 0))
+  } catch {
+    return []
+  }
+}
+
+// 현재 사용자: 지정한 관리자 메시지들을 읽음 처리
+export async function markAdminMessagesRead(ids: string[]): Promise<void> {
+  if (!isConfigured() || ids.length === 0) return
+  const deviceId = getDeviceId()
+  if (!deviceId) return
+  await Promise.all(
+    ids.map((id) =>
+      updateDoc(doc(getDb(), 'users', deviceId, 'messages', id), { readByUser: true }).catch(
+        () => {},
+      ),
+    ),
+  )
+}
+
+// 소유자(관리자): 모든 사용자에서 온 최근 메시지 (최신 순) — 파운더 인박스용
+export async function getRecentUserMessages(limitN = 50): Promise<ChatMessage[]> {
+  if (!isConfigured() || !isOwner()) return []
+  try {
+    const q = query(
+      collectionGroup(getDb(), 'messages'),
+      where('from', '==', 'user'),
+      orderBy('createdAt', 'desc'),
+      limit(limitN),
+    )
+    const snap = await getDocs(q)
+    return snap.docs.map((d) => {
+      const deviceId = d.ref.parent.parent?.id ?? ''
+      return mapMessageDoc(d.id, deviceId, d.data())
+    })
+  } catch {
+    return []
+  }
+}
+
+// 소유자(관리자): 특정 사용자의 메시지들을 읽음 처리
+export async function markUserMessagesRead(deviceId: string, ids: string[]): Promise<void> {
+  if (!isConfigured() || !isOwner() || !deviceId || ids.length === 0) return
+  await Promise.all(
+    ids.map((id) =>
+      updateDoc(doc(getDb(), 'users', deviceId, 'messages', id), { readByAdmin: true }).catch(
+        () => {},
+      ),
+    ),
+  )
 }
 
 // 관리자: 사용자의 모든 일별 스냅샷을 읽어 세션 목록으로 펼친다.

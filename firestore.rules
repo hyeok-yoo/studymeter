@@ -49,6 +49,18 @@ service cloud.firestore {
         && isOptTimestamp(data, 'lastSeen');
     }
 
+    // 관리자↔사용자 메시지. 클라이언트가 쓰는 필드:
+    //   from, text, name(선택), createdAt, readByUser, readByAdmin
+    function isValidMessage(data, sender) {
+      return data.keys().hasOnly(['from', 'text', 'name', 'createdAt', 'readByUser', 'readByAdmin'])
+        && data.from == sender
+        && data.text is string && data.text.size() <= 2000
+        && isOptString(data, 'name', 200)
+        && isOptTimestamp(data, 'createdAt')
+        && isOptBool(data, 'readByUser')
+        && isOptBool(data, 'readByAdmin');
+    }
+
     // 하루치 공부기록 스냅샷
     function isValidDay(data) {
       return data.keys().hasOnly(['date', 'updatedAt', 'sessions'])
@@ -79,11 +91,28 @@ service cloud.firestore {
         allow create, update: if (isSelf(deviceId) && isValidDay(request.resource.data)) || isOwner();
         allow delete: if isOwner();
       }
+
+      // 관리자↔사용자 메시지 하위 컬렉션
+      match /messages/{msgId} {
+        // 읽기: 본인 또는 소유자
+        allow read: if isOwner() || isSelf(deviceId);
+        // 생성: 소유자는 from='admin', 본인은 from='user' 로만 작성 가능
+        allow create: if (isOwner() && isValidMessage(request.resource.data, 'admin'))
+          || (isSelf(deviceId) && isValidMessage(request.resource.data, 'user'));
+        // 수정: 본인/소유자 (읽음 플래그 flip 용도)
+        allow update: if isOwner() || isSelf(deviceId);
+        allow delete: if isOwner();
+      }
     }
 
     // ── 관리자 설정 (소유자 전용) ────────────────────────────────────────────
     match /admin/{document} {
       allow read, write: if isOwner();
+    }
+
+    // 파운더 인박스: 소유자가 전체 사용자의 메시지를 collectionGroup 으로 조회
+    match /{path=**}/messages/{msgId} {
+      allow read: if isOwner();
     }
 
     // 그 외 모든 경로는 기본 거부 (명시적 차단)
