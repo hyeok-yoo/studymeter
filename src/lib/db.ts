@@ -73,6 +73,14 @@ export interface EvalTag {
     custom?: boolean;  // 사용자가 추가함
 }
 
+/** D-day 항목. 사용자가 개수·날짜·라벨을 자유롭게 커스텀한다. */
+export interface Dday {
+    id: string;
+    label: string;
+    date: string;      // YYYY-MM-DD (목표 날짜)
+    emoji?: string;    // 표시용 이모지 (선택)
+}
+
 /** 기능별 시스템 프롬프트 오버라이드 (undefined = 기본 프롬프트 사용) */
 export interface AiSystemPrompts {
     base?: string;          // 공통 페르소나 (모든 기능 앞에 붙음)
@@ -111,6 +119,8 @@ export interface Settings {
     evalTags?: EvalTag[];
     morningReportHour?: number;      // 아침 리포트 알림 시각 (0-23). 기본 7
     morningReportEnabled?: boolean;  // 아침 리포트 알림. 기본 true
+    /** D-day 목록 (undefined = 기본 프리셋 사용). 개수·날짜 자유 커스텀. */
+    ddays?: Dday[];
 }
 
 // ── 일기 인터페이스 ─────────────────────────────────────────────────────────
@@ -149,6 +159,54 @@ export interface AiArtifact {
     createdAt: number;
 }
 
+// ── 체크리스트(할 일) 인터페이스 ─────────────────────────────────────────────
+
+/** 할 일 범위: 오늘(일)·이번 주·이번 달. */
+export type TodoScope = 'day' | 'week' | 'month';
+
+export interface Todo {
+    id?: number;
+    scope: TodoScope;
+    /** 범위 키: day=YYYY-MM-DD(공부일), week=그 주 월요일 YYYY-MM-DD, month=YYYY-MM */
+    periodKey: string;
+    text: string;
+    done: boolean;
+    order: number;         // 같은 범위 내 정렬 순서
+    createdAt: number;
+    completedAt?: number;
+}
+
+// ── 학습 복기(learning notes) + RAG 인터페이스 ───────────────────────────────
+
+/**
+ * 세션당 "오늘 뭘 배웠는지" 기록. 나중에 AI가 복기·개념 연결에 활용한다.
+ * 데이터가 많아져도 검색이 되도록 임베딩 벡터를 함께 저장한다(가능할 때).
+ */
+export interface LearningNote {
+    id?: number;
+    sessionId?: number;    // 연결된 공부 세션 (없을 수도 있음: 채팅으로 직접 기록)
+    date: string;          // YYYY-MM-DD (공부일)
+    subject: string;
+    subItem?: string;
+    content: string;       // 배운 내용 (자유 서술)
+    embedding?: number[];  // 의미 검색용 임베딩 (생성 실패 시 undefined → 키워드 검색으로 폴백)
+    embeddingModel?: string;
+    createdAt: number;
+    updatedAt: number;
+}
+
+// ── 주간 일기 인터페이스 ─────────────────────────────────────────────────────
+
+/** 주간 일기. 주로 일요일 밤/월요일 아침에 쓰지만 상시 작성 가능. */
+export interface WeeklyDiary {
+    weekStart: string;     // 그 주 월요일 YYYY-MM-DD (Primary Key)
+    content?: string;      // 이번 주 한마디/회고 (자유 서술)
+    score?: number;        // 이번 주 점수 1-10 (선택)
+    aiReply?: string;      // AI 답장 (마크다운)
+    createdAt: number;
+    updatedAt: number;
+}
+
 // 세션 중 주차된 생각 인터페이스
 export interface ThoughtNote {
     id?: number;
@@ -167,6 +225,9 @@ class StudyMeterDB extends Dexie {
     thoughtNotes!: EntityTable<ThoughtNote, 'id'>;
     diaryEntries!: EntityTable<DiaryEntry, 'date'>;
     aiArtifacts!: EntityTable<AiArtifact, 'id'>;
+    todos!: EntityTable<Todo, 'id'>;
+    learningNotes!: EntityTable<LearningNote, 'id'>;
+    weeklyDiaries!: EntityTable<WeeklyDiary, 'weekStart'>;
 
     constructor() {
         super('StudyMeterDB');
@@ -191,6 +252,18 @@ class StudyMeterDB extends Dexie {
             thoughtNotes: '++id, date, sessionStartTime',
             diaryEntries: 'date',
             aiArtifacts: '++id, date, [kind+date]'
+        });
+
+        this.version(4).stores({
+            sessions: '++id, date, subject, type, startTime',
+            dailyRecords: 'date',
+            settings: '++id',
+            thoughtNotes: '++id, date, sessionStartTime',
+            diaryEntries: 'date',
+            aiArtifacts: '++id, date, [kind+date]',
+            todos: '++id, [scope+periodKey], scope, periodKey, done',
+            learningNotes: '++id, date, subject, sessionId, createdAt',
+            weeklyDiaries: 'weekStart'
         });
     }
 }
@@ -231,7 +304,8 @@ export async function initializeSettings(): Promise<Settings> {
         ],
         types: ['자습', '수업', '테스트', '과제'],
         theme: 'system',
-        drowsinessThresholdSec: 15
+        drowsinessThresholdSec: 15,
+        ddays: getDefaultDdays()
     };
 
     await db.settings.add(defaultSettings);
@@ -596,4 +670,128 @@ export async function putAiArtifact(artifact: Omit<AiArtifact, 'id'>): Promise<v
 /** 캐시 삭제 — "다시 생성" 버튼이 캐시를 비우고 재생성할 때 사용. */
 export async function deleteAiArtifact(kind: string, date: string): Promise<void> {
     await db.aiArtifacts.where('[kind+date]').equals([kind, date]).delete();
+}
+
+// ── D-day 헬퍼 ───────────────────────────────────────────────────────────────
+
+/** 기본 D-day 3종 (사용자가 자유롭게 수정·추가·삭제). */
+export function getDefaultDdays(): Dday[] {
+    return [
+        { id: 'dday-suneung', label: '수능', date: '2026-11-19', emoji: '🎯' },
+        { id: 'dday-mock-9', label: '9월 모의평가', date: '2026-09-02', emoji: '📝' },
+        { id: 'dday-final', label: '기말고사', date: '2026-07-08', emoji: '📚' },
+    ];
+}
+
+/** 오늘 기준 남은 일수. 양수=미래(D-n), 0=당일(D-day), 음수=지난 날(D+n). */
+export function getDdayDiff(targetDate: string, today: string = getTodayDate()): number {
+    const t = new Date(targetDate + 'T00:00:00').getTime();
+    const n = new Date(today + 'T00:00:00').getTime();
+    return Math.round((t - n) / 86400000);
+}
+
+/** D-day 표시 문자열. 예: D-30, D-DAY, D+5 */
+export function formatDday(diff: number): string {
+    if (diff === 0) return 'D-DAY';
+    return diff > 0 ? `D-${diff}` : `D+${-diff}`;
+}
+
+// ── 기간 키 헬퍼 (체크리스트/주간 일기) ───────────────────────────────────────
+
+/** 이번(또는 주어진 날짜의) 주 월요일 YYYY-MM-DD. 주간 범위 키. */
+export function getWeekKey(date: Date = getStudyToday()): string {
+    return formatDateYYYYMMDD(getMonday(date));
+}
+
+/** 이번(또는 주어진 날짜의) 달 YYYY-MM. 월간 범위 키. */
+export function getMonthKey(date: Date = getStudyToday()): string {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    return `${y}-${m}`;
+}
+
+/** 범위별 현재 기간 키를 반환한다. */
+export function currentPeriodKey(scope: TodoScope): string {
+    if (scope === 'day') return getTodayDate();
+    if (scope === 'week') return getWeekKey();
+    return getMonthKey();
+}
+
+// ── 체크리스트(할 일) 헬퍼 ───────────────────────────────────────────────────
+
+export async function getTodos(scope: TodoScope, periodKey: string): Promise<Todo[]> {
+    const list = await db.todos.where('[scope+periodKey]').equals([scope, periodKey]).toArray();
+    return list.sort((a, b) => (a.done === b.done ? a.order - b.order : a.done ? 1 : -1));
+}
+
+export async function addTodo(scope: TodoScope, periodKey: string, text: string): Promise<number> {
+    const trimmed = text.trim();
+    if (!trimmed) throw new Error('할 일 내용이 비어 있습니다.');
+    const existing = await db.todos.where('[scope+periodKey]').equals([scope, periodKey]).toArray();
+    const maxOrder = existing.reduce((m, t) => Math.max(m, t.order), 0);
+    return await db.todos.add({
+        scope,
+        periodKey,
+        text: trimmed,
+        done: false,
+        order: maxOrder + 1,
+        createdAt: Date.now(),
+    }) as number;
+}
+
+export async function toggleTodo(id: number): Promise<void> {
+    const todo = await db.todos.get(id);
+    if (!todo) return;
+    const done = !todo.done;
+    await db.todos.update(id, { done, completedAt: done ? Date.now() : undefined });
+}
+
+export async function updateTodoText(id: number, text: string): Promise<void> {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    await db.todos.update(id, { text: trimmed });
+}
+
+export async function deleteTodo(id: number): Promise<void> {
+    await db.todos.delete(id);
+}
+
+/** 완료된 할 일 일괄 삭제 (범위 내 "정리하기"). */
+export async function clearCompletedTodos(scope: TodoScope, periodKey: string): Promise<number> {
+    const done = await db.todos.where('[scope+periodKey]').equals([scope, periodKey])
+        .filter(t => t.done).toArray();
+    await Promise.all(done.map(t => db.todos.delete(t.id!)));
+    return done.length;
+}
+
+// ── 주간 일기 헬퍼 ───────────────────────────────────────────────────────────
+
+export async function getWeeklyDiary(weekStart: string): Promise<WeeklyDiary | undefined> {
+    return db.weeklyDiaries.get(weekStart);
+}
+
+export async function saveWeeklyDiary(entry: WeeklyDiary): Promise<void> {
+    await db.weeklyDiaries.put(entry);
+}
+
+// ── 학습 복기(learning notes) 헬퍼 ───────────────────────────────────────────
+
+export async function addLearningNote(note: Omit<LearningNote, 'id'>): Promise<number> {
+    return await db.learningNotes.add(note) as number;
+}
+
+export async function getLearningNotesByDate(date: string): Promise<LearningNote[]> {
+    return db.learningNotes.where('date').equals(date).toArray();
+}
+
+export async function getAllLearningNotes(): Promise<LearningNote[]> {
+    return db.learningNotes.orderBy('createdAt').reverse().toArray();
+}
+
+export async function updateLearningNote(id: number, data: Partial<LearningNote>): Promise<void> {
+    await db.learningNotes.update(id, data);
+}
+
+export async function deleteLearningNote(id: number): Promise<void> {
+    await db.learningNotes.delete(id);
 }

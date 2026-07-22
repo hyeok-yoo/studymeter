@@ -364,6 +364,52 @@ export async function generateContent(
     }
 }
 
+// ── 임베딩 (의미 검색/RAG용) ──────────────────────────────────────────────────
+
+/** 기본 임베딩 모델. 무료 티어에서 널리 제공되는 안정 모델. */
+export const DEFAULT_EMBED_MODEL = 'text-embedding-004'
+
+/**
+ * 여러 문장의 임베딩 벡터를 한 번에 받는다 (batchEmbedContents).
+ * 실패하면 빈 배열을 반환한다(호출 측이 키워드 검색으로 폴백).
+ */
+export async function embedTexts(
+    apiKey: string,
+    texts: string[],
+    model: string = DEFAULT_EMBED_MODEL,
+): Promise<number[][]> {
+    if (!apiKey || texts.length === 0) return []
+    const modelPath = model.startsWith('models/') ? model : `models/${model}`
+    try {
+        const res = await fetch(`${API_BASE}/${modelPath}:batchEmbedContents?key=${encodeURIComponent(apiKey)}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                requests: texts.map((t) => ({
+                    model: modelPath,
+                    content: { parts: [{ text: t }] },
+                })),
+            }),
+        })
+        if (!res.ok) return []
+        const data = await res.json().catch(() => ({}))
+        const embeddings = (data.embeddings as Array<{ values?: number[] }> | undefined) ?? []
+        return embeddings.map((e) => e.values ?? [])
+    } catch {
+        return []
+    }
+}
+
+/** 단일 문장 임베딩. 실패 시 null. */
+export async function embedText(
+    apiKey: string,
+    text: string,
+    model: string = DEFAULT_EMBED_MODEL,
+): Promise<number[] | null> {
+    const [vec] = await embedTexts(apiKey, [text], model)
+    return vec && vec.length ? vec : null
+}
+
 /**
  * 함수 실행 결과를 모델에 돌려주는 후속 턴용 content 를 만든다.
  * (호출자는 reply.contents + 이 content 로 다시 generateContent 를 호출)
