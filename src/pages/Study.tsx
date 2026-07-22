@@ -528,9 +528,36 @@ export default function Study({ settings }: StudyProps) {
     }
 
     return (
-        <div className="true-black min-h-screen bg-black text-white flex flex-col justify-between safe-area-bottom p-6 md:p-12 overflow-hidden">
+        <div className="sm-study true-black h-[100dvh] min-h-[100dvh] bg-black text-white flex flex-col justify-between safe-area-bottom p-6 md:p-12 overflow-y-auto">
+            {/* 아이패드 가로모드(4:3에 가까운, 짧은 세로 높이)에서도 스톱워치·재생/일시정지 버튼이
+                절대 잘리지 않도록 하는 컴팩트 레이아웃. 갤럭시탭 16:10(가로세로비 1.5 초과)은 대상에서
+                제외되어 기존 모습을 그대로 유지한다. overflow-y-auto는 어떤 경우에도(고급 모드 등으로
+                콘텐츠가 늘어나도) 콘텐츠가 화면 밖으로 사라지지 않게 하는 안전망이다. */}
+            <style>{`
+                @media (orientation: landscape) and (max-height: 900px) and (max-aspect-ratio: 3/2) {
+                    .sm-study { padding: 0.75rem 1.25rem !important; }
+                    .sm-header { gap: 0.5rem !important; }
+                    .sm-selectors { padding-bottom: 0.5rem !important; }
+                    .sm-subitem { padding: 0.5rem !important; }
+                    .sm-main { justify-content: flex-start !important; }
+                    .sm-timer-block { gap: 0.35rem !important; }
+                    .sm-subject-label { font-size: 0.7rem !important; }
+                    .sm-timer-num { font-size: clamp(2.5rem, 11vh, 6rem) !important; }
+                    .sm-metric-grid { margin-top: 0.5rem !important; gap: 0.375rem !important; }
+                    .sm-metric-card { padding: 0.375rem !important; }
+                    .sm-metric-value { font-size: 0.95rem !important; }
+                    .sm-goal { margin-top: 0.375rem !important; }
+                    .sm-focus-wrap { margin-top: 0.5rem !important; }
+                    .sm-controls { margin-top: 0.5rem !important; gap: 1.5rem !important; }
+                    .sm-play-btn { width: 4.5rem !important; height: 4.5rem !important; }
+                    .sm-parking-btn { width: 2.75rem !important; height: 2.75rem !important; }
+                    .sm-spacer { width: 2.75rem !important; height: 2.75rem !important; }
+                    .sm-footer { height: 3rem !important; padding: 0 1rem !important; gap: 0.75rem !important; border-radius: 1.25rem !important; }
+                    .sm-footer-chips { display: none !important; }
+                }
+            `}</style>
             {/* Top Bar */}
-            <header className="flex flex-col gap-6 animate-fade-in">
+            <header className="sm-header flex flex-col gap-6 animate-fade-in">
                 <div className="flex justify-between items-center">
                     <div className="flex items-center gap-3">
                         <div className="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_10px_2px_rgba(239,68,68,0.6)]"></div>
@@ -539,7 +566,7 @@ export default function Study({ settings }: StudyProps) {
                     <Pressable onClick={handleEnd} pressScale={0.95} className="px-5 py-2 rounded-full bg-white/10 font-bold text-sm">Exit Session</Pressable>
                 </div>
 
-                <div className="flex gap-4 overflow-x-auto pb-6 no-scrollbar">
+                <div className="sm-selectors flex gap-4 overflow-x-auto pb-6 no-scrollbar">
                     <SlidingSelector
                         items={settings.subjects.map(s => s.name)}
                         currentValue={currentSubject}
@@ -559,7 +586,7 @@ export default function Study({ settings }: StudyProps) {
                 </div>
                 {/* Sub-item selector (only shows if current subject has children) */}
                 {hasSubItems && (
-                    <div className="flex flex-col gap-2 p-4 bg-white/5 rounded-2xl border border-white/5 animate-fade-in shadow-inner">
+                    <div className="sm-subitem flex flex-col gap-2 p-4 bg-white/5 rounded-2xl border border-white/5 animate-fade-in shadow-inner">
                         <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-30">Select Sub-Item</p>
                         <div className="flex gap-2 overflow-x-auto no-scrollbar">
                             <button
@@ -587,12 +614,12 @@ export default function Study({ settings }: StudyProps) {
             </header>
 
             {/* Main Timer Display */}
-            <main className="flex-1 flex flex-col items-center justify-center relative z-0">
+            <main className="sm-main flex-1 flex flex-col items-center justify-center relative z-0">
                 <div className="absolute inset-0 bg-gradient-to-b from-indigo-500/10 via-transparent to-transparent blur-[120px] pointer-events-none -z-10"></div>
 
-                <motion.div className="relative text-center flex flex-col gap-4" variants={fadeRise} initial="initial" animate="animate">
+                <motion.div className="sm-timer-block relative text-center flex flex-col gap-4" variants={fadeRise} initial="initial" animate="animate">
                     <div className="flex items-center justify-center gap-2">
-                        <h2 className="text-xl font-bold opacity-40 uppercase tracking-[0.3em]">
+                        <h2 className="sm-subject-label text-xl font-bold opacity-40 uppercase tracking-[0.3em]">
                             {currentSubject}{currentSubItem ? ` › ${currentSubItem}` : ''} · {currentType}
                         </h2>
                         <HelpButton dark title="타이머 표시 안내" items={[
@@ -605,7 +632,7 @@ export default function Study({ settings }: StudyProps) {
 
                     {countdownDuration ? (
                         <div className="flex flex-col items-center gap-2">
-                            <span className="text-display text-8xl md:text-[10rem] font-black tabular-nums text-red-500 drop-shadow-[0_0_50px_rgba(239,68,68,0.3)]">
+                            <span className="sm-timer-num text-display text-8xl md:text-[10rem] font-black tabular-nums text-red-500 drop-shadow-[0_0_50px_rgba(239,68,68,0.3)]">
                                 {formatDuration(Math.max(0, countdownDuration - sessionTime))}
                             </span>
                             <div className="flex items-center gap-2 opacity-40">
@@ -613,35 +640,35 @@ export default function Study({ settings }: StudyProps) {
                             </div>
                         </div>
                     ) : (
-                        <span className="text-display text-8xl md:text-[10rem] font-black tabular-nums gradient-text drop-shadow-2xl">
+                        <span className="sm-timer-num text-display text-8xl md:text-[10rem] font-black tabular-nums gradient-text drop-shadow-2xl">
                             {formatDurationWithDecimal(todayTotal + sessionTime)}
                         </span>
                     )}
 
                     {/* 4 Metric Cards */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8 w-full max-w-3xl mx-auto">
-                        <div className="bg-white/[0.06] border border-white/10 rounded-2xl p-4 text-center">
+                    <div className="sm-metric-grid grid grid-cols-2 md:grid-cols-4 gap-4 mt-8 w-full max-w-3xl mx-auto">
+                        <div className="sm-metric-card bg-white/[0.06] border border-white/10 rounded-2xl p-4 text-center">
                             <div className="flex items-center justify-center gap-1.5 mb-1">
                                 <span className="text-[10px] font-black uppercase tracking-widest opacity-40">{currentSubject} 누적</span>
                                 <HelpButton dark title={`${currentSubject} 오늘 누적`} items={`오늘 "${currentSubject}" 과목에서 모든 타입(강의·자습·테스트 등)으로 공부한 총 시간입니다. 과목을 전환해도 이전 세션 시간이 합산됩니다.`} />
                             </div>
-                            <span className="text-2xl md:text-3xl font-bold tabular-nums">{formatDuration(todaySubjectTotal + sessionTime)}</span>
+                            <span className="sm-metric-value text-2xl md:text-3xl font-bold tabular-nums">{formatDuration(todaySubjectTotal + sessionTime)}</span>
                         </div>
-                        <div className="bg-white/[0.06] border border-white/10 rounded-2xl p-4 text-center">
+                        <div className="sm-metric-card bg-white/[0.06] border border-white/10 rounded-2xl p-4 text-center">
                             <div className="flex items-center justify-center gap-1.5 mb-1">
                                 <span className="text-[10px] font-black uppercase tracking-widest opacity-40">{currentSubject}+{currentType}</span>
                                 <HelpButton dark title="과목+타입 누적" items={`오늘 "${currentSubject}" 과목에서 "${currentType}" 타입으로만 공부한 시간입니다. 예: 수학 강의만, 영어 자습만 따로 보고 싶을 때 유용합니다.`} />
                             </div>
-                            <span className="text-2xl md:text-3xl font-bold tabular-nums text-indigo-300">{formatDuration(todaySubjectTypeTotal + sessionTime)}</span>
+                            <span className="sm-metric-value text-2xl md:text-3xl font-bold tabular-nums text-indigo-300">{formatDuration(todaySubjectTypeTotal + sessionTime)}</span>
                         </div>
-                        <div className="bg-white/[0.06] border border-white/10 rounded-2xl p-4 text-center">
+                        <div className="sm-metric-card bg-white/[0.06] border border-white/10 rounded-2xl p-4 text-center">
                             <div className="flex items-center justify-center gap-1.5 mb-1">
                                 <span className="text-[10px] font-black uppercase tracking-widest opacity-40">현재 세션</span>
                                 <HelpButton dark title="현재 세션 시간" items="이번 공부 시작 버튼을 누른 순간부터 지금까지의 경과 시간입니다. 타입이나 과목을 전환하면 세션이 분리되어 다시 0부터 시작합니다." />
                             </div>
-                            <span className="text-2xl md:text-3xl font-bold tabular-nums text-cyan-400">{formatDuration(sessionTime)}</span>
+                            <span className="sm-metric-value text-2xl md:text-3xl font-bold tabular-nums text-cyan-400">{formatDuration(sessionTime)}</span>
                         </div>
-                        <div className="bg-white/[0.06] border border-white/10 rounded-2xl p-4 text-center">
+                        <div className="sm-metric-card bg-white/[0.06] border border-white/10 rounded-2xl p-4 text-center">
                             <div className="flex items-center justify-center gap-1.5 mb-1">
                                 <span className="text-[10px] font-black uppercase tracking-widest opacity-40">순공 (자습)</span>
                                 <HelpButton dark title="순공 시간이란?" items={[
@@ -649,7 +676,7 @@ export default function Study({ settings }: StudyProps) {
                                     { title: '왜 따로 보나요?', description: '수동적인 강의 시청과 능동적인 자습·문제풀이를 구분하여, 실제 스스로 공부한 시간을 파악하기 위함입니다.' },
                                 ]} />
                             </div>
-                            <span className="text-2xl md:text-3xl font-bold tabular-nums text-purple-400">{formatDuration(todaySelfStudyTotal + ((currentType === '자습' || currentType === '테스트') ? sessionTime : 0))}</span>
+                            <span className="sm-metric-value text-2xl md:text-3xl font-bold tabular-nums text-purple-400">{formatDuration(todaySelfStudyTotal + ((currentType === '자습' || currentType === '테스트') ? sessionTime : 0))}</span>
                         </div>
                     </div>
                 </motion.div>
@@ -661,7 +688,7 @@ export default function Study({ settings }: StudyProps) {
                     const goalH = Math.floor(settings.dailyGoalMs! / 3600000)
                     const goalM = Math.floor((settings.dailyGoalMs! % 3600000) / 60000)
                     return (
-                        <div className="w-full max-w-3xl mx-auto mt-4 px-1">
+                        <div className="sm-goal w-full max-w-3xl mx-auto mt-4 px-1">
                             <div className="flex justify-between text-[10px] font-black uppercase tracking-widest opacity-40 mb-1.5">
                                 <span>일일 목표 {goalH > 0 ? `${goalH}h` : ''}{goalM > 0 ? ` ${goalM}m` : ''}</span>
                                 <span style={{ color: pct >= 100 ? '#22c55e' : 'inherit' }}>{pct}%{pct >= 100 ? ' ✓' : ''}</span>
@@ -686,18 +713,20 @@ export default function Study({ settings }: StudyProps) {
                 })()}
 
                 {/* Focus Panel */}
-                <FocusPanel drowsinessThresholdSec={settings.drowsinessThresholdSec ?? 15} />
+                <div className="sm-focus-wrap">
+                    <FocusPanel drowsinessThresholdSec={settings.drowsinessThresholdSec ?? 15} />
+                </div>
 
                 {/* Controls Area */}
-                <div className="mt-16 flex items-center justify-center gap-10">
+                <div className="sm-controls mt-16 flex items-center justify-center gap-10">
                     {/* Thought Parking Button */}
-                    <div className="flex flex-col items-center gap-1">
+                    <div className="sm-parking flex flex-col items-center gap-1">
                         <Pressable
                             onClick={() => setShowParkingDrawer(true)}
                             pressScale={0.9}
                             className="flex flex-col items-center gap-0.5 group"
                         >
-                            <div className="w-16 h-16 rounded-2xl bg-white/[0.08] hover:bg-blue-500/20 border border-white/10 hover:border-blue-400/40 flex flex-col items-center justify-center gap-0.5 transition-colors">
+                            <div className="sm-parking-btn w-16 h-16 rounded-2xl bg-white/[0.08] hover:bg-blue-500/20 border border-white/10 hover:border-blue-400/40 flex flex-col items-center justify-center gap-0.5 transition-colors">
                                 <span className="text-xl font-black text-blue-400 leading-none">P</span>
                                 {parkedNotes.length > 0 && (
                                     <span className="text-[10px] font-black text-blue-300 leading-none">{parkedNotes.length}</span>
@@ -716,7 +745,7 @@ export default function Study({ settings }: StudyProps) {
                         onClick={handlePauseResume}
                         pressScale={0.9}
                         hoverLift
-                        className={`w-28 h-28 rounded-full flex items-center justify-center shadow-2xl cursor-pointer transition-colors ${isRunning ? 'bg-yellow-400' : 'bg-green-500'}`}
+                        className={`sm-play-btn w-28 h-28 rounded-full flex items-center justify-center shadow-2xl cursor-pointer transition-colors ${isRunning ? 'bg-yellow-400' : 'bg-green-500'}`}
                     >
                         {isRunning ? (
                             /* Pause Icon - Two vertical bars */
@@ -731,12 +760,12 @@ export default function Study({ settings }: StudyProps) {
                     </Pressable>
 
                     {/* Spacer to balance layout */}
-                    <div className="w-16 h-16" />
+                    <div className="sm-spacer w-16 h-16" />
                 </div>
             </main>
 
             {/* Bottom Insight Bar */}
-            <footer className="h-24 bg-white/[0.06] rounded-[2.5rem] border border-white/10 flex items-center px-10 gap-8 animate-slide-up">
+            <footer className="sm-footer h-24 bg-white/[0.06] rounded-[2.5rem] border border-white/10 flex items-center px-10 gap-8 animate-slide-up">
                 <div className="flex-1 flex flex-col">
                     <span className="text-[10px] font-black uppercase tracking-widest opacity-40 mb-1">Weekly progress</span>
                     <div className="flex items-baseline gap-2">
@@ -746,7 +775,7 @@ export default function Study({ settings }: StudyProps) {
                         </span>
                     </div>
                 </div>
-                <div className="flex gap-4">
+                <div className="sm-footer-chips flex gap-4">
                     {weeklyStats.slice(0, 3).map(stat => (
                         <div key={stat.subject} className="px-4 py-2 bg-white/5 rounded-xl border border-white/5 flex flex-col items-center">
                             <span className="text-[8px] font-black uppercase opacity-40">{stat.subject}</span>
