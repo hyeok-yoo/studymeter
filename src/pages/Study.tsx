@@ -529,12 +529,13 @@ export default function Study({ settings }: StudyProps) {
 
     return (
         <div className="sm-study true-black h-[100dvh] min-h-[100dvh] bg-black text-white flex flex-col justify-between safe-area-bottom p-6 md:p-12 overflow-y-auto">
-            {/* 아이패드 가로모드(4:3에 가까운, 짧은 세로 높이)에서도 스톱워치·재생/일시정지 버튼이
-                절대 잘리지 않도록 하는 컴팩트 레이아웃. 갤럭시탭 16:10(가로세로비 1.5 초과)은 대상에서
-                제외되어 기존 모습을 그대로 유지한다. overflow-y-auto는 어떤 경우에도(고급 모드 등으로
-                콘텐츠가 늘어나도) 콘텐츠가 화면 밖으로 사라지지 않게 하는 안전망이다. */}
+            {/* 아이패드 가로모드(4:3 ≈ 1.33)에서도 스톱워치·재생/일시정지 버튼이 절대 잘리지 않도록
+                하는 컴팩트 레이아웃. 갤럭시탭 16:10(1.6)은 대상에서 확실히 제외해 기존(넓은) 모습을
+                유지한다 — 임계값을 11/8(1.375)로 두어, 브라우저 크롬으로 가로폭이 줄어 비율이 다소
+                낮아지는 갤럭시탭(≈1.475)까지도 제외되게 한다. overflow-y-auto는 어떤 경우에도(고급
+                모드 등으로 콘텐츠가 늘어나도) 콘텐츠가 화면 밖으로 사라지지 않게 하는 안전망이다. */}
             <style>{`
-                @media (orientation: landscape) and (max-height: 900px) and (max-aspect-ratio: 3/2) {
+                @media (orientation: landscape) and (max-height: 900px) and (max-aspect-ratio: 11/8) {
                     .sm-study { padding: 0.75rem 1.25rem !important; }
                     .sm-header { gap: 0.5rem !important; }
                     .sm-selectors { padding-bottom: 0.5rem !important; }

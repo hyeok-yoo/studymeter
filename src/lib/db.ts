@@ -218,6 +218,21 @@ export interface ThoughtNote {
     reviewed: boolean;       // 나중에 검토했는지
 }
 
+// ── Gemini 대화 기록 ─────────────────────────────────────────────────────────
+
+/**
+ * 저장된 Gemini 대화 한 건. 메시지(표시용)와 Gemini contents(대화 이어가기용)를 함께 담는다.
+ * 컴포넌트의 Message/GeminiContent 타입과의 결합을 피하려 unknown[] 로 저장하고, 불러올 때 캐스팅한다.
+ */
+export interface ChatConversation {
+    id?: number;
+    title: string;            // 첫 사용자 메시지에서 유도한 제목
+    messages: unknown[];      // 화면 표시용 메시지 배열 (GeminiChat 의 Message[])
+    contents: unknown[];      // Gemini 히스토리 (GeminiContent[]) — 대화 이어가기용
+    createdAt: number;
+    updatedAt: number;
+}
+
 // Dexie 데이터베이스 클래스
 class StudyMeterDB extends Dexie {
     sessions!: EntityTable<StudySession, 'id'>;
@@ -229,6 +244,7 @@ class StudyMeterDB extends Dexie {
     todos!: EntityTable<Todo, 'id'>;
     learningNotes!: EntityTable<LearningNote, 'id'>;
     weeklyDiaries!: EntityTable<WeeklyDiary, 'weekStart'>;
+    chatConversations!: EntityTable<ChatConversation, 'id'>;
 
     constructor() {
         super('StudyMeterDB');
@@ -265,6 +281,19 @@ class StudyMeterDB extends Dexie {
             todos: '++id, [scope+periodKey], scope, periodKey, done',
             learningNotes: '++id, date, subject, sessionId, createdAt',
             weeklyDiaries: 'weekStart'
+        });
+
+        this.version(5).stores({
+            sessions: '++id, date, subject, type, startTime',
+            dailyRecords: 'date',
+            settings: '++id',
+            thoughtNotes: '++id, date, sessionStartTime',
+            diaryEntries: 'date',
+            aiArtifacts: '++id, date, [kind+date]',
+            todos: '++id, [scope+periodKey], scope, periodKey, done',
+            learningNotes: '++id, date, subject, sessionId, createdAt',
+            weeklyDiaries: 'weekStart',
+            chatConversations: '++id, updatedAt'
         });
     }
 }
@@ -795,4 +824,128 @@ export async function updateLearningNote(id: number, data: Partial<LearningNote>
 
 export async function deleteLearningNote(id: number): Promise<void> {
     await db.learningNotes.delete(id);
+}
+
+// ── Gemini 대화 기록 헬퍼 ─────────────────────────────────────────────────────
+
+/** 최근 수정순(내림차순)으로 저장된 대화 목록. */
+export async function listChatConversations(): Promise<ChatConversation[]> {
+    return db.chatConversations.orderBy('updatedAt').reverse().toArray();
+}
+
+export async function getChatConversation(id: number): Promise<ChatConversation | undefined> {
+    return db.chatConversations.get(id);
+}
+
+/** 대화를 저장(신규/갱신)하고 id 를 반환한다. */
+export async function saveChatConversation(conv: ChatConversation): Promise<number> {
+    return await db.chatConversations.put(conv) as number;
+}
+
+export async function deleteChatConversation(id: number): Promise<void> {
+    await db.chatConversations.delete(id);
+}
+
+/** 모든 대화 기록 삭제. 삭제된 건수를 반환. */
+export async function clearChatConversations(): Promise<number> {
+    const n = await db.chatConversations.count();
+    await db.chatConversations.clear();
+    return n;
+}
+
+// ── 데이터 관리(용량·정리) 헬퍼 ──────────────────────────────────────────────
+
+export interface DatabaseStats {
+    sessions: number;
+    diaryEntries: number;
+    chatConversations: number;
+    learningNotes: number;
+    todos: number;
+    aiArtifacts: number;
+    thoughtNotes: number;
+    weeklyDiaries: number;
+    /** navigator.storage.estimate() 가 지원될 때만 채워진다. */
+    storageUsedBytes?: number;
+    storageQuotaBytes?: number;
+}
+
+/** 테이블별 레코드 수 + (가능하면) 저장소 사용량. */
+export async function getDatabaseStats(): Promise<DatabaseStats> {
+    const [sessions, diaryEntries, chatConversations, learningNotes, todos, aiArtifacts, thoughtNotes, weeklyDiaries] =
+        await Promise.all([
+            db.sessions.count(),
+            db.diaryEntries.count(),
+            db.chatConversations.count(),
+            db.learningNotes.count(),
+            db.todos.count(),
+            db.aiArtifacts.count(),
+            db.thoughtNotes.count(),
+            db.weeklyDiaries.count(),
+        ]);
+
+    let storageUsedBytes: number | undefined;
+    let storageQuotaBytes: number | undefined;
+    try {
+        if (typeof navigator !== 'undefined' && navigator.storage?.estimate) {
+            const est = await navigator.storage.estimate();
+            storageUsedBytes = est.usage;
+            storageQuotaBytes = est.quota;
+        }
+    } catch { /* ignore */ }
+
+    return { sessions, diaryEntries, chatConversations, learningNotes, todos, aiArtifacts, thoughtNotes, weeklyDiaries, storageUsedBytes, storageQuotaBytes };
+}
+
+/** 오늘로부터 months 개월 전 날짜(YYYY-MM-DD). */
+function dateMonthsAgo(months: number): string {
+    const d = new Date();
+    d.setMonth(d.getMonth() - months);
+    return formatDateYYYYMMDD(d);
+}
+
+export interface PruneResult {
+    sessions: number;
+    diaryEntries: number;
+    thoughtNotes: number;
+    learningNotes: number;
+    aiArtifacts: number;
+    weeklyDiaries: number;
+}
+
+/**
+ * months 개월보다 오래된 날짜 기반 기록을 삭제한다 (세션·일기·주차 생각·학습 노트·AI 캐시·주간 일기).
+ * 날짜는 'YYYY-MM-DD' 문자열이라 사전식 비교가 그대로 성립한다. 반환은 테이블별 삭제 건수.
+ */
+export async function pruneDataOlderThan(months: number): Promise<PruneResult> {
+    const cutoff = dateMonthsAgo(months);
+    const [sessions, diaryEntries, thoughtNotes, learningNotes, aiArtifacts, weeklyDiaries] = await Promise.all([
+        db.sessions.where('date').below(cutoff).delete(),
+        db.diaryEntries.where('date').below(cutoff).delete(),
+        db.thoughtNotes.where('date').below(cutoff).delete(),
+        db.learningNotes.where('date').below(cutoff).delete(),
+        db.aiArtifacts.where('date').below(cutoff).delete(),
+        db.weeklyDiaries.where('weekStart').below(cutoff).delete(),
+    ]);
+    return { sessions, diaryEntries, thoughtNotes, learningNotes, aiArtifacts, weeklyDiaries };
+}
+
+/** 학습 복기 노트 전체 삭제. 삭제 건수 반환. */
+export async function clearLearningNotes(): Promise<number> {
+    const n = await db.learningNotes.count();
+    await db.learningNotes.clear();
+    return n;
+}
+
+/** AI 생성물 캐시(아침 리포트·일기 초안 등) 전체 삭제. 삭제 건수 반환. */
+export async function clearAiArtifacts(): Promise<number> {
+    const n = await db.aiArtifacts.count();
+    await db.aiArtifacts.clear();
+    return n;
+}
+
+/** 세션 중 주차된 생각 전체 삭제. 삭제 건수 반환. */
+export async function clearThoughtNotes(): Promise<number> {
+    const n = await db.thoughtNotes.count();
+    await db.thoughtNotes.clear();
+    return n;
 }

@@ -11,6 +11,7 @@
  */
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
+import { useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Icon } from '@iconify/react'
 import Pressable from './ui/Pressable'
@@ -29,6 +30,7 @@ function timeLabel(m: ChatMessage): string {
 }
 
 export default function FounderInbox() {
+  const location = useLocation()
   const [isOwner, setIsOwner] = useState(false)
   const [recent, setRecent] = useState<ChatMessage[]>([])
   const [panelOpen, setPanelOpen] = useState(false)
@@ -74,7 +76,8 @@ export default function FounderInbox() {
 
   const unreadCount = recent.filter((m) => !m.readByAdmin).length
 
-  if (!isOwner) return null
+  // 우하단 인박스 아이콘은 메인(홈) 화면에서만 노출한다. (폴링은 계속 돌아 안 읽음 수는 최신 유지)
+  if (!isOwner || location.pathname !== '/') return null
 
   return createPortal(
     <>
