@@ -1612,6 +1612,24 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                     </div>
                 </motion.div>
 
+                {/* 데이터 관리 (용량 확인 · 정리 · 삭제) */}
+                <motion.div variants={staggerItem}>
+                    <Pressable
+                        onClick={() => navigate('/data')}
+                        pressScale={0.98}
+                        className="w-full flex items-center justify-between px-5 py-3.5 rounded-2xl glass-card hover:bg-white/5 border border-[var(--color-border)]"
+                    >
+                        <div className="flex items-center gap-3">
+                            <Icon icon="mdi:database-cog-outline" className="text-xl text-[var(--color-primary)] flex-shrink-0" />
+                            <div className="text-left">
+                                <p className="text-sm font-medium text-[var(--color-text)]">데이터 관리</p>
+                                <p className="text-xs text-[var(--color-text-secondary)] mt-0.5">저장소 사용량 확인 · 오래된 데이터 정리 · 항목별 삭제</p>
+                            </div>
+                        </div>
+                        <Icon icon="mdi:chevron-right" className="text-xl text-[var(--color-text-secondary)] opacity-50 flex-shrink-0" />
+                    </Pressable>
+                </motion.div>
+
                 {/* Save Button */}
                 <motion.div variants={staggerItem}>
                     <Pressable

@@ -1,8 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Icon } from '@iconify/react'
-import type { Settings } from '../lib/db'
-import { db, formatDuration, formatDateYYYYMMDD, getTodayDate } from '../lib/db'
+import { useLiveQuery } from 'dexie-react-hooks'
+import type { Settings, ChatConversation } from '../lib/db'
+import {
+    db, formatDuration, formatDateYYYYMMDD, getTodayDate,
+    listChatConversations, getChatConversation, saveChatConversation, deleteChatConversation,
+} from '../lib/db'
 import {
     generateContent,
     fetchGeminiModels,
@@ -18,6 +22,7 @@ import { buildModelChain, supportsFunctionCalling, supportsGrounding, markModelE
 import { buildSystemInstruction } from '../lib/ai/prompts'
 import AiMarkdown from '../components/AiMarkdown'
 import Pressable from '../components/ui/Pressable'
+import Sheet from '../components/ui/Sheet'
 import { fadeRise, staggerContainer, staggerItem } from '../lib/motion'
 
 interface GeminiChatProps {
@@ -132,6 +137,21 @@ function readFileAsBase64(file: File): Promise<{ mimeType: string; data: string 
     })
 }
 
+/** 저장된 대화 목록에 표시할 짧은 날짜/시간 문자열. */
+function formatConvTime(ts: number): string {
+    const d = new Date(ts)
+    return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
+/** 첫 사용자 메시지에서 대화 제목을 유도한다 (최대 40자). */
+function deriveConversationTitle(finalMessages: Message[]): string {
+    const firstUser = finalMessages.find((m) => m.role === 'user')
+    if (!firstUser) return '새 대화'
+    const trimmed = firstUser.content.trim()
+    if (!trimmed) return '(첨부)'
+    return trimmed.length > 40 ? `${trimmed.slice(0, 40)}…` : trimmed
+}
+
 function deriveActiveCaps(model: GeminiModel | undefined, name: string) {
     if (model) return model
     // 목록을 아직 못 받았을 때 이름만으로 능력 추정
@@ -156,8 +176,73 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
     const [attachments, setAttachments] = useState<StagedAttachment[]>([])
     const fileInputRef = useRef<HTMLInputElement>(null)
 
+    // ── 대화 저장/불러오기 ──────────────────────────────────────────────────
+    const [conversationId, setConversationId] = useState<number | null>(null)
+    const [historyPanelOpen, setHistoryPanelOpen] = useState(false)
+    // 갱신 시 원래 createdAt 을 유지하기 위한 ref (로드/신규 생성 시점에 채워짐)
+    const createdAtRef = useRef<number | null>(null)
+    const conversations = useLiveQuery(() => listChatConversations(), [], [] as ChatConversation[])
+
     // 함수 선언은 사용자의 과목·유형 목록(enum)을 반영해 동적으로 만든다.
     const functionDeclarations = useMemo(() => buildChatFunctionDeclarations(settings), [settings])
+
+    /** 현재 대화를 저장(신규 생성 또는 갱신)한다. 저장 실패는 조용히 무시(대화는 메모리에 남음). */
+    const persistConversation = async (finalMessages: Message[], finalHistory: GeminiContent[]) => {
+        try {
+            const now = Date.now()
+            const title = deriveConversationTitle(finalMessages)
+            if (conversationId == null) {
+                const id = await saveChatConversation({
+                    title,
+                    messages: finalMessages,
+                    contents: finalHistory,
+                    createdAt: now,
+                    updatedAt: now,
+                })
+                createdAtRef.current = now
+                setConversationId(id)
+            } else {
+                await saveChatConversation({
+                    id: conversationId,
+                    title,
+                    messages: finalMessages,
+                    contents: finalHistory,
+                    createdAt: createdAtRef.current ?? now,
+                    updatedAt: now,
+                })
+            }
+        } catch {
+            /* 저장 실패는 무시 — 대화는 화면 상태에는 남아있음 */
+        }
+    }
+
+    /** 새 대화를 시작한다 (기존 메시지/히스토리/첨부 초기화). */
+    const startNewChat = () => {
+        setMessages([])
+        setHistory([])
+        setAttachments([])
+        setConversationId(null)
+        createdAtRef.current = null
+    }
+
+    /** 저장된 대화를 불러와 화면에 반영한다. */
+    const loadConversation = async (id: number) => {
+        const conv = await getChatConversation(id)
+        if (!conv) return
+        setMessages(conv.messages as Message[])
+        setHistory(conv.contents as GeminiContent[])
+        setAttachments([])
+        setConversationId(conv.id ?? id)
+        createdAtRef.current = conv.createdAt
+        setHistoryPanelOpen(false)
+    }
+
+    /** 저장된 대화를 삭제한다. 현재 열려있는 대화면 새 대화 상태로 되돌린다. */
+    const handleDeleteConversation = async (id: number) => {
+        if (!window.confirm('이 대화를 삭제할까요?')) return
+        await deleteChatConversation(id)
+        if (conversationId === id) startNewChat()
+    }
 
     const handleFilesChosen = async (files: FileList | null) => {
         if (!files || files.length === 0) return
@@ -345,11 +430,14 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
             previewUrl: att.isImage ? `data:${att.mimeType};base64,${att.data}` : undefined,
         }))
 
-        setMessages(prev => [...prev, {
+        const userMsg: Message = {
             role: 'user',
             content: userMessage || (staged.length ? `(첨부 ${staged.length}개 전송)` : ''),
             attachments: displayAttachments.length ? displayAttachments : undefined,
-        }])
+        }
+        // 비동기 setState 타이밍에 기대지 않고, 저장 시 정확한 최종 배열을 넘기기 위해 로컬로 추적한다.
+        const messagesWithUser = [...messages, userMsg]
+        setMessages(messagesWithUser)
         setInput('')
         setAttachments([]) // 전송 후 첨부 비우기
         setShareData('none') // Reset after sending
@@ -381,7 +469,8 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
 
             if (!reply) throw new Error('응답을 받지 못했습니다.')
 
-            setHistory(trimHistory(reply.contents ?? contents))
+            const finalHistory = trimHistory(reply.contents ?? contents)
+            setHistory(finalHistory)
 
             let content = reply.text
             if (!content && functionActivity.length) content = '(요청하신 작업을 완료했습니다.)'
@@ -389,16 +478,22 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
                 content += '\n\n> 💡 선택한 모델의 할당량이 초과되어 더 가벼운 모델로 자동 전환해 답변했습니다.'
             }
 
-            setMessages(prev => [...prev, {
+            const assistantMsg: Message = {
                 role: 'assistant',
                 content,
-                reasoning: reply!.reasoning,
-                grounding: reply!.grounding,
+                reasoning: reply.reasoning,
+                grounding: reply.grounding,
                 functionActivity: functionActivity.length ? functionActivity : undefined,
-            }])
+            }
+            const finalMessages = [...messagesWithUser, assistantMsg]
+            setMessages(finalMessages)
+            await persistConversation(finalMessages, finalHistory)
         } catch (err) {
             const msg = err instanceof Error ? err.message : '오류가 발생했습니다. API 키를 확인해주세요.'
-            setMessages(prev => [...prev, { role: 'assistant', content: `❌ ${msg}` }])
+            const finalMessages = [...messagesWithUser, { role: 'assistant' as const, content: `❌ ${msg}` }]
+            setMessages(finalMessages)
+            // 에러가 나도 지금까지의 대화(사용자 메시지 포함)는 잃지 않도록 저장한다.
+            await persistConversation(finalMessages, history)
         } finally {
             setLoading(false)
         }
@@ -407,7 +502,27 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
     return (
         <div className="animate-fade-in max-w-4xl mx-auto h-[calc(100vh-8rem)] flex flex-col">
             <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-                <h1 className="text-3xl font-bold gradient-text">Gemini</h1>
+                <div className="flex items-center gap-2">
+                    <h1 className="text-3xl font-bold gradient-text">Gemini</h1>
+                    {settings.geminiApiKey && (
+                        <div className="flex items-center gap-1">
+                            <Pressable
+                                onClick={startNewChat}
+                                className="w-9 h-9 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text-secondary)] flex items-center justify-center"
+                                title="새 대화"
+                            >
+                                <Icon icon="mdi:message-plus-outline" className="text-lg" />
+                            </Pressable>
+                            <Pressable
+                                onClick={() => setHistoryPanelOpen(true)}
+                                className="w-9 h-9 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text-secondary)] flex items-center justify-center relative"
+                                title="이전 대화"
+                            >
+                                <Icon icon="mdi:history" className="text-lg" />
+                            </Pressable>
+                        </div>
+                    )}
+                </div>
                 {settings.geminiApiKey && activeModel.name && (
                     <div className="flex items-center gap-1.5 flex-wrap justify-end">
                         <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-[var(--color-text-secondary)]">
@@ -707,6 +822,52 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
                     </div>
                 </>
             )}
+
+            {/* 이전 대화 불러오기 패널 */}
+            <Sheet
+                open={historyPanelOpen}
+                onClose={() => setHistoryPanelOpen(false)}
+                ariaLabel="이전 대화"
+                zIndex={8000}
+            >
+                <div className="pt-1">
+                    <h2 className="text-lg font-bold text-[var(--color-text)] mb-3 flex items-center gap-2">
+                        <Icon icon="mdi:history" className="text-xl" /> 이전 대화
+                    </h2>
+                    {!conversations || conversations.length === 0 ? (
+                        <div className="text-center py-10">
+                            <Icon icon="mdi:chat-outline" className="text-4xl text-[var(--color-text-secondary)] opacity-40 mb-2 block mx-auto" />
+                            <p className="text-sm text-[var(--color-text-secondary)]">저장된 대화가 없습니다.</p>
+                        </div>
+                    ) : (
+                        <div className="flex flex-col gap-1.5">
+                            {conversations.map((conv) => (
+                                <div
+                                    key={conv.id}
+                                    onClick={() => conv.id != null && loadConversation(conv.id)}
+                                    className={`flex items-center gap-2 p-3 rounded-xl border cursor-pointer transition-colors ${conv.id === conversationId
+                                        ? 'bg-[var(--color-primary)]/15 border-[var(--color-primary)]/40'
+                                        : 'bg-white/5 border-white/10 hover:bg-white/10'
+                                        }`}
+                                >
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium truncate text-[var(--color-text)]">{conv.title}</p>
+                                        <p className="text-[10px] text-[var(--color-text-secondary)] opacity-70 mt-0.5">{formatConvTime(conv.updatedAt)}</p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={(e) => { e.stopPropagation(); if (conv.id != null) handleDeleteConversation(conv.id) }}
+                                        aria-label="대화 삭제"
+                                        className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-[var(--color-text-secondary)] hover:text-red-400 hover:bg-red-500/10"
+                                    >
+                                        <Icon icon="mdi:trash-can-outline" className="text-base" />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </Sheet>
         </div>
     )
 }

@@ -25,6 +25,7 @@ const SettingsPage = lazy(() => import('./pages/Settings'))
 const EditRecords = lazy(() => import('./pages/EditRecords'))
 const DeveloperPage = lazy(() => import('./pages/Developer'))
 const AdminPage = lazy(() => import('./pages/Admin'))
+const DataManagement = lazy(() => import('./pages/DataManagement'))
 
 function App() {
   const [settings, setSettings] = useState<Settings | null>(null)
@@ -203,6 +204,7 @@ function App() {
             <Route path="edit-records" element={<EditRecords settings={settings!} />} />
             <Route path="gemini" element={<GeminiChat settings={settings!} />} />
             <Route path="settings" element={<SettingsPage settings={settings!} onSettingsChange={setSettings} />} />
+            <Route path="data" element={<DataManagement />} />
             <Route path="developer" element={<DeveloperPage />} />
           </Route>
 

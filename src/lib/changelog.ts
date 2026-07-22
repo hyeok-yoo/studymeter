@@ -33,7 +33,9 @@ export const CHANGELOG: ChangelogEntry[] = [
         items: [
             { icon: 'mdi:view-dashboard-outline', text: '홈 화면을 정리했어요 — 매일 쓰는 것만 앞에 두고, 주간 회고·학습 복기는 접이식 섹션으로 옮겨 한결 깔끔해졌어요.' },
             { icon: 'mdi:camera', text: '종이 일기를 사진·스캔으로 그대로 올릴 수 있어요 — 손으로 쓴 일기를 찍어 올리면 기록에 사진 그대로 남습니다.' },
-            { icon: 'mdi:bug-check', text: '업데이트 후 "새로워진 점" 안내가 제대로 뜨도록 고쳤어요.' },
+            { icon: 'mdi:history', text: 'Gemini 대화가 저장돼요 — "이전 대화"에서 지난 대화를 다시 불러오고, "새 대화"로 새로 시작할 수 있어요.' },
+            { icon: 'mdi:database-cog-outline', text: '데이터 관리 화면이 생겼어요 (설정 → 데이터 관리) — 저장소 사용량을 보고, 오래된 기록이나 대화·캐시를 골라 정리할 수 있어요.' },
+            { icon: 'mdi:bug-check', text: '갤럭시탭 가로 화면의 공부 중 UI가 다시 넓게 보이도록, "새로워진 점" 안내가 제대로 뜨도록 고쳤어요.' },
         ],
     },
     {
