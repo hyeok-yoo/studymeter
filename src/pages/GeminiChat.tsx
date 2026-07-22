@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Icon } from '@iconify/react'
 import type { Settings } from '../lib/db'
@@ -13,7 +13,7 @@ import {
     type GeminiContent,
     type GeminiReply,
 } from '../lib/gemini'
-import { CHAT_FUNCTION_DECLARATIONS, executeChatFunction } from '../lib/ai/functions'
+import { buildChatFunctionDeclarations, executeChatFunction } from '../lib/ai/functions'
 import { buildModelChain, supportsFunctionCalling, supportsGrounding, markModelExhausted, markModelCooldown } from '../lib/ai/router'
 import { buildSystemInstruction } from '../lib/ai/prompts'
 import AiMarkdown from '../components/AiMarkdown'
@@ -37,6 +37,7 @@ interface Message {
     reasoning?: string
     grounding?: GroundingSource[]
     functionActivity?: FunctionActivityItem[]
+    attachments?: DisplayAttachment[]
 }
 
 /** 대화 히스토리(contents)로 유지할 최대 항목 수. 넘으면 오래된 턴부터 자른다. */
@@ -52,20 +53,39 @@ function trimHistory(contents: GeminiContent[]): GeminiContent[] {
     return trimmed
 }
 
+const WRITE_ERROR_LABELS: Record<string, string> = {
+    log_session: '기록 실패',
+    save_diary: '일기 저장 실패',
+    save_weekly_diary: '주간 일기 저장 실패',
+    add_todo: '할 일 추가 실패',
+    complete_todo: '할 일 완료 실패',
+    save_learning_note: '학습 노트 저장 실패',
+}
+
 /** 조회/저장 함수 실행 결과를 사람이 읽을 짧은 칩 문구로 변환한다. */
 function describeFunctionActivity(name: string, result: Record<string, unknown>): FunctionActivityItem {
     const error = typeof result.error === 'string'
     if (error) {
-        const label = name === 'log_session' ? `기록 실패: ${result.error}`
-            : name === 'save_diary' ? `일기 저장 실패: ${result.error}`
-                : `조회 실패: ${result.error}`
-        return { name, label, error: true }
+        const prefix = WRITE_ERROR_LABELS[name] ?? '조회 실패'
+        return { name, label: `${prefix}: ${result.error}`, error: true }
     }
     switch (name) {
         case 'log_session':
             return { name, label: `${result.saved ?? '세션'} 기록됨` }
         case 'save_diary':
             return { name, label: `일기 저장됨${result.date ? ` (${result.date})` : ''}` }
+        case 'save_weekly_diary':
+            return { name, label: `주간 일기 저장됨${result.week_start ? ` (${result.week_start})` : ''}` }
+        case 'add_todo':
+            return { name, label: `할 일 추가됨: ${result.saved ?? ''}` }
+        case 'complete_todo':
+            return { name, label: `할 일 완료: ${result.completed ?? ''}` }
+        case 'save_learning_note':
+            return { name, label: `학습 노트 저장됨${result.saved ? ` (${result.saved})` : ''}` }
+        case 'list_todos':
+            return { name, label: '할 일 조회' }
+        case 'search_learning_notes':
+            return { name, label: `학습 노트 검색 (${result.count ?? 0}건)` }
         case 'get_study_data':
             return { name, label: '공부 기록 조회' }
         case 'get_diary':
@@ -76,7 +96,41 @@ function describeFunctionActivity(name: string, result: Record<string, unknown>)
 }
 
 // 조회류 vs 저장류에 따라 칩 아이콘을 다르게 보여준다.
-const WRITE_FUNCTIONS = new Set(['log_session', 'save_diary'])
+const WRITE_FUNCTIONS = new Set([
+    'log_session', 'save_diary', 'save_weekly_diary', 'add_todo', 'complete_todo', 'save_learning_note',
+])
+
+/** 첨부 파일 하나 (전송 대기 중). data 는 raw base64 (data: 접두사 없음). */
+interface StagedAttachment {
+    name: string
+    mimeType: string
+    data: string
+    isImage: boolean
+}
+
+/** 사용자 메시지 버블에 표시할 첨부 요약. */
+interface DisplayAttachment {
+    name: string
+    isImage: boolean
+    previewUrl?: string
+}
+
+/** File 을 raw base64 로 읽는다 (data: 접두사 제거). */
+function readFileAsBase64(file: File): Promise<{ mimeType: string; data: string }> {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => {
+            const result = typeof reader.result === 'string' ? reader.result : ''
+            const comma = result.indexOf(',')
+            resolve({
+                mimeType: file.type || 'application/octet-stream',
+                data: comma >= 0 ? result.slice(comma + 1) : result,
+            })
+        }
+        reader.onerror = () => reject(reader.error ?? new Error('파일을 읽지 못했습니다.'))
+        reader.readAsDataURL(file)
+    })
+}
 
 function deriveActiveCaps(model: GeminiModel | undefined, name: string) {
     if (model) return model
@@ -99,6 +153,33 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
     const [models, setModels] = useState<GeminiModel[]>([])
     const [useGrounding, setUseGrounding] = useState(settings.aiGroundingDefault !== false)
     const [useThinking, setUseThinking] = useState(true)
+    const [attachments, setAttachments] = useState<StagedAttachment[]>([])
+    const fileInputRef = useRef<HTMLInputElement>(null)
+
+    // 함수 선언은 사용자의 과목·유형 목록(enum)을 반영해 동적으로 만든다.
+    const functionDeclarations = useMemo(() => buildChatFunctionDeclarations(settings), [settings])
+
+    const handleFilesChosen = async (files: FileList | null) => {
+        if (!files || files.length === 0) return
+        const staged: StagedAttachment[] = []
+        for (const file of Array.from(files)) {
+            const isImage = file.type.startsWith('image/')
+            const isPdf = file.type === 'application/pdf'
+            if (!isImage && !isPdf) continue
+            try {
+                const { mimeType, data } = await readFileAsBase64(file)
+                staged.push({ name: file.name, mimeType, data, isImage })
+            } catch {
+                /* 개별 파일 읽기 실패는 무시 */
+            }
+        }
+        if (staged.length) setAttachments((prev) => [...prev, ...staged])
+        if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+
+    const removeAttachment = (index: number) => {
+        setAttachments((prev) => prev.filter((_, i) => i !== index))
+    }
 
     // 사용 가능한 모델 목록을 받아 선택 모델의 능력치를 파악한다.
     useEffect(() => {
@@ -217,7 +298,7 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
                     thinkingLevel: settings.aiThinkingLevels?.interactive,
                     availableModels: models,
                     contents,
-                    functionDeclarations: useFn ? CHAT_FUNCTION_DECLARATIONS : undefined,
+                    functionDeclarations: useFn ? functionDeclarations : undefined,
                     // 후보가 더 남아있으면 우리가 직접 다음 후보로 넘어갈 수 있도록 자동 폴백을 끈다.
                     // 마지막 후보에서는 generateContent 자체의 1회 자동 폴백(flash 전환)을 허용한다.
                     noFallback: !isLast,
@@ -244,15 +325,33 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
     }
 
     const sendMessage = async () => {
-        if (!input.trim() || !settings.geminiApiKey || loading) return
+        if ((!input.trim() && attachments.length === 0) || !settings.geminiApiKey || loading) return
 
         setLoading(true)
         const dataSummary = await getStudyDataSummary()
         const fullPrompt = dataSummary + input
         const userMessage = input
+        const staged = attachments
 
-        setMessages(prev => [...prev, { role: 'user', content: userMessage }])
+        // 사용자 메시지 parts: 텍스트(있으면) + 첨부(inlineData). 이미지·PDF 모두 inlineData 로 전달.
+        const userParts: Array<Record<string, unknown>> = []
+        if (fullPrompt.trim()) userParts.push({ text: fullPrompt })
+        for (const att of staged) userParts.push({ inlineData: { mimeType: att.mimeType, data: att.data } })
+        if (userParts.length === 0) userParts.push({ text: '' })
+
+        const displayAttachments: DisplayAttachment[] = staged.map((att) => ({
+            name: att.name,
+            isImage: att.isImage,
+            previewUrl: att.isImage ? `data:${att.mimeType};base64,${att.data}` : undefined,
+        }))
+
+        setMessages(prev => [...prev, {
+            role: 'user',
+            content: userMessage || (staged.length ? `(첨부 ${staged.length}개 전송)` : ''),
+            attachments: displayAttachments.length ? displayAttachments : undefined,
+        }])
         setInput('')
+        setAttachments([]) // 전송 후 첨부 비우기
         setShareData('none') // Reset after sending
 
         try {
@@ -260,7 +359,7 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
             // 검색이 켜져 있어도 함수 선언을 생략하지 않는다 (모델별 지원은 callModelWithRouting 에서 게이팅).
             const wantFunctions = true
 
-            let contents = trimHistory([...history, { role: 'user', parts: [{ text: fullPrompt }] }])
+            let contents = trimHistory([...history, { role: 'user', parts: userParts }])
             const functionActivity: FunctionActivityItem[] = []
             let reply: GeminiReply | null = null
 
@@ -358,7 +457,8 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
                                 <p className="font-bold text-[var(--color-text)]">오늘 공부한 걸 그냥 말해보세요</p>
                                 <p className="text-sm mt-2 opacity-90">"학원에서 수학 2시간 듣고 좀 졸았어, 영어 단어도 1시간 했고"</p>
                                 <p className="text-sm mt-1 opacity-70">→ 세션 기록과 오늘 일기까지 알아서 정리해드려요.</p>
-                                <p className="text-xs mt-3 opacity-60">질문·개념 설명도 물어보세요. 📊 버튼으로 기록을 함께 공유할 수 있어요.</p>
+                                <p className="text-sm mt-3 opacity-80">📎 모르는 문제 사진을 보내면 풀어드리고, 손글씨 일기·할 일 목록 사진은 앱에 옮겨 저장해드려요.</p>
+                                <p className="text-xs mt-2 opacity-60">질문·개념 설명도 물어보세요. 📊 버튼으로 기록을 함께 공유할 수 있어요.</p>
                             </motion.div>
                         )}
 
@@ -437,7 +537,31 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
                                             )}
                                         </>
                                     ) : (
-                                        <p className="whitespace-pre-wrap">{msg.content}</p>
+                                        <>
+                                            {msg.attachments && msg.attachments.length > 0 && (
+                                                <div className="flex flex-wrap gap-2 mb-2">
+                                                    {msg.attachments.map((att, ai) => (
+                                                        att.previewUrl ? (
+                                                            <img
+                                                                key={ai}
+                                                                src={att.previewUrl}
+                                                                alt={att.name}
+                                                                className="w-20 h-20 object-cover rounded-lg border border-white/20"
+                                                            />
+                                                        ) : (
+                                                            <span
+                                                                key={ai}
+                                                                className="text-xs font-medium px-2 py-1 rounded-lg bg-white/15 border border-white/20 flex items-center gap-1 max-w-[10rem]"
+                                                            >
+                                                                <Icon icon="mdi:file-pdf-box" className="text-sm flex-shrink-0" />
+                                                                <span className="truncate">{att.name}</span>
+                                                            </span>
+                                                        )
+                                                    ))}
+                                                </div>
+                                            )}
+                                            {msg.content && <p className="whitespace-pre-wrap">{msg.content}</p>}
+                                        </>
                                     )}
                                 </div>
                             </motion.div>
@@ -515,8 +639,55 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
                             </span>
                         )}
 
+                        {/* Staged attachments */}
+                        {attachments.length > 0 && (
+                            <div className="flex flex-wrap gap-2">
+                                {attachments.map((att, ai) => (
+                                    <div
+                                        key={ai}
+                                        className="relative group flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] max-w-[12rem]"
+                                    >
+                                        {att.isImage ? (
+                                            <img
+                                                src={`data:${att.mimeType};base64,${att.data}`}
+                                                alt={att.name}
+                                                className="w-9 h-9 object-cover rounded-md flex-shrink-0"
+                                            />
+                                        ) : (
+                                            <Icon icon="mdi:file-pdf-box" className="text-2xl text-red-400 flex-shrink-0" />
+                                        )}
+                                        <span className="text-xs text-[var(--color-text-secondary)] truncate">{att.name}</span>
+                                        <button
+                                            type="button"
+                                            onClick={() => removeAttachment(ai)}
+                                            aria-label="첨부 제거"
+                                            className="flex-shrink-0 w-5 h-5 rounded-full bg-black/30 text-white flex items-center justify-center hover:bg-black/50"
+                                        >
+                                            <Icon icon="mdi:close" className="text-xs" />
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
                         {/* Input */}
                         <div className="flex gap-3">
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept="image/*,application/pdf"
+                                multiple
+                                className="hidden"
+                                onChange={(e) => handleFilesChosen(e.target.files)}
+                            />
+                            <Pressable
+                                onClick={() => fileInputRef.current?.click()}
+                                disabled={loading}
+                                className="px-3 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text-secondary)] flex items-center justify-center disabled:opacity-50"
+                                title="사진 또는 PDF 첨부 (모르는 문제·손글씨 일기·할 일 목록)"
+                            >
+                                <Icon icon="mdi:paperclip" className="text-lg" />
+                            </Pressable>
                             <input
                                 type="text"
                                 value={input}
@@ -527,7 +698,7 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
                             />
                             <Pressable
                                 onClick={sendMessage}
-                                disabled={loading || !input.trim()}
+                                disabled={loading || (!input.trim() && attachments.length === 0)}
                                 className="btn btn-primary px-6 disabled:opacity-50"
                             >
                                 전송
