@@ -94,33 +94,46 @@ async function hasExistingData(): Promise<boolean> {
     return false;
 }
 
+export interface PendingChangelog {
+    /** 모달을 띄울지 여부. */
+    show: boolean;
+    /** 렌더링할 항목 — 항상 전체 이력(최신이 맨 위, 스크롤로 예전 버전까지). */
+    entries: ChangelogEntry[];
+    /** 마지막으로 본 버전 이후 "새로" 추가된 버전들 (NEW 배지 표시용). */
+    newVersions: string[];
+}
+
+const NOTHING: PendingChangelog = { show: false, entries: [], newVersions: [] };
+
 /**
- * 지금 체인지로그를 보여줘야 하는지 판단하고, 보여줄 항목을 반환한다.
+ * 지금 체인지로그를 보여줘야 하는지 판단한다.
+ * 띄울 때는 항상 **전체 이력**(entries = CHANGELOG, 최신이 맨 위)을 넘겨, 스크롤을 내리면
+ * 예전 버전(예: 1.6)의 변경사항까지 볼 수 있게 한다. newVersions 로 이번에 새로 추가된
+ * 버전만 구분해 표시할 수 있다.
  *  - 저장된 버전 == 현재: 표시 안 함.
- *  - 저장된 버전 < 현재: 그 사이(현재 버전 포함)의 항목들을 보여준다.
+ *  - 저장된 버전 < 현재: 표시(현재 버전 포함, 그 위쪽이 새 항목).
  *  - 저장된 버전 없음:
- *      · 기존 사용자(데이터 있음): 업데이트로 보고 최신 항목을 1회 보여준다.
- *        (예전엔 여기서 조용히 삼켜서 아무도 못 봤던 버그를 수정함.)
+ *      · 기존 사용자(데이터 있음): 업데이트로 보고 표시(전체를 새 항목으로 간주).
  *      · 진짜 신규 설치(데이터 없음): 표시하지 않고 현재 버전만 조용히 기록.
- * 반환이 빈 배열이면 모달을 띄우지 않는다. (모달 닫을 때 markVersionSeen 호출)
+ * 모달을 닫을 때 markVersionSeen 을 호출한다.
  */
-export async function pendingChangelog(): Promise<ChangelogEntry[]> {
+export async function pendingChangelog(): Promise<PendingChangelog> {
     const seen = getLastSeenVersion();
 
-    if (seen === APP_VERSION) return [];
+    if (seen === APP_VERSION) return NOTHING;
 
     if (seen === null) {
         if (await hasExistingData()) {
-            // 기존 사용자에게 최신 릴리스 항목을 보여준다.
-            return CHANGELOG.slice(0, 1);
+            // 기존 사용자 — 전체를 새 항목으로 간주해 보여준다.
+            return { show: true, entries: CHANGELOG, newVersions: CHANGELOG.map(e => e.version) };
         }
         // 진짜 신규 설치 — 업데이트가 아니므로 현재 버전만 기록하고 넘어간다.
         markVersionSeen();
-        return [];
+        return NOTHING;
     }
 
-    if (!isOlder(seen, APP_VERSION)) return [];
+    if (!isOlder(seen, APP_VERSION)) return NOTHING;
 
-    // 마지막으로 본 버전보다 새로운 항목만 (여러 버전 건너뛴 경우 모두 보여준다).
-    return CHANGELOG.filter(e => isOlder(seen, e.version));
+    const newVersions = CHANGELOG.filter(e => isOlder(seen, e.version)).map(e => e.version);
+    return { show: true, entries: CHANGELOG, newVersions };
 }

@@ -16,6 +16,7 @@ import { materialize, staggerContainer, staggerItem } from '../lib/motion'
 
 export default function ChangelogModal() {
     const [entries, setEntries] = useState<ChangelogEntry[]>([])
+    const [newVersions, setNewVersions] = useState<string[]>([])
     const [open, setOpen] = useState(false)
     const location = useLocation()
     const decidedRef = useRef(false)
@@ -28,8 +29,9 @@ export default function ChangelogModal() {
             const pending = await pendingChangelog()
             if (cancelled) return
             decidedRef.current = true
-            if (pending.length > 0) {
-                setEntries(pending)
+            if (pending.show && pending.entries.length > 0) {
+                setEntries(pending.entries)
+                setNewVersions(pending.newVersions)
                 setOpen(true)
             }
         })()
@@ -84,13 +86,14 @@ export default function ChangelogModal() {
                             <div className="overflow-y-auto no-scrollbar pr-1 flex flex-col gap-6">
                                 {entries.map((entry) => (
                                     <div key={entry.version} className="flex flex-col gap-3">
-                                        {entries.length > 1 && (
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-xs font-black text-[var(--color-text)] text-display">v{entry.version}</span>
-                                                <span className="text-[10px] font-bold text-[var(--color-text-secondary)] opacity-60">{entry.date}</span>
-                                                <div className="flex-1 h-px bg-[var(--color-border)]" />
-                                            </div>
-                                        )}
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs font-black text-[var(--color-text)] text-display">v{entry.version}</span>
+                                            {newVersions.includes(entry.version) && (
+                                                <span className="px-1.5 py-0.5 rounded-md bg-indigo-500 text-white text-[9px] font-black tracking-wide">NEW</span>
+                                            )}
+                                            <span className="text-[10px] font-bold text-[var(--color-text-secondary)] opacity-60">{entry.date}</span>
+                                            <div className="flex-1 h-px bg-[var(--color-border)]" />
+                                        </div>
                                         <motion.ul
                                             variants={staggerContainer}
                                             initial="initial"
