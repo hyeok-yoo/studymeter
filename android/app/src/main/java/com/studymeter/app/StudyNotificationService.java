@@ -39,6 +39,7 @@ public class StudyNotificationService extends Service {
     private long pauseStartTime = 0;        // 마지막 PAUSE 시각 (네이티브 즉시 처리 시 경과시간 보정용)
     private long baseTotalStudyMs = 0;      // 현재 세션을 제외한 오늘 총 누적 공부 시간
     private long baseSubjectStudyMs = 0;    // 현재 세션을 제외한 현재 과목 누적 공부 시간
+    private long countdownDurationMs = 0;   // 테스트(카운트다운) 총 시간. 0이면 일반 스톱워치 모드
 
     @Override
     public void onCreate() {
@@ -68,6 +69,7 @@ public class StudyNotificationService extends Service {
             long currentElapsedAtCall = System.currentTimeMillis() - sessionStartTime;
             baseTotalStudyMs = totalFromJs - currentElapsedAtCall;
             baseSubjectStudyMs = subjectFromJs - currentElapsedAtCall;
+            countdownDurationMs = intent.getLongExtra("countdownMs", 0);
 
             ensureNotificationChannel();
             long initElapsed = System.currentTimeMillis() - sessionStartTime;
@@ -87,6 +89,7 @@ public class StudyNotificationService extends Service {
             long currentElapsedAtCall = System.currentTimeMillis() - sessionStartTime;
             baseTotalStudyMs = totalFromJs - currentElapsedAtCall;
             baseSubjectStudyMs = subjectFromJs - currentElapsedAtCall;
+            countdownDurationMs = intent.getLongExtra("countdownMs", 0);
 
             // startForegroundService() 계약 준수: UPDATE도 항상 startForeground를 호출한다.
             // (호출하지 않으면 서비스가 foreground가 아닌 상태에서 재시작될 때
@@ -226,16 +229,34 @@ public class StudyNotificationService extends Service {
         String sessionTimeStr = formatElapsed(sessionElapsed);
         String subjectTimeStr = formatElapsed(liveSubjectStudyMs);
         String totalTimeStr = formatElapsed(liveTotalStudyMs);
-        String statusText = isRunning ? "집중 중" : "일시정지";
+
+        // 카운트다운(테스트) 모드에서는 올라가는 경과가 아니라 남은 시간을 보여준다.
+        // 칩이 스톱워치처럼 올라가면 시험 시간이 얼마 남았는지 알 수 없다.
+        boolean countdown = countdownDurationMs > 0;
+        long remainingMs = countdown ? Math.max(0, countdownDurationMs - sessionElapsed) : 0;
+        boolean finished = countdown && remainingMs <= 0;
+
+        String statusText;
+        if (countdown) {
+            statusText = finished ? "시간 종료" : (isRunning ? "테스트 진행 중" : "일시정지");
+        } else {
+            statusText = isRunning ? "집중 중" : "일시정지";
+        }
 
         // 칩에 표시할 짧은 텍스트 (과목 H:MM:SS)
-        String chipText = currentSubject + " " + formatChipTime(liveTotalStudyMs);
+        String chipText = countdown
+                ? currentSubject + " " + (finished ? "종료" : formatChipTime(remainingMs))
+                : currentSubject + " " + formatChipTime(liveTotalStudyMs);
 
-        // 타이틀: 과목 H:MM:SS (오늘 총 누적)
-        String titleText = currentSubject + " " + totalTimeStr;
+        // 타이틀: 카운트다운이면 남은 시간, 아니면 오늘 총 누적
+        String titleText = countdown
+                ? currentSubject + " " + (finished ? "시간 종료" : formatElapsed(remainingMs) + " 남음")
+                : currentSubject + " " + totalTimeStr;
 
         // ProgressStyle 은 줄바꿈(\n)을 무시하고 한 줄로 표시하므로, 최대한 간결하게 가로 한 줄로 배치
-        String contentText = "세션 " + sessionTimeStr + " · 과목 " + subjectTimeStr + " · 오늘 " + totalTimeStr;
+        String contentText = countdown
+                ? "경과 " + sessionTimeStr + " · 전체 " + formatElapsed(countdownDurationMs) + " · 오늘 " + totalTimeStr
+                : "세션 " + sessionTimeStr + " · 과목 " + subjectTimeStr + " · 오늘 " + totalTimeStr;
 
         Notification.Builder builder = new Notification.Builder(this, CHANNEL_ID)
                 .setContentTitle(titleText)
@@ -277,7 +298,11 @@ public class StudyNotificationService extends Service {
         // 스타일 적용 (다중 줄 지원을 위해 Fallback부터 먼저 설정)
         // 안드로이드 15 이하거나, ProgressStyle 미지원 환경을 위한 기본 스타일
         builder.setStyle(new Notification.BigTextStyle()
-                .bigText("세션: " + sessionTimeStr + "\n과목: " + subjectTimeStr + "\n오늘: " + totalTimeStr)
+                .bigText(countdown
+                        ? "남은 시간: " + (finished ? "0:00:00" : formatElapsed(remainingMs))
+                                + "\n경과: " + sessionTimeStr
+                                + "\n오늘: " + totalTimeStr
+                        : "세션: " + sessionTimeStr + "\n과목: " + subjectTimeStr + "\n오늘: " + totalTimeStr)
                 .setBigContentTitle(titleText));
 
         // Android 16 (API 36) 이상: ProgressStyle + Promoted Ongoing으로 Now Bar 칩 진입

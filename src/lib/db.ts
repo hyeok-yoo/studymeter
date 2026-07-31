@@ -1,4 +1,5 @@
 import Dexie, { type EntityTable } from 'dexie';
+import type { HaConfig } from './ha/types';
 
 // 세션 기록 인터페이스
 export interface SessionEvaluation {
@@ -49,11 +50,37 @@ export interface DailyRecord {
     firstVisitCompleted: boolean;
 }
 
+/** 과목별 조명 프리셋. 색온도를 지원하는 조명에만 적용된다. */
+export interface SubjectLightPreset {
+    colorTempK?: number;   // 2000-6500
+    brightnessPct?: number; // 1-100
+}
+
 // 과목 인터페이스 (계층 구조)
 export interface SubjectItem {
     name: string;
     children?: string[]; // 하위 항목들
+    /** 공부 시작 시 방 조명에 적용할 프리셋 (HA 연동이 켜져 있을 때만 쓰인다) */
+    lightPreset?: SubjectLightPreset;
 }
+
+/** 테스트 타이머 프리셋. 기본 6개를 시드로 넣고 사용자가 추가·삭제한다. */
+export interface TimerPreset {
+    id: string;
+    label: string;
+    minutes: number;
+    /** 과목형 프리셋은 라벨 아래 분을 따로 표기한다 */
+    kind: 'subject' | 'duration';
+}
+
+export const DEFAULT_TIMER_PRESETS: TimerPreset[] = [
+    { id: 'ko', label: '국어', minutes: 80, kind: 'subject' },
+    { id: 'ma', label: '수학', minutes: 100, kind: 'subject' },
+    { id: 'en', label: '영어', minutes: 70, kind: 'subject' },
+    { id: 'd30', label: '30분', minutes: 30, kind: 'duration' },
+    { id: 'd40', label: '40분', minutes: 40, kind: 'duration' },
+    { id: 'd50', label: '50분', minutes: 50, kind: 'duration' },
+];
 
 // ── AI 역할/태그 관련 타입 ───────────────────────────────────────────────────
 
@@ -121,6 +148,10 @@ export interface Settings {
     morningReportEnabled?: boolean;  // 아침 리포트 알림. 기본 true
     /** D-day 목록 (undefined = 기본 프리셋 사용). 개수·날짜 자유 커스텀. */
     ddays?: Dday[];
+    /** 테스트 타이머 프리셋 (undefined = DEFAULT_TIMER_PRESETS 사용) */
+    timerPresets?: TimerPreset[];
+    /** Home Assistant 연동 설정. 토큰은 이 기기에만 저장된다. */
+    haConfig?: HaConfig;
 }
 
 // ── 일기 인터페이스 ─────────────────────────────────────────────────────────

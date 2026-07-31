@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, memo } from 'react'
+import { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react'
 import { createPortal } from 'react-dom'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts'
 import Pressable from '../components/ui/Pressable'
@@ -25,6 +25,8 @@ import {
     addThoughtNote
 } from '../lib/db'
 import TestTimerModal from '../components/TestTimerModal'
+import RoomPanel from '../components/RoomPanel'
+import { useSessionEvents } from '../lib/ha/useSessionEvents'
 import SessionEvalModal from '../components/SessionEvalModal'
 import { TabletCamera } from '../components/TabletCamera'
 import { NativeBridge } from '../lib/NativeBridge'
@@ -63,6 +65,31 @@ export default function Study({ settings }: StudyProps) {
     const [lastSessionDuration, setLastSessionDuration] = useState(0)
     const [showParkingDrawer, setShowParkingDrawer] = useState(false)
     const [parkedNotes, setParkedNotes] = useState<ThoughtNote[]>([])
+    /** 방 패널이 실제로 떠 있는지 (집일 때만 true) */
+    const [roomAvailable, setRoomAvailable] = useState(false)
+    const [focusOpen, setFocusOpen] = useState(false)
+
+    // 집중력 모니터는 항상 기본 숨김 — 사용자가 펼칠 때만 마운트한다
+    // (카메라 파이프라인이 무거우므로 접힌 동안은 아예 돌지 않는 편이 낫다)
+    const showFocusPanel = focusOpen
+
+    // ── HA 세션 이벤트 ──────────────────────────────────────────────────────
+    // 공부의 시작/중단/종료를 HA 로 알려 자동화가 반응할 수 있게 한다.
+    const sendSessionEvent = useSessionEvents(settings.haConfig)
+    const sessionStartSentRef = useRef(false)
+    const prevRunningRef = useRef(isRunning)
+    const prevSubjectRef = useRef(currentSubject)
+
+    const handleSaveSubjectPreset = useCallback(async (subjectName: string, colorTempK: number) => {
+        if (settings.id == null) return
+        const subjects = settings.subjects.map(s =>
+            s.name === subjectName
+                ? { ...s, lightPreset: { ...(s.lightPreset ?? {}), colorTempK } }
+                : s,
+        )
+        await db.settings.update(settings.id, { subjects })
+    }, [settings.id, settings.subjects])
+
 
     // Get current subject's children
     const currentSubjectData = settings.subjects.find(s => s.name === currentSubject)
@@ -238,16 +265,44 @@ export default function Study({ settings }: StudyProps) {
             if (!notificationStartedRef.current) {
                 const hasPermission = await NativeBridge.requestNotificationPermission();
                 if (hasPermission) {
-                    NativeBridge.startNowBar(currentSubject, chronometerBase, isRunning, totalStudyMsRef.current, subjectStudyMsRef.current);
+                    NativeBridge.startNowBar(currentSubject, chronometerBase, isRunning, totalStudyMsRef.current, subjectStudyMsRef.current, countdownDuration ?? 0);
                     notificationStartedRef.current = true;
                 }
             } else {
-                NativeBridge.updateNowBar(currentSubject, chronometerBase, isRunning, totalStudyMsRef.current, subjectStudyMsRef.current);
+                NativeBridge.updateNowBar(currentSubject, chronometerBase, isRunning, totalStudyMsRef.current, subjectStudyMsRef.current, countdownDuration ?? 0);
             }
         };
 
         syncNotification();
-    }, [currentSubject, currentType, currentSubItem, isRunning, isLoaded, isEnding])
+        // countdownDuration 이 빠지면 세션 도중 테스트 타이머를 켜도 칩이 스톱워치로 남는다
+    }, [currentSubject, currentType, currentSubItem, isRunning, isLoaded, isEnding, countdownDuration])
+
+    // HA 세션 이벤트 — 시작 1회, 이후엔 일시정지/재개·과목 변경만 알린다.
+    // 값이 그대로면 아무것도 보내지 않아 HA 에 불필요한 요청이 가지 않는다.
+    useEffect(() => {
+        if (!isLoaded) return
+        const payload = {
+            subject: currentSubject,
+            type: currentType,
+            subItem: currentSubItem,
+            countdownMs: countdownDuration ?? 0,
+        }
+        if (!sessionStartSentRef.current) {
+            sessionStartSentRef.current = true
+            prevRunningRef.current = isRunning
+            prevSubjectRef.current = currentSubject
+            sendSessionEvent('start', payload)
+            return
+        }
+        if (prevRunningRef.current !== isRunning) {
+            prevRunningRef.current = isRunning
+            sendSessionEvent(isRunning ? 'resume' : 'pause', payload)
+        }
+        if (prevSubjectRef.current !== currentSubject) {
+            prevSubjectRef.current = currentSubject
+            sendSessionEvent('subject_change', payload)
+        }
+    }, [isLoaded, isRunning, currentSubject, currentType, currentSubItem, countdownDuration, sendSessionEvent])
 
     useEffect(() => {
         // 몰입형 모드 진입
@@ -458,6 +513,13 @@ export default function Study({ settings }: StudyProps) {
         endingRef.current = true
         setIsEnding(true)
         NativeBridge.stopNowBar()
+        sendSessionEvent('end', {
+            subject: currentSubject,
+            type: currentType,
+            subItem: currentSubItem,
+            countdownMs: countdownDuration ?? 0,
+            elapsedMs: sessionTime,
+        })
         const sessionId = await saveSession(true)
         if (sessionId) {
             setShowEvalModal(true)
@@ -713,10 +775,43 @@ export default function Study({ settings }: StudyProps) {
                     )
                 })()}
 
-                {/* Focus Panel */}
-                <div className="sm-focus-wrap">
-                    <FocusPanel drowsinessThresholdSec={settings.drowsinessThresholdSec ?? 15} />
-                </div>
+                {/* Room Panel — 집(로컬 HA 도달)일 때만 마운트된다 */}
+                <RoomPanel
+                    config={settings.haConfig}
+                    currentSubject={currentSubject}
+                    subjects={settings.subjects}
+                    onSaveSubjectPreset={handleSaveSubjectPreset}
+                    focusOpen={focusOpen}
+                    onToggleFocus={() => setFocusOpen(v => !v)}
+                    onAvailabilityChange={setRoomAvailable}
+                />
+
+                {/* 방 패널이 없을 때(집 밖)의 집중력 모니터 토글 — 펼칠 수단은 남겨둔다 */}
+                {!roomAvailable && (
+                    <button
+                        onClick={() => setFocusOpen(v => !v)}
+                        aria-expanded={focusOpen}
+                        className="mt-6 w-full max-w-3xl mx-auto flex items-center justify-between px-5 py-3 rounded-2xl border border-white/10 bg-white/[0.04]"
+                    >
+                        <span className="flex items-center gap-2">
+                            <Icon icon="mdi:eye-outline" className="text-[16px] opacity-40" />
+                            <span className="text-[12px] font-bold opacity-50">집중력 모니터</span>
+                        </span>
+                        <span className="flex items-center gap-1 text-[12px] font-bold opacity-40">
+                            {focusOpen ? '접기' : '펼치기'}
+                            <motion.span animate={{ rotate: focusOpen ? 180 : 0 }} transition={spring.snappy} className="flex">
+                                <Icon icon="mdi:chevron-down" className="text-[15px]" />
+                            </motion.span>
+                        </span>
+                    </button>
+                )}
+
+                {/* Focus Panel — 펼쳤을 때만 마운트 */}
+                {showFocusPanel && (
+                    <div className="sm-focus-wrap">
+                        <FocusPanel drowsinessThresholdSec={settings.drowsinessThresholdSec ?? 15} />
+                    </div>
+                )}
 
                 {/* Controls Area */}
                 <div className="sm-controls mt-16 flex items-center justify-center gap-10">
@@ -841,6 +936,7 @@ export default function Study({ settings }: StudyProps) {
                 <TestTimerModal
                     onClose={() => setShowTestTimer(false)}
                     onConfirm={handleTestTimerConfirm}
+                    settings={settings}
                 />
             )}
 

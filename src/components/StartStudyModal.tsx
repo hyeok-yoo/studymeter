@@ -243,6 +243,7 @@ export default function StartStudyModal({
                 <TestTimerModal
                     onClose={() => setShowTestTimer(false)}
                     onConfirm={handleTestTimerConfirm}
+                    settings={settings}
                 />
             )}
         </>,

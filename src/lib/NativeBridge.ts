@@ -3,9 +3,9 @@ import { KeepAwake } from '@capacitor-community/keep-awake';
 import { Capacitor, registerPlugin } from '@capacitor/core';
 
 interface NowBarPlugin {
-    startNowBar(options: { subject: string; startTime: number; isRunning: boolean; totalStudyMs: number; subjectStudyMs: number }): Promise<void>;
+    startNowBar(options: { subject: string; startTime: number; isRunning: boolean; totalStudyMs: number; subjectStudyMs: number; countdownMs: number }): Promise<void>;
     stopNowBar(): Promise<void>;
-    updateNowBar(options: { subject: string; startTime: number; isRunning: boolean; totalStudyMs: number; subjectStudyMs: number }): Promise<void>;
+    updateNowBar(options: { subject: string; startTime: number; isRunning: boolean; totalStudyMs: number; subjectStudyMs: number; countdownMs: number }): Promise<void>;
     checkPermissions(): Promise<{ display: PermissionState }>;
     requestPermissions(): Promise<{ display: PermissionState }>;
     consumePendingActions(): Promise<{ actions: { action: string; at: number }[] }>;
@@ -98,10 +98,10 @@ export const NativeBridge = {
     /**
      * Now Bar 알림 시작
      */
-    async startNowBar(subject: string, startTime: number, isRunning: boolean, totalStudyMs: number = 0, subjectStudyMs: number = 0) {
+    async startNowBar(subject: string, startTime: number, isRunning: boolean, totalStudyMs: number = 0, subjectStudyMs: number = 0, countdownMs: number = 0) {
         if (!this.isNative()) return;
         try {
-            await NowBar.startNowBar({ subject, startTime, isRunning, totalStudyMs, subjectStudyMs });
+            await NowBar.startNowBar({ subject, startTime, isRunning, totalStudyMs, subjectStudyMs, countdownMs });
         } catch (e) {
             console.error('StartNowBar failed', e);
         }
@@ -121,11 +121,13 @@ export const NativeBridge = {
 
     /**
      * Now Bar 알림 업데이트 (과목 변경, 일시정지/재개 시)
+     *
+     * countdownMs > 0 이면 칩이 스톱워치가 아니라 남은 시간으로 표시된다.
      */
-    async updateNowBar(subject: string, startTime: number, isRunning: boolean, totalStudyMs: number = 0, subjectStudyMs: number = 0) {
+    async updateNowBar(subject: string, startTime: number, isRunning: boolean, totalStudyMs: number = 0, subjectStudyMs: number = 0, countdownMs: number = 0) {
         if (!this.isNative()) return;
         try {
-            await NowBar.updateNowBar({ subject, startTime, isRunning, totalStudyMs, subjectStudyMs });
+            await NowBar.updateNowBar({ subject, startTime, isRunning, totalStudyMs, subjectStudyMs, countdownMs });
         } catch (e) {
             console.error('UpdateNowBar failed', e);
         }

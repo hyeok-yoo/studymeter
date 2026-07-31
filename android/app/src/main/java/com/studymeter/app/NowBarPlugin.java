@@ -79,6 +79,8 @@ public class NowBarPlugin extends Plugin {
         Long totalStudyMs = totalNum != null ? totalNum.longValue() : 0L;
         Number subjectNum = (Number) call.getData().opt("subjectStudyMs");
         Long subjectStudyMs = subjectNum != null ? subjectNum.longValue() : 0L;
+        Number countdownNum = (Number) call.getData().opt("countdownMs");
+        Long countdownMs = countdownNum != null ? countdownNum.longValue() : 0L;
 
         try {
             Intent intent = new Intent(getContext(), StudyNotificationService.class);
@@ -88,6 +90,7 @@ public class NowBarPlugin extends Plugin {
             intent.putExtra("isRunning", isRunning != null ? isRunning : true);
             intent.putExtra("totalStudyMs", totalStudyMs);
             intent.putExtra("subjectStudyMs", subjectStudyMs);
+            intent.putExtra("countdownMs", countdownMs);
 
             getContext().startForegroundService(intent);
             Log.d(TAG, "startNowBar: service started for " + subject);
@@ -122,6 +125,8 @@ public class NowBarPlugin extends Plugin {
         Long totalStudyMs = totalNum != null ? totalNum.longValue() : 0L;
         Number subjectNum = (Number) call.getData().opt("subjectStudyMs");
         Long subjectStudyMs = subjectNum != null ? subjectNum.longValue() : 0L;
+        Number countdownNum = (Number) call.getData().opt("countdownMs");
+        Long countdownMs = countdownNum != null ? countdownNum.longValue() : 0L;
 
         try {
             Intent intent = new Intent(getContext(), StudyNotificationService.class);
@@ -131,6 +136,7 @@ public class NowBarPlugin extends Plugin {
             intent.putExtra("isRunning", isRunning != null ? isRunning : true);
             intent.putExtra("totalStudyMs", totalStudyMs);
             intent.putExtra("subjectStudyMs", subjectStudyMs);
+            intent.putExtra("countdownMs", countdownMs);
 
             getContext().startForegroundService(intent);
             call.resolve();

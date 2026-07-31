@@ -11,6 +11,7 @@ import { useFocusNative } from '../lib/useFocusNative'
 import { TabletCamera } from '../components/TabletCamera'
 import { HelpButton } from '../components/HelpButton'
 import DevAccessModal from '../components/DevAccessModal'
+import HaSettingsSection from '../components/HaSettingsSection'
 import { isOwner } from '../lib/telemetry'
 import { fetchGeminiModels, type GeminiModel } from '../lib/gemini'
 import { PROMPT_LABELS, DEFAULT_PROMPTS, getPrompt, type PromptKey } from '../lib/ai/prompts'
@@ -869,6 +870,9 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                     </div>
                 </motion.div>
 
+                {/* 홈 어시스턴트 */}
+                <HaSettingsSection settings={settings} onSettingsChange={onSettingsChange} />
+
                 {/* Gemini AI */}
                 <motion.div variants={staggerItem}>
                     <SectionLabel>Gemini AI</SectionLabel>
@@ -1411,7 +1415,7 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                                 type="text"
                                 value={serverUrlInput}
                                 onChange={(e) => setServerUrlInput(e.target.value)}
-                                placeholder="예: 192.168.25.14 (IP만 입력해도 자동 보강)"
+                                placeholder="예: 192.168.0.14 (IP만 입력해도 자동 보강)"
                                 className="flex-1 px-4 py-3 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)] text-sm font-mono"
                             />
                             <Pressable
