@@ -14,6 +14,7 @@ import { App } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import { HaSocket } from './socket';
 import { callService, fireEvent, ping, HaAuthError } from './client';
+import { clampColorTempKelvin, type LightPresetValue } from './presets';
 import { isHaConfigured, type HaConfig, type HaConnection, type HaStateMap } from './types';
 
 /** 설정에서 실제로 고른 엔티티만 구독한다 — 안 쓰는 건 트래픽도 만들지 않는다. */
@@ -36,9 +37,13 @@ export interface HaActions {
     toggleLight(entityId: string): Promise<void>;
     setLightBrightness(entityId: string, pct: number): Promise<void>;
     applyColorTemp(kelvin: number, entityIds?: string[]): Promise<void>;
+    /** 색온도 + 밝기를 turn_on 한 번에 실어 보낸다 (과목 프리셋) */
+    applyLightPreset(preset: LightPresetValue, entityIds?: string[]): Promise<void>;
     moveDesk(position: number): Promise<void>;
     setClimateTemperature(target: number): Promise<void>;
     setClimateMode(mode: string): Promise<void>;
+    /** 바람 세기 — 고를 수 있는 값은 엔티티의 fan_modes 가 알려준다 */
+    setFanMode(mode: string): Promise<void>;
     sendSessionEvent(action: string, payload?: Record<string, unknown>): Promise<void>;
 }
 
@@ -55,6 +60,14 @@ export function useHomeAssistant(config: HaConfig | undefined): UseHomeAssistant
     const [states, setStates] = useState<HaStateMap>({});
     const [lastError, setLastError] = useState<string | null>(null);
     const socketRef = useRef<HaSocket | null>(null);
+    /**
+     * 최신 상태의 거울. 프리셋 클램프는 조명의 min/max_color_temp_kelvin 을 봐야 하는데,
+     * states 를 actions 의존성에 넣으면 값이 바뀔 때마다 액션 객체가 통째로 새로 만들어진다.
+     */
+    const statesRef = useRef<HaStateMap>({});
+    useEffect(() => {
+        statesRef.current = states;
+    }, [states]);
 
     const configured = isHaConfigured(config);
     const localUrl = config?.localUrl ?? '';
@@ -159,62 +172,95 @@ export function useHomeAssistant(config: HaConfig | undefined): UseHomeAssistant
         [configured],
     );
 
-    const actions = useMemo<HaActions>(() => ({
-        toggleLight: (entityId) =>
-            guard(() => callService(localUrl, token, 'light', 'toggle', { entity_id: entityId })),
-
-        setLightBrightness: (entityId, pct) =>
-            guard(() => callService(localUrl, token, 'light', 'turn_on', {
-                entity_id: entityId,
-                brightness_pct: Math.round(Math.max(1, Math.min(100, pct))),
-            })),
-
-        // color_temp(mireds)는 2026.3 에서 제거됐다 — 켈빈만 쓴다
-        applyColorTemp: (kelvin, ids) =>
+    const actions = useMemo<HaActions>(() => {
+        // color_temp(mireds)는 2026.3 에서 제거됐다 — 켈빈만 쓴다.
+        // 조명마다 낼 수 있는 켈빈 범위가 다르므로 각자 클램프하고, 같은 값이 된 것끼리
+        // 묶어서 호출한다 (보통 한 번으로 끝난다).
+        const applyLightPreset = (preset: LightPresetValue, ids?: string[]) =>
             guard(async () => {
                 const targets = ids ?? (config?.entities.lights ?? [])
                     .filter(l => l.supportsColorTemp)
                     .map(l => l.entityId);
                 if (!targets.length) return;
-                await callService(localUrl, token, 'light', 'turn_on', {
-                    entity_id: targets,
-                    color_temp_kelvin: Math.round(kelvin),
-                });
-            }),
 
-        moveDesk: (position) =>
-            guard(async () => {
-                const cover = config?.entities.deskCover;
-                if (!cover) return;
-                await callService(localUrl, token, 'cover', 'set_cover_position', {
-                    entity_id: cover,
-                    position: Math.round(Math.max(0, Math.min(100, position))),
-                });
-            }),
+                const byKelvin = new Map<number, string[]>();
+                for (const id of targets) {
+                    const k = clampColorTempKelvin(preset.colorTempK, statesRef.current[id]);
+                    const bucket = byKelvin.get(k);
+                    if (bucket) bucket.push(id);
+                    else byKelvin.set(k, [id]);
+                }
 
-        setClimateTemperature: (target) =>
-            guard(async () => {
-                const climate = config?.entities.climate;
-                if (!climate) return;
-                await callService(localUrl, token, 'climate', 'set_temperature', {
-                    entity_id: climate,
-                    temperature: target,
-                });
-            }),
+                const { brightnessPct } = preset;
+                for (const [k, entityIds] of byKelvin) {
+                    await callService(localUrl, token, 'light', 'turn_on', {
+                        entity_id: entityIds,
+                        color_temp_kelvin: k,
+                        ...(brightnessPct != null
+                            ? { brightness_pct: Math.round(Math.max(1, Math.min(100, brightnessPct))) }
+                            : {}),
+                    });
+                }
+            });
 
-        setClimateMode: (mode) =>
-            guard(async () => {
-                const climate = config?.entities.climate;
-                if (!climate) return;
-                await callService(localUrl, token, 'climate', 'set_hvac_mode', {
-                    entity_id: climate,
-                    hvac_mode: mode,
-                });
-            }),
+        return {
+            toggleLight: (entityId) =>
+                guard(() => callService(localUrl, token, 'light', 'toggle', { entity_id: entityId })),
 
-        sendSessionEvent: (action, payload = {}) =>
-            guard(() => fireEvent(localUrl, token, 'studymeter_session', { action, ...payload })),
-    }), [guard, localUrl, token, config?.entities]);
+            setLightBrightness: (entityId, pct) =>
+                guard(() => callService(localUrl, token, 'light', 'turn_on', {
+                    entity_id: entityId,
+                    brightness_pct: Math.round(Math.max(1, Math.min(100, pct))),
+                })),
+
+            applyColorTemp: (kelvin, ids) => applyLightPreset({ colorTempK: kelvin }, ids),
+
+            applyLightPreset,
+
+            moveDesk: (position) =>
+                guard(async () => {
+                    const cover = config?.entities.deskCover;
+                    if (!cover) return;
+                    await callService(localUrl, token, 'cover', 'set_cover_position', {
+                        entity_id: cover,
+                        position: Math.round(Math.max(0, Math.min(100, position))),
+                    });
+                }),
+
+            setClimateTemperature: (target) =>
+                guard(async () => {
+                    const climate = config?.entities.climate;
+                    if (!climate) return;
+                    await callService(localUrl, token, 'climate', 'set_temperature', {
+                        entity_id: climate,
+                        temperature: target,
+                    });
+                }),
+
+            setClimateMode: (mode) =>
+                guard(async () => {
+                    const climate = config?.entities.climate;
+                    if (!climate) return;
+                    await callService(localUrl, token, 'climate', 'set_hvac_mode', {
+                        entity_id: climate,
+                        hvac_mode: mode,
+                    });
+                }),
+
+            setFanMode: (mode) =>
+                guard(async () => {
+                    const climate = config?.entities.climate;
+                    if (!climate) return;
+                    await callService(localUrl, token, 'climate', 'set_fan_mode', {
+                        entity_id: climate,
+                        fan_mode: mode,
+                    });
+                }),
+
+            sendSessionEvent: (action, payload = {}) =>
+                guard(() => fireEvent(localUrl, token, 'studymeter_session', { action, ...payload })),
+        };
+    }, [guard, localUrl, token, config?.entities]);
 
     return { connection, states, actions, lastError };
 }
