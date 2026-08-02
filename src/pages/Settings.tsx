@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Icon } from '@iconify/react'
@@ -19,88 +19,66 @@ import { getModelList, isModelExhausted } from '../lib/ai/router'
 import { getTodayUsage } from '../lib/ai/budget'
 import { DEFAULT_EVAL_TAGS, TAG_CATEGORY_LABELS } from '../lib/tags'
 import Pressable from '../components/ui/Pressable'
+import Segmented from '../components/ui/Segmented'
+import { SectionLabel, Row, Toggle } from '../components/ui/Section'
+import { input, badge } from '../components/ui/styles'
 import { spring, fadeRise, staggerContainer, staggerItem } from '../lib/motion'
 
-// ── 작은 토글 스위치 (고급 모드/앰비언트 AI 등에서 재사용) ──────────────────────
-function ToggleSwitch({ enabled, onChange }: { enabled: boolean; onChange: () => void }) {
-    return (
-        <motion.button
-            type="button"
-            role="switch"
-            aria-checked={enabled}
-            onClick={onChange}
-            whileTap={{ scale: 0.92 }}
-            transition={spring.snappy}
-            className="relative flex-shrink-0 w-12 h-7 rounded-full transition-colors duration-300"
-            style={{ background: enabled ? 'var(--color-primary)' : 'rgba(120,120,128,0.24)' }}
-        >
-            <motion.div
-                className="absolute top-1 left-1 w-5 h-5 rounded-full bg-white shadow-md"
-                animate={{ x: enabled ? 20 : 0 }}
-                transition={spring.snappy}
-            />
-        </motion.button>
-    )
-}
-
-// ── 섹션 라벨 (iOS 설정 스타일 — 작은 uppercase tracking) ───────────────────────
-function SectionLabel({ children }: { children: React.ReactNode }) {
-    return (
-        <p className="px-1.5 mb-2 text-[11px] font-bold uppercase tracking-wider text-[var(--color-text-secondary)] opacity-60">
-            {children}
-        </p>
-    )
-}
-
-// ── 카드 안의 행(row) — 라벨 왼쪽 · 컨트롤 오른쪽, 구분선으로 정렬 ──────────────
-function SettingsRow({ children, first = false }: { children: React.ReactNode; first?: boolean }) {
-    return (
-        <div className={`flex items-center justify-between gap-4 px-5 py-4 ${first ? '' : 'border-t border-[var(--color-border)]'}`}>
-            {children}
-        </div>
-    )
-}
-
-// ── Segmented control — 선택 배경이 layoutId 스프링으로 이동 ─────────────────
-function SegmentedControl<T extends string>({
-    layoutId,
-    options,
-    value,
-    onChange,
-    size = 'md',
-}: {
-    layoutId: string
-    options: Array<{ value: T; label: React.ReactNode }>
-    value: T
-    onChange: (v: T) => void
-    size?: 'md' | 'sm'
+/**
+ * 섹션 헤더 — 라벨(+도움말) 왼쪽 · 액션 오른쪽.
+ * 공용 SectionHeader 는 라벨에서 px-1.5/mb-2 를 떼어 내 정렬이 미세하게 달라지므로,
+ * 픽셀을 그대로 두기 위해 이 화면의 조립 방식만 여기서 묶는다.
+ */
+function SectionHead({ label, help, action }: {
+    label: React.ReactNode
+    help?: React.ReactNode
+    action?: React.ReactNode
 }) {
     return (
-        <div className={`relative flex gap-1 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] ${size === 'sm' ? 'p-0.5' : 'p-1'}`}>
-            {options.map((opt) => {
-                const active = opt.value === value
-                return (
-                    <button
-                        key={opt.value}
-                        type="button"
-                        onClick={() => onChange(opt.value)}
-                        className={`relative flex-1 rounded-lg font-medium transition-colors active:scale-[0.97] ${size === 'sm' ? 'py-1 px-2 text-[10px]' : 'py-2.5 px-3 text-sm'}`}
-                    >
-                        {active && (
-                            <motion.div
-                                layoutId={layoutId}
-                                className="absolute inset-0 rounded-lg bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-secondary)]"
-                                transition={spring.default}
-                            />
-                        )}
-                        <span className={`relative z-10 flex items-center justify-center gap-1.5 whitespace-nowrap ${active ? 'text-white' : 'text-[var(--color-text-secondary)]'}`}>
-                            {opt.label}
-                        </span>
-                    </button>
-                )
-            })}
+        <div className="flex items-center justify-between px-1.5 mb-2">
+            <div className="flex items-center gap-2">
+                <SectionLabel>{label}</SectionLabel>
+                {help}
+            </div>
+            {action}
         </div>
     )
+}
+
+// Tailwind 가 클래스명을 정적으로 스캔하므로 색 토큰은 조합하지 말고 통째로 적어 둔다.
+const PILL_TONE = {
+    indigo: 'bg-indigo-500/10 text-indigo-400',
+    purple: 'bg-purple-500/10 text-purple-400',
+    green: 'bg-green-500/10 text-green-400',
+    red: 'bg-red-500/10 text-red-400',
+} as const
+
+/** 캘리브레이션·파이프라인·백업에서 반복되는 "아이콘 + 라벨" 액션 버튼 */
+function ActionPill({ tone, icon, label, onClick, disabled }: {
+    tone: keyof typeof PILL_TONE
+    icon: string
+    label: React.ReactNode
+    onClick: () => void
+    disabled?: boolean
+}) {
+    return (
+        <Pressable
+            onClick={onClick}
+            disabled={disabled}
+            className={`flex-1 px-4 py-3 rounded-xl ${PILL_TONE[tone]} font-medium text-sm disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2`}
+        >
+            <Icon icon={icon} className="text-base" />
+            {label}
+        </Pressable>
+    )
+}
+
+/** 테마를 문서에 적용한다. 'system' 이면 OS 설정을 따른다. */
+function applyTheme(theme: 'light' | 'dark' | 'system') {
+    const dark = theme === 'system'
+        ? window.matchMedia('(prefers-color-scheme: dark)').matches
+        : theme === 'dark'
+    document.documentElement.classList.toggle('dark', dark)
 }
 
 type ThinkingChoice = AiThinkingLevel | 'auto'
@@ -111,8 +89,25 @@ const ROLE_ROWS: Array<{ role: AiRole; label: string; autoLabel: string }> = [
     { role: 'ambient', label: '백그라운드 코멘트', autoLabel: '자동 (추천: Gemma 4 31B)' },
 ]
 
+// 태블릿(네이티브)·PC Focus 양쪽에서 같은 두 버튼이 반복된다.
+const CALIB_SCENARIOS = [
+    { mode: 'book', tone: 'indigo', icon: 'mdi:book-open-outline', label: '책 캘리브레이션' },
+    { mode: 'monitor', tone: 'purple', icon: 'mdi:monitor-outline', label: '모니터 캘리브레이션' },
+] as const satisfies ReadonlyArray<{ mode: 'book' | 'monitor'; tone: keyof typeof PILL_TONE; icon: string; label: string }>
+
 const TAG_CATEGORY_ORDER: EvalTag['category'][] = ['obstacle', 'condition', 'good', 'context', 'day']
 const TAG_SCOPE_LABELS: Record<EvalTag['scope'], string> = { session: '세션', day: '하루', both: '양쪽' }
+
+// 공용 `input` 토큰과 크기가 어긋나는 입력들. 폭·정렬만 호출부에서 덧붙인다.
+const FIELD_BASE = 'bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)]'
+/** 목표 시간 · 졸음 기준의 큰 숫자 상자 */
+const NUMBER_FIELD = `w-28 px-4 py-3 rounded-xl ${FIELD_BASE} text-center text-lg font-bold`
+/** D-day 행 (이모지/제목/날짜가 폭만 다르다) */
+const DDAY_FIELD = `py-2.5 rounded-lg ${FIELD_BASE}`
+/** 커스텀 태그 추가 줄 */
+const TAG_FIELD = `px-3 py-2 rounded-lg ${FIELD_BASE} text-sm`
+/** 역할별 모델 오버라이드 (select 와 fallback input 이 같은 모양) */
+const ROLE_FIELD = `w-full px-4 py-2.5 rounded-xl ${FIELD_BASE} text-sm`
 
 interface SettingsPageProps {
     settings: Settings
@@ -312,35 +307,34 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
         return () => { cancelled = true }
     }, [geminiApiKey])
 
+    /** 설정 한 조각을 저장하고 상위 상태에 즉시 반영한다. */
+    const patch = useCallback((fields: Partial<Settings>) => {
+        if (settings.id != null) db.settings.update(settings.id, fields)
+        onSettingsChange({ ...settings, ...fields })
+    }, [settings, onSettingsChange])
+
     // 고급 모드 / 앰비언트 AI / 아침 리포트 토글은 즉시 저장 (테마 토글과 동일한 패턴)
     const handleToggleAdvancedMode = () => {
         const next = !advancedMode
         setAdvancedMode(next)
-        db.settings.update(settings.id!, { advancedMode: next })
         // Study 탭의 졸음·자세 상세 지표도 같은 스위치로 통합 (구 개발자 도구 토글)
         localStorage.setItem('sm_advanced_features', next ? 'true' : 'false')
-        onSettingsChange({ ...settings, advancedMode: next })
+        patch({ advancedMode: next })
     }
 
     const handleToggleAmbient = () => {
-        const next = !aiAmbientEnabled
-        setAiAmbientEnabled(next)
-        db.settings.update(settings.id!, { aiAmbientEnabled: next })
-        onSettingsChange({ ...settings, aiAmbientEnabled: next })
+        setAiAmbientEnabled(!aiAmbientEnabled)
+        patch({ aiAmbientEnabled: !aiAmbientEnabled })
     }
 
     const handleToggleMorningReport = () => {
-        const next = !morningReportEnabled
-        setMorningReportEnabled(next)
-        db.settings.update(settings.id!, { morningReportEnabled: next })
-        onSettingsChange({ ...settings, morningReportEnabled: next })
+        setMorningReportEnabled(!morningReportEnabled)
+        patch({ morningReportEnabled: !morningReportEnabled })
     }
 
     const handleToggleGrounding = () => {
-        const next = !aiGroundingDefault
-        setAiGroundingDefault(next)
-        db.settings.update(settings.id!, { aiGroundingDefault: next })
-        onSettingsChange({ ...settings, aiGroundingDefault: next })
+        setAiGroundingDefault(!aiGroundingDefault)
+        patch({ aiGroundingDefault: !aiGroundingDefault })
     }
 
     // ── 평가 태그 관리 핸들러 ────────────────────────────────────────────────
@@ -389,17 +383,14 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
         reader.onloadend = () => {
             const base64 = reader.result as string
             setProfilePicture(base64)
-            // Save immediately
-            db.settings.update(settings.id!, { profilePicture: base64 })
-            onSettingsChange({ ...settings, profilePicture: base64 })
+            patch({ profilePicture: base64 })  // 저장 버튼을 기다리지 않고 즉시 반영
         }
         reader.readAsDataURL(file)
     }
 
     const handleRemoveProfilePicture = () => {
         setProfilePicture('')
-        db.settings.update(settings.id!, { profilePicture: undefined })
-        onSettingsChange({ ...settings, profilePicture: undefined })
+        patch({ profilePicture: undefined })
     }
 
     const handleAddSubject = async () => {
@@ -464,19 +455,18 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
         const drowsySec = parseInt(drowsinessSec, 10)
 
         // 역할별 모델 오버라이드: 빈 값은 저장하지 않는다 (= 자동)
-        const roleModelOverrides: Partial<Record<AiRole, string>> = {}
-        for (const { role } of ROLE_ROWS) {
-            const v = (aiRoleModels[role] || '').trim()
-            if (v) roleModelOverrides[role] = v
-        }
+        const roleModelOverrides: Partial<Record<AiRole, string>> = Object.fromEntries(
+            ROLE_ROWS
+                .map(({ role }) => [role, (aiRoleModels[role] || '').trim()] as const)
+                .filter(([, v]) => v)
+        )
 
         // 시스템 프롬프트: 기본값과 동일하거나 공백이면 저장하지 않는다 (= 기본값 사용)
-        const promptOverrides: AiSystemPrompts = {}
-        for (const key of Object.keys(PROMPT_LABELS) as PromptKey[]) {
-            const val = (aiSystemPromptsState[key] || '').trim()
-            const def = DEFAULT_PROMPTS[key].trim()
-            if (val && val !== def) promptOverrides[key] = val
-        }
+        const promptOverrides: AiSystemPrompts = Object.fromEntries(
+            (Object.keys(PROMPT_LABELS) as PromptKey[])
+                .map((key) => [key, (aiSystemPromptsState[key] || '').trim()] as const)
+                .filter(([key, val]) => val && val !== DEFAULT_PROMPTS[key].trim())
+        )
 
         const newSettings: Settings = {
             ...settings,
@@ -502,16 +492,7 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
 
         await db.settings.put(newSettings)
         onSettingsChange(newSettings)
-
-        // Apply theme
-        if (theme === 'dark') {
-            document.documentElement.classList.add('dark')
-        } else if (theme === 'light') {
-            document.documentElement.classList.remove('dark')
-        } else {
-            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-            document.documentElement.classList.toggle('dark', prefersDark)
-        }
+        applyTheme(theme)
 
         setSaved(true)
         setTimeout(() => setSaved(false), 2000)
@@ -578,7 +559,7 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                 <motion.div variants={staggerItem}>
                     <SectionLabel>프로필</SectionLabel>
                     <div className="glass-card overflow-hidden">
-                        <SettingsRow first>
+                        <Row first>
                             <div className="flex items-center gap-4">
                                 {profilePicture ? (
                                     <img
@@ -618,8 +599,8 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                                     <p className="text-[10px] text-[var(--color-text-secondary)] opacity-70">최대 500KB</p>
                                 </div>
                             </div>
-                        </SettingsRow>
-                        <SettingsRow>
+                        </Row>
+                        <Row>
                             <label className="text-sm font-medium text-[var(--color-text)] whitespace-nowrap">사용자 이름</label>
                             <input
                                 type="text"
@@ -627,7 +608,7 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                                 onChange={(e) => setUserName(e.target.value)}
                                 className="flex-1 max-w-[60%] px-3 py-2 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)] text-right"
                             />
-                        </SettingsRow>
+                        </Row>
                     </div>
                 </motion.div>
 
@@ -654,7 +635,7 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                                     value={dailyGoalHours}
                                     onChange={(e) => setDailyGoalHours(e.target.value)}
                                     placeholder="예: 8"
-                                    className="w-28 px-4 py-3 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)] text-center text-lg font-bold"
+                                    className={NUMBER_FIELD}
                                 />
                                 <span className="text-[var(--color-text-secondary)] font-medium">시간</span>
                                 {dailyGoalHours && (
@@ -684,7 +665,7 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                                     value={drowsinessSec}
                                     onChange={(e) => setDrowsinessSec(e.target.value)}
                                     placeholder="15"
-                                    className="w-28 px-4 py-3 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)] text-center text-lg font-bold"
+                                    className={NUMBER_FIELD}
                                 />
                                 <span className="text-[var(--color-text-secondary)] font-medium">초 이상 지속 시</span>
                             </div>
@@ -694,22 +675,20 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
 
                 {/* D-day 관리 */}
                 <motion.div variants={staggerItem}>
-                    <div className="flex items-center justify-between px-1.5 mb-2">
-                        <div className="flex items-center gap-2">
-                            <SectionLabel>D-day</SectionLabel>
-                            <HelpButton title="D-day" items={[
-                                { description: '수능·모의고사·시험 등 목표일까지 남은 날짜를 홈 화면 상단에 항상 보여줍니다.' },
-                                { title: '개수 제한 없음', description: '기본 3개(수능·모의평가·기말고사)가 채워져 있지만, 자유롭게 추가·수정·삭제할 수 있습니다.' },
-                                { title: '이모지', description: '항목을 구분하기 쉽도록 이모지를 하나 붙일 수 있습니다. (선택)' },
-                            ]} />
-                        </div>
-                        <Pressable
+                    <SectionHead
+                        label="D-day"
+                        help={<HelpButton title="D-day" items={[
+                            { description: '수능·모의고사·시험 등 목표일까지 남은 날짜를 홈 화면 상단에 항상 보여줍니다.' },
+                            { title: '개수 제한 없음', description: '기본 3개(수능·모의평가·기말고사)가 채워져 있지만, 자유롭게 추가·수정·삭제할 수 있습니다.' },
+                            { title: '이모지', description: '항목을 구분하기 쉽도록 이모지를 하나 붙일 수 있습니다. (선택)' },
+                        ]} />}
+                        action={<Pressable
                             onClick={handleAddDday}
                             className="text-xs px-3 py-1.5 rounded-lg bg-indigo-500/10 text-indigo-500 font-bold"
                         >
                             + D-day 추가
-                        </Pressable>
-                    </div>
+                        </Pressable>}
+                    />
 
                     <div className="glass-card p-6 space-y-3">
                         {ddays.length === 0 && (
@@ -725,20 +704,20 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                                     onChange={(e) => handleDdayChange(idx, { emoji: e.target.value })}
                                     placeholder="🎯"
                                     maxLength={4}
-                                    className="w-12 px-2 py-2.5 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)] text-center text-lg"
+                                    className={`w-12 px-2 ${DDAY_FIELD} text-center text-lg`}
                                 />
                                 <input
                                     type="text"
                                     value={d.label}
                                     onChange={(e) => handleDdayChange(idx, { label: e.target.value })}
                                     placeholder="예: 수능"
-                                    className="flex-1 min-w-[7rem] px-3 py-2.5 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)] text-sm font-medium"
+                                    className={`flex-1 min-w-[7rem] px-3 ${DDAY_FIELD} text-sm font-medium`}
                                 />
                                 <input
                                     type="date"
                                     value={d.date}
                                     onChange={(e) => handleDdayChange(idx, { date: e.target.value })}
-                                    className="px-3 py-2.5 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)] text-sm"
+                                    className={`px-3 ${DDAY_FIELD} text-sm`}
                                 />
                                 <Pressable
                                     onClick={() => handleRemoveDday(idx)}
@@ -754,22 +733,20 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
 
                 {/* 과목 및 하위 항목 관리 */}
                 <motion.div variants={staggerItem}>
-                    <div className="flex items-center justify-between px-1.5 mb-2">
-                        <div className="flex items-center gap-2">
-                            <SectionLabel>과목 및 하위 항목</SectionLabel>
-                            <HelpButton title="과목 및 하위 항목" items={[
-                                { description: '공부하는 과목 목록을 관리합니다. 공부 시작 시 과목을 선택하면 통계가 과목별로 집계됩니다.' },
-                                { title: '하위 항목', description: '과목에 세부 분류를 추가할 수 있습니다. 예: 수학 > 미분, 적분 / 영어 > 문법, 독해. 타이머 화면에서 선택하면 더 세밀하게 시간을 관리할 수 있습니다.' },
-                                { title: '삭제 주의', description: '과목을 삭제해도 기존 기록은 유지됩니다. 하지만 새로운 세션에서는 해당 과목을 선택할 수 없게 됩니다.' },
-                            ]} />
-                        </div>
-                        <Pressable
+                    <SectionHead
+                        label="과목 및 하위 항목"
+                        help={<HelpButton title="과목 및 하위 항목" items={[
+                            { description: '공부하는 과목 목록을 관리합니다. 공부 시작 시 과목을 선택하면 통계가 과목별로 집계됩니다.' },
+                            { title: '하위 항목', description: '과목에 세부 분류를 추가할 수 있습니다. 예: 수학 > 미분, 적분 / 영어 > 문법, 독해. 타이머 화면에서 선택하면 더 세밀하게 시간을 관리할 수 있습니다.' },
+                            { title: '삭제 주의', description: '과목을 삭제해도 기존 기록은 유지됩니다. 하지만 새로운 세션에서는 해당 과목을 선택할 수 없게 됩니다.' },
+                        ]} />}
+                        action={<Pressable
                             onClick={handleAddSubject}
                             className="text-xs px-3 py-1.5 rounded-lg bg-indigo-500/10 text-indigo-500 font-bold"
                         >
                             + 과목 추가
-                        </Pressable>
-                    </div>
+                        </Pressable>}
+                    />
 
                     <div className="glass-card p-6 space-y-4">
                         {localSubjects.map((subject, sIdx) => (
@@ -819,22 +796,22 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
 
                 {/* 학습 유형 */}
                 <motion.div variants={staggerItem}>
-                    <div className="flex items-center gap-2 px-1.5 mb-2">
-                        <SectionLabel>학습 유형 (쉼표로 구분)</SectionLabel>
-                        <HelpButton title="학습 유형 설정" items={[
+                    <SectionHead
+                        label="학습 유형 (쉼표로 구분)"
+                        help={<HelpButton title="학습 유형 설정" items={[
                             { description: '공부 방식을 분류하는 태그입니다. 타이머 화면 상단에서 선택합니다.' },
                             { title: '순공 계산', description: '"자습"과 "테스트" 유형으로 기록된 세션만 순공 시간에 포함됩니다. 강의·수업 등은 총합에는 포함되지만 순공에서는 제외됩니다.' },
                             { title: '테스트 특수 기능', description: '"테스트" 유형 선택 시 카운트다운 타이머를 설정할 수 있습니다. 시험 시간을 미리 설정하고 시간 내에 문제를 풀 수 있습니다.' },
                             { title: '커스터마이즈', description: '원하는 유형명을 자유롭게 추가하되, 순공 집계가 필요하면 "자습"이나 "테스트"라는 단어를 포함시켜야 합니다.' },
-                        ]} />
-                    </div>
+                        ]} />}
+                    />
                     <div className="glass-card p-6">
                         <input
                             type="text"
                             value={types}
                             onChange={(e) => setTypes(e.target.value)}
                             placeholder="자습, 수업, 테스트, ..."
-                            className="w-full px-4 py-3 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)]"
+                            className={input}
                         />
                     </div>
                 </motion.div>
@@ -843,23 +820,13 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                 <motion.div variants={staggerItem}>
                     <SectionLabel>테마</SectionLabel>
                     <div className="glass-card p-4">
-                        <SegmentedControl
+                        <Segmented
                             layoutId="theme-picker"
                             value={theme}
                             onChange={(t) => {
                                 setTheme(t)
-                                // Instantly apply theme
-                                if (t === 'dark') {
-                                    document.documentElement.classList.add('dark')
-                                } else if (t === 'light') {
-                                    document.documentElement.classList.remove('dark')
-                                } else {
-                                    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-                                    document.documentElement.classList.toggle('dark', prefersDark)
-                                }
-                                // Also save to DB immediately
-                                db.settings.update(settings.id!, { theme: t })
-                                onSettingsChange({ ...settings, theme: t })
+                                applyTheme(t)   // 저장 버튼을 누르기 전에도 바로 보이도록
+                                patch({ theme: t })
                             }}
                             options={[
                                 { value: 'light', label: <><Icon icon="mdi:white-balance-sunny" className="text-base" /> 라이트</> },
@@ -891,7 +858,7 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                                 value={geminiApiKey}
                                 onChange={(e) => setGeminiApiKey(e.target.value)}
                                 placeholder="AIza..."
-                                className="w-full px-4 py-3 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)]"
+                                className={input}
                             />
                             <p className="text-sm text-[var(--color-text-secondary)] mt-2">
                                 <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="text-[var(--color-primary)] hover:underline">
@@ -910,7 +877,7 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                                 value={geminiModel}
                                 onChange={(e) => setGeminiModel(e.target.value)}
                                 disabled={geminiModels.length === 0}
-                                className="w-full px-4 py-3 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)] disabled:opacity-50"
+                                className={`${input} disabled:opacity-50`}
                             >
                                 {geminiModels.length === 0 ? (
                                     <option value="">
@@ -983,7 +950,7 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                 <motion.div variants={staggerItem}>
                     <SectionLabel>AI 동작</SectionLabel>
                     <div className="glass-card overflow-hidden">
-                        <SettingsRow first>
+                        <Row first>
                             <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2">
                                     <label className="text-sm font-medium text-[var(--color-text)]">고급 모드</label>
@@ -994,32 +961,32 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                                 </div>
                                 <p className="text-xs text-[var(--color-text-secondary)] mt-1">역할별 모델·프롬프트 편집 + 졸음·자세 상세 지표</p>
                             </div>
-                            <ToggleSwitch enabled={advancedMode} onChange={handleToggleAdvancedMode} />
-                        </SettingsRow>
+                            <Toggle enabled={advancedMode} onChange={handleToggleAdvancedMode} />
+                        </Row>
 
-                        <SettingsRow>
+                        <Row>
                             <div className="flex-1 min-w-0">
                                 <label className="text-sm font-medium text-[var(--color-text)]">앰비언트 AI</label>
                                 <p className="text-xs text-[var(--color-text-secondary)] mt-1">아침 리포트·일기 답장·세션 코멘트를 자동 생성합니다.</p>
                             </div>
-                            <ToggleSwitch enabled={aiAmbientEnabled} onChange={handleToggleAmbient} />
-                        </SettingsRow>
+                            <Toggle enabled={aiAmbientEnabled} onChange={handleToggleAmbient} />
+                        </Row>
 
-                        <SettingsRow>
+                        <Row>
                             <div className="flex-1 min-w-0">
                                 <label className="text-sm font-medium text-[var(--color-text)]">아침 리포트</label>
                                 <p className="text-xs text-[var(--color-text-secondary)] mt-1">그날 처음 앱을 열 때 홈 화면에 어제·주간 분석을 자동으로 준비합니다. (백그라운드 실행·알림 없음)</p>
                             </div>
-                            <ToggleSwitch enabled={morningReportEnabled} onChange={handleToggleMorningReport} />
-                        </SettingsRow>
+                            <Toggle enabled={morningReportEnabled} onChange={handleToggleMorningReport} />
+                        </Row>
 
-                        <SettingsRow>
+                        <Row>
                             <div className="flex-1 min-w-0">
                                 <label className="text-sm font-medium text-[var(--color-text)]">웹 검색(Google 그라운딩)</label>
                                 <p className="text-xs text-[var(--color-text-secondary)] mt-1">AI가 최신 정보를 Google 검색으로 근거 삼아 답합니다. (지원하는 모델에서만 자동 적용)</p>
                             </div>
-                            <ToggleSwitch enabled={aiGroundingDefault} onChange={handleToggleGrounding} />
-                        </SettingsRow>
+                            <Toggle enabled={aiGroundingDefault} onChange={handleToggleGrounding} />
+                        </Row>
                     </div>
                 </motion.div>
 
@@ -1051,7 +1018,7 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                                                 <select
                                                     value={aiRoleModels[role] || ''}
                                                     onChange={(e) => setAiRoleModels(prev => ({ ...prev, [role]: e.target.value }))}
-                                                    className="w-full px-4 py-2.5 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)] text-sm"
+                                                    className={ROLE_FIELD}
                                                 >
                                                     <option value="">{autoLabel}</option>
                                                     {roleModelList.map((m) => (
@@ -1066,14 +1033,14 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                                                     value={aiRoleModels[role] || ''}
                                                     onChange={(e) => setAiRoleModels(prev => ({ ...prev, [role]: e.target.value }))}
                                                     placeholder={autoLabel}
-                                                    className="w-full px-4 py-2.5 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)] text-sm font-mono"
+                                                    className={`${ROLE_FIELD} font-mono`}
                                                 />
                                             )}
                                             {/* 역할별 추론(thinking) 강도 — segmented control */}
                                             <div className="flex items-center gap-2">
                                                 <span className="text-[10px] text-[var(--color-text-secondary)] whitespace-nowrap">추론 강도</span>
                                                 <div className="flex-1">
-                                                    <SegmentedControl<ThinkingChoice>
+                                                    <Segmented<ThinkingChoice>
                                                         layoutId={`thinking-${role}`}
                                                         size="sm"
                                                         value={(aiThinkingLevels[role] ?? 'auto') as ThinkingChoice}
@@ -1119,7 +1086,7 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                                                             <p className="text-[10px] text-[var(--color-text-secondary)] mb-1.5 opacity-70">기능별</p>
                                                             <div className="flex flex-wrap gap-1.5">
                                                                 {kindEntries.map(([kind, count]) => (
-                                                                    <span key={kind} className="text-[10px] font-medium px-2 py-1 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-400/20">
+                                                                    <span key={kind} className={badge}>
                                                                         {kind} × {count}
                                                                     </span>
                                                                 ))}
@@ -1147,14 +1114,14 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
 
                             {/* 시스템 프롬프트 편집 */}
                             <div>
-                                <div className="flex items-center gap-2 px-1.5 mb-2">
-                                    <SectionLabel>시스템 프롬프트</SectionLabel>
-                                    <HelpButton title="시스템 프롬프트 편집" items={[
+                                <SectionHead
+                                    label="시스템 프롬프트"
+                                    help={<HelpButton title="시스템 프롬프트 편집" items={[
                                         { description: 'AI 기능별로 실제 전달되는 시스템 지시문을 직접 확인하고 수정할 수 있습니다.' },
                                         { title: '공통 페르소나', description: '모든 AI 기능 앞에 항상 붙는 공통 말투 지시입니다.' },
                                         { title: '기본값 복원', description: '수정한 내용을 앱 기본 프롬프트로 되돌립니다. 비워두거나 기본값과 같으면 저장 시 자동으로 기본값을 사용합니다.' },
-                                    ]} />
-                                </div>
+                                    ]} />}
+                                />
                                 <div className="glass-card p-6 space-y-3">
                                     {(Object.keys(PROMPT_LABELS) as PromptKey[]).map((key) => {
                                         const current = aiSystemPromptsState[key] ?? ''
@@ -1191,22 +1158,20 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
 
                 {/* 평가 태그 관리 */}
                 <motion.div variants={staggerItem}>
-                    <div className="flex items-center justify-between px-1.5 mb-2">
-                        <div className="flex items-center gap-2">
-                            <SectionLabel>평가 태그 관리</SectionLabel>
-                            <HelpButton title="평가 태그 관리" items={[
-                                { description: '세션 평가와 하루 일기에서 선택하는 태그 목록입니다. 필요 없는 태그는 숨기고, 원하는 태그를 직접 추가할 수 있습니다.' },
-                                { title: '숨기기', description: '기본 태그는 삭제할 수 없지만 숨겨서 목록에서 보이지 않게 할 수 있습니다.' },
-                                { title: '커스텀 태그', description: '직접 추가한 태그는 삭제할 수 있습니다.' },
-                            ]} />
-                        </div>
-                        <Pressable
+                    <SectionHead
+                        label="평가 태그 관리"
+                        help={<HelpButton title="평가 태그 관리" items={[
+                            { description: '세션 평가와 하루 일기에서 선택하는 태그 목록입니다. 필요 없는 태그는 숨기고, 원하는 태그를 직접 추가할 수 있습니다.' },
+                            { title: '숨기기', description: '기본 태그는 삭제할 수 없지만 숨겨서 목록에서 보이지 않게 할 수 있습니다.' },
+                            { title: '커스텀 태그', description: '직접 추가한 태그는 삭제할 수 있습니다.' },
+                        ]} />}
+                        action={<Pressable
                             onClick={handleRestoreDefaultTags}
                             className="text-xs px-3 py-1.5 rounded-lg bg-indigo-500/10 text-indigo-500 font-bold"
                         >
                             기본 태그 복원
-                        </Pressable>
-                    </div>
+                        </Pressable>}
+                    />
 
                     <div className="glass-card p-6 space-y-4">
                         <div className="space-y-4">
@@ -1265,12 +1230,12 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                                     value={newTagName}
                                     onChange={(e) => setNewTagName(e.target.value)}
                                     placeholder="태그 이름"
-                                    className="flex-1 min-w-[120px] px-3 py-2 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)] text-sm"
+                                    className={`flex-1 min-w-[120px] ${TAG_FIELD}`}
                                 />
                                 <select
                                     value={newTagCategory}
                                     onChange={(e) => setNewTagCategory(e.target.value as EvalTag['category'])}
-                                    className="px-3 py-2 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)] text-sm"
+                                    className={TAG_FIELD}
                                 >
                                     {TAG_CATEGORY_ORDER.map((cat) => (
                                         <option key={cat} value={cat}>{TAG_CATEGORY_LABELS[cat]}</option>
@@ -1279,7 +1244,7 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                                 <select
                                     value={newTagScope}
                                     onChange={(e) => setNewTagScope(e.target.value as EvalTag['scope'])}
-                                    className="px-3 py-2 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)] text-sm"
+                                    className={TAG_FIELD}
                                 >
                                     {(Object.keys(TAG_SCOPE_LABELS) as Array<EvalTag['scope']>).map((scope) => (
                                         <option key={scope} value={scope}>{TAG_SCOPE_LABELS[scope]}</option>
@@ -1299,15 +1264,15 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
 
                 {/* 태블릿 자체 측정 설정 */}
                 <motion.div variants={staggerItem}>
-                    <div className="flex items-center gap-2 px-1.5 mb-2">
-                        <SectionLabel>집중도 측정 — 태블릿</SectionLabel>
-                        <HelpButton title="집중도 측정 — 태블릿" items={[
+                    <SectionHead
+                        label="집중도 측정 — 태블릿"
+                        help={<HelpButton title="집중도 측정 — 태블릿" items={[
                             { description: 'Android 앱에서 전면 카메라를 이용해 얼굴·시선·생체신호를 분석하고 실시간 집중 점수를 측정합니다.' },
                             { title: '시선 캘리브레이션', description: '9개 지점을 응시하면 시선 추적이 개인화됩니다. 책 모드(하향 시선)와 모니터 모드(정면 시선) 중 환경에 맞게 선택하세요.' },
                             { title: '점수 개인화', description: '세션 종료 후 별점 평가를 여러 번 하면 나의 집중 패턴에 맞게 점수 기준이 조정됩니다.' },
                             { title: '웹 버전', description: '앱이 아닌 브라우저에서도 웹캠을 통해 간략한 집중도 측정을 사용할 수 있습니다.' },
-                        ]} />
-                    </div>
+                        ]} />}
+                    />
                     <div className="glass-card p-6 space-y-4">
                         <div className="flex items-center justify-between">
                             <span className="text-sm font-medium text-[var(--color-text)]">상태</span>
@@ -1333,22 +1298,16 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                                         캘리브레이션 화면이 열립니다. 빨간 점을 차례로 응시하고 버튼을 눌러 9개 지점을 캡처하세요.
                                     </p>
                                     <div className="flex gap-2">
-                                        <Pressable
-                                            onClick={() => handleNativeCalibration('book')}
-                                            disabled={nativeCalibRunning || nativeStatus === 'starting'}
-                                            className="flex-1 px-4 py-3 rounded-xl bg-indigo-500/10 text-indigo-400 font-medium text-sm disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                                        >
-                                            <Icon icon="mdi:book-open-outline" className="text-base" />
-                                            책 캘리브레이션
-                                        </Pressable>
-                                        <Pressable
-                                            onClick={() => handleNativeCalibration('monitor')}
-                                            disabled={nativeCalibRunning || nativeStatus === 'starting'}
-                                            className="flex-1 px-4 py-3 rounded-xl bg-purple-500/10 text-purple-400 font-medium text-sm disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                                        >
-                                            <Icon icon="mdi:monitor-outline" className="text-base" />
-                                            모니터 캘리브레이션
-                                        </Pressable>
+                                        {CALIB_SCENARIOS.map(({ mode, tone, icon, label }) => (
+                                            <ActionPill
+                                                key={mode}
+                                                tone={tone}
+                                                icon={icon}
+                                                label={label}
+                                                onClick={() => handleNativeCalibration(mode)}
+                                                disabled={nativeCalibRunning || nativeStatus === 'starting'}
+                                            />
+                                        ))}
                                     </div>
                                 </>
                             )}
@@ -1390,15 +1349,15 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
 
                 {/* PC Focus 연결 설정 */}
                 <motion.div variants={staggerItem}>
-                    <div className="flex items-center gap-2 px-1.5 mb-2">
-                        <SectionLabel>PC Focus 연결</SectionLabel>
-                        <HelpButton title="PC Focus 서버 연결" items={[
+                    <SectionHead
+                        label="PC Focus 연결"
+                        help={<HelpButton title="PC Focus 서버 연결" items={[
                             { description: 'PC(노트북·데스크탑)의 웹캠을 이용해 집중도를 분석하는 별도 서버에 접속합니다.' },
                             { title: '사용 방법', description: 'PC에 Focus 분석 서버 프로그램을 실행하고, 같은 Wi-Fi에 연결된 상태에서 PC의 IP 주소를 입력하여 연결합니다.' },
                             { title: '언제 사용?', description: '태블릿을 책 받침으로 세워 두고 PC 카메라로 얼굴을 찍고 싶을 때, 또는 더 좋은 카메라 화질로 집중도를 측정하고 싶을 때 사용합니다.' },
                             { title: '캘리브레이션', description: '9개 지점을 순서대로 응시하며 캡처하면 시선 추적이 정교해집니다. 책/모니터 환경에 따라 모드를 선택하세요.' },
-                        ]} />
-                    </div>
+                        ]} />}
+                    />
                     <div className="glass-card p-6 space-y-4">
                         <div className="flex items-center justify-between mb-2">
                             <span className="text-sm font-medium text-[var(--color-text)]">서버 연결</span>
@@ -1458,22 +1417,20 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                             </p>
 
                             <div className="flex gap-2 mb-4">
-                                <Pressable
+                                <ActionPill
+                                    tone="indigo"
+                                    icon="mdi:play"
+                                    label="시작"
                                     onClick={sendPipelineStart}
                                     disabled={!connected || (pipelineState?.running === true)}
-                                    className="flex-1 px-4 py-3 rounded-xl bg-indigo-500/10 text-indigo-400 font-medium text-sm disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                                >
-                                    <Icon icon="mdi:play" className="text-base" />
-                                    시작
-                                </Pressable>
-                                <Pressable
+                                />
+                                <ActionPill
+                                    tone="red"
+                                    icon="mdi:stop"
+                                    label="정지"
                                     onClick={sendPipelineStop}
                                     disabled={!connected || (pipelineState?.running !== true)}
-                                    className="flex-1 px-4 py-3 rounded-xl bg-red-500/10 text-red-400 font-medium text-sm disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                                >
-                                    <Icon icon="mdi:stop" className="text-base" />
-                                    정지
-                                </Pressable>
+                                />
                             </div>
                         </div>
 
@@ -1527,33 +1484,26 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                             )}
 
                             <div className="flex gap-2 mb-3">
-                                <Pressable
-                                    onClick={() => handleCalibrateStart('book')}
-                                    disabled={!connected}
-                                    className="flex-1 px-4 py-3 rounded-xl bg-indigo-500/10 text-indigo-400 font-medium text-sm disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                                >
-                                    <Icon icon="mdi:book-open-outline" className="text-base" />
-                                    책 캘리브레이션
-                                </Pressable>
-                                <Pressable
-                                    onClick={() => handleCalibrateStart('monitor')}
-                                    disabled={!connected}
-                                    className="flex-1 px-4 py-3 rounded-xl bg-purple-500/10 text-purple-400 font-medium text-sm disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                                >
-                                    <Icon icon="mdi:monitor-outline" className="text-base" />
-                                    모니터 캘리브레이션
-                                </Pressable>
+                                {CALIB_SCENARIOS.map(({ mode, tone, icon, label }) => (
+                                    <ActionPill
+                                        key={mode}
+                                        tone={tone}
+                                        icon={icon}
+                                        label={label}
+                                        onClick={() => handleCalibrateStart(mode)}
+                                        disabled={!connected}
+                                    />
+                                ))}
                             </div>
 
                             <div className="flex items-center gap-3">
-                                <Pressable
+                                <ActionPill
+                                    tone="green"
+                                    icon="mdi:camera-iris"
+                                    label="캡처"
                                     onClick={handleCalibrateCapture}
                                     disabled={!connected || captureCount >= 9}
-                                    className="flex-1 px-4 py-3 rounded-xl bg-green-500/10 text-green-400 font-medium text-sm disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                                >
-                                    <Icon icon="mdi:camera-iris" className="text-base" />
-                                    캡처
-                                </Pressable>
+                                />
                                 <div className="flex items-center gap-2 min-w-[90px]">
                                     <div className="flex gap-0.5">
                                         {Array.from({ length: 9 }).map((_, i) => (
@@ -1586,22 +1536,20 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                         </p>
 
                         <div className="flex gap-2">
-                            <Pressable
+                            <ActionPill
+                                tone="indigo"
+                                icon="mdi:export-variant"
+                                label={exporting ? '내보내는 중...' : '내보내기 (백업)'}
                                 onClick={handleExportBackup}
                                 disabled={exporting || importing}
-                                className="flex-1 px-4 py-3 rounded-xl bg-indigo-500/10 text-indigo-400 font-medium text-sm disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                            >
-                                <Icon icon="mdi:export-variant" className="text-base" />
-                                {exporting ? '내보내는 중...' : '내보내기 (백업)'}
-                            </Pressable>
-                            <Pressable
+                            />
+                            <ActionPill
+                                tone="green"
+                                icon="mdi:import"
+                                label={importing ? '복원 중...' : '가져오기 (복원)'}
                                 onClick={() => backupInputRef.current?.click()}
                                 disabled={exporting || importing}
-                                className="flex-1 px-4 py-3 rounded-xl bg-green-500/10 text-green-400 font-medium text-sm disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                            >
-                                <Icon icon="mdi:import" className="text-base" />
-                                {importing ? '복원 중...' : '가져오기 (복원)'}
-                            </Pressable>
+                            />
                         </div>
                         <p className="text-[10px] text-[var(--color-text-secondary)] opacity-60 leading-relaxed">
                             ⚠️ 가져오기를 하면 현재 기기의 데이터가 백업 파일 내용으로 모두 교체됩니다.
