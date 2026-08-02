@@ -1,5 +1,12 @@
 import Dexie, { type EntityTable } from 'dexie';
 import type { HaConfig } from './ha/types';
+import { hm, hms, hmsDecimal, hhmm, ymd } from './format';
+import { groupTotals, sumDuration, sumTotals, type Totals } from './sessions';
+
+// 표시 포맷·집계는 각각 format.ts / sessions.ts 에 단일 구현으로 두고,
+// 기존 호출부가 그대로 동작하도록 여기서 이름만 다시 내보낸다.
+export { hm, hms, hmsDecimal, hhmm, ymd, koDate, mmss, bytes, addDays, toDate, parseHhmm } from './format';
+export { groupTotals, isSelfStudy, sumTotals, sumDuration, SELF_STUDY_TYPES, type Totals } from './sessions';
 
 // 세션 기록 인터페이스
 export interface SessionEvaluation {
@@ -399,21 +406,11 @@ export function getDateFromTimestamp(timestamp: number): string {
     return formatDateYYYYMMDD(adjustForStudyDay(new Date(timestamp)));
 }
 
-// Date 객체를 YYYY-MM-DD 형식으로 변환 (로컬 시간 기준)
-export function formatDateYYYYMMDD(date: Date): string {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-}
+/** @deprecated `ymd` (format.ts) 를 쓴다 — 이름만 남긴 별칭. */
+export const formatDateYYYYMMDD = ymd;
 
-// 타임스탬프를 HH:mm 형식으로 변환 (로컬 시간)
-export function formatTimeHHMM(timestamp: number): string {
-    const date = new Date(timestamp);
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
-    return `${hours}:${minutes}`;
-}
+/** @deprecated `hhmm` (format.ts) 를 쓴다 — 이름만 남긴 별칭. */
+export const formatTimeHHMM = hhmm;
 
 // 주어진 날짜가 속한 주의 월요일 구하기
 export function getMonday(d: Date): Date {
@@ -456,51 +453,26 @@ export async function updateDailyRecord(data: Partial<DailyRecord>): Promise<voi
     }
 }
 
+/** 특정 날짜의 세션 (기본: 오늘). 아래 집계들의 공통 진입점. */
+export async function getSessionsOn(date: string = getTodayDate()): Promise<StudySession[]> {
+    return db.sessions.where('date').equals(date).toArray();
+}
+
 // 오늘 총 공부 시간 계산 (ms)
 export async function getTodayTotalStudyTime(): Promise<number> {
-    const today = getTodayDate();
-    const sessions = await db.sessions.where('date').equals(today).toArray();
-    return sessions.reduce((total, session) => total + session.duration, 0);
+    return sumDuration(await getSessionsOn());
 }
 
 // 오늘 과목별 공부 시간 계산
-export async function getTodayStudyTimeBySubject(): Promise<Map<string, { total: number; selfStudy: number }>> {
-    const today = getTodayDate();
-    const sessions = await db.sessions.where('date').equals(today).toArray();
-
-    const result = new Map<string, { total: number; selfStudy: number }>();
-
-    for (const session of sessions) {
-        const existing = result.get(session.subject) || { total: 0, selfStudy: 0 };
-        existing.total += session.duration;
-        if (session.type === '자습' || session.type === '테스트') {
-            existing.selfStudy += session.duration;
-        }
-        result.set(session.subject, existing);
-    }
-
-    return result;
+export async function getTodayStudyTimeBySubject(): Promise<Map<string, Totals>> {
+    return groupTotals(await getSessionsOn(), (s) => s.subject);
 }
 
-// 시간 포맷팅 (ms -> HH:MM:SS)
-export function formatDuration(ms: number): string {
-    const totalSeconds = Math.floor(ms / 1000);
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const seconds = totalSeconds % 60;
+/** @deprecated `hms` (format.ts) 를 쓴다 — 이름만 남긴 별칭. */
+export const formatDuration = hms;
 
-    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-}
-
-// 시간 포맷팅 with 소수점 (ms -> HH:MM:SS.X)
-export function formatDurationWithDecimal(ms: number): string {
-    const totalSeconds = ms / 1000;
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const seconds = (totalSeconds % 60).toFixed(1);
-
-    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.padStart(4, '0')}`;
-}
+/** @deprecated `hmsDecimal` (format.ts) 를 쓴다 — 이름만 남긴 별칭. */
+export const formatDurationWithDecimal = hmsDecimal;
 
 // 세션 삭제
 export async function deleteStudySession(id: number): Promise<void> {
@@ -512,16 +484,8 @@ export async function updateStudySession(id: number, data: Partial<StudySession>
     await db.sessions.update(id, data);
 }
 
-// 시간 포맷팅 (ms -> Xh Ym) - 초 반올림
-export function formatDurationHourMinute(ms: number): string {
-    const totalSeconds = Math.round(ms / 1000);
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    if (hours > 0) {
-        return `${hours}h ${minutes}m`;
-    }
-    return `${minutes}m`;
-}
+/** @deprecated `hm(ms, { round: true })` (format.ts) 를 쓴다 — 이름만 남긴 별칭. */
+export const formatDurationHourMinute = (ms: number): string => hm(ms, { round: true });
 
 // 특정 시간 범위에 겹치는 세션 찾기 (전체 범위 겹침 확인)
 export async function findOverlappingSession(
@@ -595,19 +559,13 @@ export async function getUnreviewedThoughtNotes(): Promise<ThoughtNote[]> {
 
 /** 특정 날짜의 자동 집계 스냅샷을 계산한다. */
 export async function computeDiaryStats(date: string, dailyGoalMs?: number): Promise<DiaryStats> {
-    const sessions = await db.sessions.where('date').equals(date).toArray();
-    const totalMs = sessions.reduce((sum, s) => sum + s.duration, 0);
-    const selfStudyMs = sessions
-        .filter(s => s.type === '자습' || s.type === '테스트')
-        .reduce((sum, s) => sum + s.duration, 0);
+    const sessions = await getSessionsOn(date);
+    const { total: totalMs, selfStudy: selfStudyMs } = sumTotals(sessions);
     const scores = sessions
         .map(s => getEvalScore(s.evaluation))
         .filter((v): v is number => v !== null);
     const drowsyCount = sessions.reduce((sum, s) => sum + (s.drowsyCount ?? 0), 0);
-    const bySubjectMap = new Map<string, number>();
-    for (const s of sessions) {
-        bySubjectMap.set(s.subject, (bySubjectMap.get(s.subject) ?? 0) + s.duration);
-    }
+    const bySubject = groupTotals(sessions, s => s.subject);
     return {
         totalMs,
         selfStudyMs,
@@ -615,8 +573,7 @@ export async function computeDiaryStats(date: string, dailyGoalMs?: number): Pro
         sessionCount: sessions.length,
         avgScore: scores.length ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10 : null,
         drowsyCount,
-        bySubject: Array.from(bySubjectMap.entries())
-            .map(([subject, ms]) => ({ subject, ms }))
+        bySubject: Array.from(bySubject, ([subject, t]) => ({ subject, ms: t.total }))
             .sort((a, b) => b.ms - a.ms),
     };
 }
