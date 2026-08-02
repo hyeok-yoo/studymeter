@@ -9,31 +9,18 @@ import { generateDiaryDraft } from '../lib/ai/aiService'
 import DiaryEditModal, { DiaryEntryView } from '../components/DiaryEditModal'
 import { spring, fadeRise } from '../lib/motion'
 import Pressable from '../components/ui/Pressable'
+import Modal from '../components/ui/Modal'
+import { hm, koDate } from '../lib/format'
+import { groupTotals, sumTotals } from '../lib/sessions'
 
 const COLORS = ['#6366f1', '#a855f7', '#06b6d4', '#10b981', '#f59e0b', '#ef4444']
 
-// Helper: Format date in Korean
-function formatDateKorean(date: Date): string {
-    const days = ['일', '월', '화', '수', '목', '금', '토']
-    return `${date.getMonth() + 1}월 ${date.getDate()}일 ${days[date.getDay()]}요일`
-}
-
-// Helper: Format date short
-function formatDateShort(date: Date): string {
-    return `${date.getMonth() + 1}/${date.getDate()}`
-}
-
-// Helper: Format duration change
-function formatDurationChange(ms: number): string {
-    const isPositive = ms >= 0
-    const absMs = Math.abs(ms)
-    const hours = Math.floor(absMs / 3600000)
-    const minutes = Math.floor((absMs % 3600000) / 60000)
-
-    if (hours > 0) {
-        return `${isPositive ? '+' : '-'}${hours}h ${minutes}m`
-    }
-    return `${isPositive ? '+' : '-'}${minutes}m`
+// 막대·파이 차트가 같은 유리 표면을 써야 하므로 툴팁 스타일은 한 곳에만 둔다.
+const TOOLTIP_STYLE = {
+    backgroundColor: 'var(--color-surface-elevated)',
+    border: 'none',
+    borderRadius: '12px',
+    color: 'var(--color-text)'
 }
 
 export default function Records() {
@@ -61,7 +48,7 @@ export default function Records() {
                 end: endOfDay,
                 startStr: formatDateYYYYMMDD(targetDate),
                 endStr: formatDateYYYYMMDD(targetDate),
-                label: formatDateKorean(targetDate),
+                label: koDate(targetDate, 'full'),
                 prevStartStr: formatDateYYYYMMDD(new Date(targetDate.getTime() - 86400000)),
                 prevEndStr: formatDateYYYYMMDD(new Date(targetDate.getTime() - 86400000))
             }
@@ -77,7 +64,7 @@ export default function Records() {
                 end: sunday,
                 startStr: formatDateYYYYMMDD(monday),
                 endStr: formatDateYYYYMMDD(sunday),
-                label: `${formatDateShort(monday)} ~ ${formatDateShort(sunday)}`,
+                label: `${koDate(monday, 'slash')} ~ ${koDate(sunday, 'slash')}`,
                 prevStartStr: formatDateYYYYMMDD(prevMonday),
                 prevEndStr: formatDateYYYYMMDD(prevSunday)
             }
@@ -130,16 +117,8 @@ export default function Records() {
                 setDailyRecord(null)
             }
 
-            // Process chart data
-            const bySubject = new Map<string, { total: number; selfStudy: number }>()
-            allSessions.forEach((session) => {
-                const existing = bySubject.get(session.subject) || { total: 0, selfStudy: 0 }
-                existing.total += session.duration
-                if (session.type === '자습' || session.type === '테스트') {
-                    existing.selfStudy += session.duration
-                }
-                bySubject.set(session.subject, existing)
-            })
+            // Process chart data — 총합/순공 집계 규칙은 lib/sessions 한 곳에만 있다.
+            const bySubject = groupTotals(allSessions, s => s.subject)
 
             const barData = Array.from(bySubject.entries()).map(([name, data]) => ({
                 name,
@@ -159,16 +138,7 @@ export default function Records() {
 
             // Build calendar data for month view
             if (viewMode === 'month') {
-                const dailyMap = new Map<string, { total: number; selfStudy: number }>()
-                allSessions.forEach((session) => {
-                    const existing = dailyMap.get(session.date) || { total: 0, selfStudy: 0 }
-                    existing.total += session.duration
-                    if (session.type === '자습' || session.type === '테스트') {
-                        existing.selfStudy += session.duration
-                    }
-                    dailyMap.set(session.date, existing)
-                })
-                setCalendarData(dailyMap)
+                setCalendarData(groupTotals(allSessions, s => s.date))
             }
         }
 
@@ -176,12 +146,10 @@ export default function Records() {
     }, [dateRange])
 
     // Calculate totals
-    const totalTime = sessions.reduce((sum, s) => sum + s.duration, 0)
-    const selfStudyTime = sessions.filter(s => s.type === '자습' || s.type === '테스트').reduce((sum, s) => sum + s.duration, 0)
+    const { total: totalTime, selfStudy: selfStudyTime } = sumTotals(sessions)
 
     // Previous period totals for comparison
-    const prevTotalTime = prevSessions.reduce((sum, s) => sum + s.duration, 0)
-    const prevSelfStudyTime = prevSessions.filter(s => s.type === '자습' || s.type === '테스트').reduce((sum, s) => sum + s.duration, 0)
+    const { total: prevTotalTime, selfStudy: prevSelfStudyTime } = sumTotals(prevSessions)
 
     // Changes
     const totalChange = totalTime - prevTotalTime
@@ -307,7 +275,7 @@ export default function Records() {
                     <p className="text-display text-2xl font-black tabular-nums gradient-text">{formatDuration(totalTime)}</p>
                     {prevTotalTime > 0 && (
                         <p className={`text-xs mt-1.5 font-semibold tabular-nums ${totalChange >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                            {formatDurationChange(totalChange)} vs 이전
+                            {hm(totalChange, { sign: true })} vs 이전
                         </p>
                     )}
                 </div>
@@ -322,7 +290,7 @@ export default function Records() {
                     <p className="text-display text-2xl font-black tabular-nums text-[var(--color-text)]">{formatDuration(selfStudyTime)}</p>
                     {prevSelfStudyTime > 0 && (
                         <p className={`text-xs mt-1.5 font-semibold tabular-nums ${selfStudyChange >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                            {formatDurationChange(selfStudyChange)} vs 이전
+                            {hm(selfStudyChange, { sign: true })} vs 이전
                         </p>
                     )}
                 </div>
@@ -370,13 +338,6 @@ export default function Records() {
                                 const data = calendarData.get(dateStr)
                                 const hasData = data && data.total > 0
 
-                                const formatShortDuration = (ms: number) => {
-                                    const hours = Math.floor(ms / 3600000)
-                                    const minutes = Math.floor((ms % 3600000) / 60000)
-                                    if (hours > 0) return `${hours}h${minutes > 0 ? ` ${minutes}m` : ''}`
-                                    return `${minutes}m`
-                                }
-
                                 cells.push(
                                     <div
                                         key={dateStr}
@@ -395,8 +356,8 @@ export default function Records() {
                                         <span className={`text-sm font-bold ${hasData ? '' : 'opacity-40'}`}>{dayNum}</span>
                                         {hasData && (
                                             <div className="mt-1 text-center">
-                                                <p className="text-[10px] font-bold text-indigo-400">{formatShortDuration(data.total)}</p>
-                                                <p className="text-[9px] opacity-60">{formatShortDuration(data.selfStudy)}</p>
+                                                <p className="text-[10px] font-bold text-indigo-400">{hm(data.total, { compact: true })}</p>
+                                                <p className="text-[9px] opacity-60">{hm(data.selfStudy, { compact: true })}</p>
                                             </div>
                                         )}
                                     </div>
@@ -438,12 +399,7 @@ export default function Records() {
                                 <XAxis dataKey="name" tick={{ fill: 'var(--color-text-secondary)', fontSize: 12 }} />
                                 <YAxis tick={{ fill: 'var(--color-text-secondary)', fontSize: 12 }} tickFormatter={(v) => formatDurationHourMinute(v)} />
                                 <Tooltip
-                                    contentStyle={{
-                                        backgroundColor: 'var(--color-surface-elevated)',
-                                        border: 'none',
-                                        borderRadius: '12px',
-                                        color: 'var(--color-text)'
-                                    }}
+                                    contentStyle={TOOLTIP_STYLE}
                                     formatter={(value: any, name: any) => [formatDurationHourMinute(value), name === '총합' ? '합계' : '순공'] as [string, string]}
                                 />
                                 <Bar dataKey="총합" fill="#3b82f6" radius={[6, 6, 0, 0]}>
@@ -489,12 +445,7 @@ export default function Records() {
                                 </Pie>
                                 <Tooltip
                                     formatter={(value: any) => formatDuration(value)}
-                                    contentStyle={{
-                                        backgroundColor: 'var(--color-surface-elevated)',
-                                        border: 'none',
-                                        borderRadius: '12px',
-                                        color: 'var(--color-text)'
-                                    }}
+                                    contentStyle={TOOLTIP_STYLE}
                                 />
                             </PieChart>
                         </ResponsiveContainer>
@@ -673,43 +624,38 @@ function AnnualContributionGraph() {
         load()
     }, [])
 
-    const today = getStudyToday()
-    const gridStart = new Date(today)
-    gridStart.setDate(gridStart.getDate() - 364)
-    const monday = getMonday(gridStart)
-
     // Build week columns
-    const weeks: Array<Array<{ date: string; ms: number; valid: boolean }>> = []
-    const monthLabels: Array<{ label: string; colIdx: number }> = []
-    let lastMonth = -1
-    const cur2 = new Date(monday)
+    // 365칸 × 7일 날짜 순회는 툴팁 hover 마다 다시 돌 이유가 없다 — studyData 가 바뀔 때만 만든다.
+    const { weeks, monthLabels } = useMemo(() => {
+        const today = getStudyToday()
+        const gridStart = new Date(today)
+        gridStart.setDate(gridStart.getDate() - 364)
+        const monday = getMonday(gridStart)
 
-    while (cur2 <= today) {
-        const col: { date: string; ms: number; valid: boolean }[] = []
-        for (let d = 0; d < 7; d++) {
-            const dateStr = formatDateYYYYMMDD(new Date(cur2))
-            const valid = cur2 >= gridStart && cur2 <= today
-            if (valid && cur2.getMonth() !== lastMonth) {
-                monthLabels.push({ label: `${cur2.getMonth() + 1}월`, colIdx: weeks.length })
-                lastMonth = cur2.getMonth()
+        const weeks: Array<Array<{ date: string; ms: number; valid: boolean }>> = []
+        const monthLabels: Array<{ label: string; colIdx: number }> = []
+        let lastMonth = -1
+        const cur2 = new Date(monday)
+
+        while (cur2 <= today) {
+            const col: { date: string; ms: number; valid: boolean }[] = []
+            for (let d = 0; d < 7; d++) {
+                const dateStr = formatDateYYYYMMDD(new Date(cur2))
+                const valid = cur2 >= gridStart && cur2 <= today
+                if (valid && cur2.getMonth() !== lastMonth) {
+                    monthLabels.push({ label: `${cur2.getMonth() + 1}월`, colIdx: weeks.length })
+                    lastMonth = cur2.getMonth()
+                }
+                col.push({ date: dateStr, ms: studyData.get(dateStr) || 0, valid })
+                cur2.setDate(cur2.getDate() + 1)
             }
-            col.push({ date: dateStr, ms: studyData.get(dateStr) || 0, valid })
-            cur2.setDate(cur2.getDate() + 1)
+            weeks.push(col)
         }
-        weeks.push(col)
-    }
+        return { weeks, monthLabels }
+    }, [studyData])
 
     const CELL = 13, GAP = 3, STEP = CELL + GAP
     const DAY_LABELS = ['월', '', '수', '', '금', '', '일']
-    const formatDateKo = (dateStr: string) => {
-        const d = new Date(dateStr + 'T00:00:00')
-        return `${d.getMonth() + 1}월 ${d.getDate()}일`
-    }
-    const formatHourMin = (ms: number) => {
-        const h = Math.floor(ms / 3600000), m = Math.floor((ms % 3600000) / 60000)
-        if (h > 0) return `${h}h ${m}m`
-        return `${m}m`
-    }
 
     return (
         <div className="space-y-6">
@@ -739,7 +685,7 @@ function AnnualContributionGraph() {
                     <h3 className="text-lg font-bold">연간 공부 기록</h3>
                     {stats.bestDay.date && (
                         <span className="text-xs text-[var(--color-text-secondary)]">
-                            최고 <span className="text-purple-400 font-bold">{formatDateKo(stats.bestDay.date)}</span> · {formatHourMin(stats.bestDay.ms)}
+                            최고 <span className="text-purple-400 font-bold">{koDate(stats.bestDay.date)}</span> · {hm(stats.bestDay.ms)}
                         </span>
                     )}
                 </div>
@@ -813,9 +759,9 @@ function AnnualContributionGraph() {
                                 pointerEvents: 'none',
                                 boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
                             }}>
-                                <div style={{ color: 'rgba(255,255,255,0.6)', marginBottom: '2px' }}>{formatDateKo(tooltip.date)}</div>
+                                <div style={{ color: 'rgba(255,255,255,0.6)', marginBottom: '2px' }}>{koDate(tooltip.date)}</div>
                                 <div style={{ color: tooltip.ms > 0 ? '#a855f7' : 'rgba(255,255,255,0.3)', fontSize: '13px' }}>
-                                    {tooltip.ms > 0 ? formatHourMin(tooltip.ms) : '공부 없음'}
+                                    {tooltip.ms > 0 ? hm(tooltip.ms) : '공부 없음'}
                                 </div>
                             </div>
                         )}
@@ -1016,76 +962,67 @@ function DiaryDetailModal({ entry, settings, onClose, onEdited }: {
 
     return (
         <>
-            <AnimatePresence>
-                {!editing && (
-                    <div className="fixed inset-0 z-[105] flex items-center justify-center p-4 sm:p-6">
-                        <motion.div
-                            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                            className="absolute inset-0 bg-black/70 backdrop-blur-xl"
-                            onClick={onClose}
-                        />
-                        <motion.div
-                            initial={{ scale: 0.9, opacity: 0, y: 30 }}
-                            animate={{ scale: 1, opacity: 1, y: 0 }}
-                            exit={{ scale: 0.9, opacity: 0, y: 30 }}
-                            transition={{ type: 'spring', damping: 20, stiffness: 300 }}
-                            className="relative w-full max-w-lg liquid-modal shadow-2xl overflow-hidden"
-                            onClick={(e) => e.stopPropagation()}
-                        >
-                            <div className="absolute inset-0 pointer-events-none bg-gradient-to-br from-indigo-500/5 via-transparent to-transparent" />
-                            <div className="relative p-8 space-y-6 max-h-[85vh] overflow-y-auto no-scrollbar">
-                                <div className="flex items-center justify-between">
-                                    <h2 className="text-xl font-black text-[var(--color-text)]">{entry.date}</h2>
-                                    <button onClick={onClose} className="p-1.5 rounded-full hover:bg-black/[0.06] dark:hover:bg-white/10 transition-all">
-                                        <Icon icon="mdi:close" className="text-xl text-[var(--color-text-secondary)]" />
-                                    </button>
-                                </div>
-
-                                {entry.oneLiner && (
-                                    <p className="text-lg font-bold text-[var(--color-text)] leading-relaxed">"{entry.oneLiner}"</p>
-                                )}
-
-                                <DiaryEntryView entry={entry} onEdit={openEditor} settings={settings} onChanged={onEdited} />
-
-                                {/* 세션 타임라인 */}
-                                {sessions.length > 0 && (
-                                    <div className="space-y-2 pt-2 border-t border-white/10">
-                                        <p className="text-xs font-black uppercase tracking-widest text-[var(--color-text-secondary)] pt-2">세션 타임라인</p>
-                                        {sessions.map(s => {
-                                            const sc = getEvalScore(s.evaluation)
-                                            return (
-                                                <div key={s.id} className="flex items-start gap-3 px-3 py-2.5 rounded-xl bg-black/[0.03] dark:bg-white/5">
-                                                    <span className="text-xs font-bold text-[var(--color-text-secondary)] tabular-nums mt-0.5 flex-shrink-0">{formatTimeHHMM(s.startTime)}</span>
-                                                    <div className="flex-1 min-w-0">
-                                                        <div className="flex items-center gap-2 flex-wrap">
-                                                            <span className="text-sm font-bold text-[var(--color-text)]">{s.subject}</span>
-                                                            {s.subItem && <span className="text-xs text-[var(--color-primary)]">› {s.subItem}</span>}
-                                                            <span className="text-[10px] text-[var(--color-text-secondary)]">{formatDurationHourMinute(s.duration)}</span>
-                                                            {sc !== null && (
-                                                                <span className="text-[10px] font-bold text-indigo-400">{sc}/10</span>
-                                                            )}
-                                                        </div>
-                                                        {s.evaluation?.tags && s.evaluation.tags.length > 0 && (
-                                                            <div className="flex flex-wrap gap-1 mt-1">
-                                                                {s.evaluation.tags.map(t => (
-                                                                    <span key={t} className="px-1.5 py-0.5 rounded-full bg-black/[0.05] dark:bg-white/10 text-[9px] font-bold text-[var(--color-text-secondary)]">{t}</span>
-                                                                ))}
-                                                            </div>
-                                                        )}
-                                                        {s.evaluation?.memo && (
-                                                            <p className="text-xs text-[var(--color-text-secondary)] italic mt-1 truncate">"{s.evaluation.memo}"</p>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            )
-                                        })}
-                                    </div>
-                                )}
-                            </div>
-                        </motion.div>
+            {/* 편집 모달이 열리면 상세는 접어 둔다 (모달 두 겹 방지) */}
+            <Modal
+                open={!editing}
+                onClose={onClose}
+                zIndex={105}
+                width="max-w-lg"
+                className="overflow-hidden"
+                scrim="bg-black/70 backdrop-blur-xl"
+                ariaLabel={`${entry.date} 일기`}
+            >
+                <div className="absolute inset-0 pointer-events-none bg-gradient-to-br from-indigo-500/5 via-transparent to-transparent" />
+                <div className="relative p-8 space-y-6 max-h-[85vh] overflow-y-auto no-scrollbar">
+                    <div className="flex items-center justify-between">
+                        <h2 className="text-xl font-black text-[var(--color-text)]">{entry.date}</h2>
+                        <button onClick={onClose} className="p-1.5 rounded-full hover:bg-black/[0.06] dark:hover:bg-white/10 transition-all">
+                            <Icon icon="mdi:close" className="text-xl text-[var(--color-text-secondary)]" />
+                        </button>
                     </div>
-                )}
-            </AnimatePresence>
+
+                    {entry.oneLiner && (
+                        <p className="text-lg font-bold text-[var(--color-text)] leading-relaxed">"{entry.oneLiner}"</p>
+                    )}
+
+                    <DiaryEntryView entry={entry} onEdit={openEditor} settings={settings} onChanged={onEdited} />
+
+                    {/* 세션 타임라인 */}
+                    {sessions.length > 0 && (
+                        <div className="space-y-2 pt-2 border-t border-white/10">
+                            <p className="text-xs font-black uppercase tracking-widest text-[var(--color-text-secondary)] pt-2">세션 타임라인</p>
+                            {sessions.map(s => {
+                                const sc = getEvalScore(s.evaluation)
+                                return (
+                                    <div key={s.id} className="flex items-start gap-3 px-3 py-2.5 rounded-xl bg-black/[0.03] dark:bg-white/5">
+                                        <span className="text-xs font-bold text-[var(--color-text-secondary)] tabular-nums mt-0.5 flex-shrink-0">{formatTimeHHMM(s.startTime)}</span>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <span className="text-sm font-bold text-[var(--color-text)]">{s.subject}</span>
+                                                {s.subItem && <span className="text-xs text-[var(--color-primary)]">› {s.subItem}</span>}
+                                                <span className="text-[10px] text-[var(--color-text-secondary)]">{formatDurationHourMinute(s.duration)}</span>
+                                                {sc !== null && (
+                                                    <span className="text-[10px] font-bold text-indigo-400">{sc}/10</span>
+                                                )}
+                                            </div>
+                                            {s.evaluation?.tags && s.evaluation.tags.length > 0 && (
+                                                <div className="flex flex-wrap gap-1 mt-1">
+                                                    {s.evaluation.tags.map(t => (
+                                                        <span key={t} className="px-1.5 py-0.5 rounded-full bg-black/[0.05] dark:bg-white/10 text-[9px] font-bold text-[var(--color-text-secondary)]">{t}</span>
+                                                    ))}
+                                                </div>
+                                            )}
+                                            {s.evaluation?.memo && (
+                                                <p className="text-xs text-[var(--color-text-secondary)] italic mt-1 truncate">"{s.evaluation.memo}"</p>
+                                            )}
+                                        </div>
+                                    </div>
+                                )
+                            })}
+                        </div>
+                    )}
+                </div>
+            </Modal>
 
             {editing && editData && (
                 <DiaryEditModal

@@ -8,27 +8,21 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Icon } from '@iconify/react'
 import { spring } from '../lib/motion'
 import Pressable from '../components/ui/Pressable'
+import Chip from '../components/ui/Chip'
+import Modal from '../components/ui/Modal'
+import { addDays, koDate, parseHhmm } from '../lib/format'
 
 interface EditRecordsProps {
     settings: Settings
 }
 
-// Helper: Format date in Korean
-function formatDateKorean(dateStr: string): string {
-    const date = new Date(dateStr + 'T00:00:00')
-    const weekdays = ['일', '월', '화', '수', '목', '금', '토']
-    return `${date.getMonth() + 1}월 ${date.getDate()}일 (${weekdays[date.getDay()]})`
-}
-
-// Helper: Change date by days
-function addDays(dateStr: string, days: number): string {
-    const date = new Date(dateStr + 'T00:00:00')
-    date.setDate(date.getDate() + days)
-    const year = date.getFullYear()
-    const month = String(date.getMonth() + 1).padStart(2, '0')
-    const day = String(date.getDate()).padStart(2, '0')
-    return `${year}-${month}-${day}`
-}
+/**
+ * 이 폼의 입력 필드 공통 클래스.
+ * ui/styles 의 `inputCompact` 토큰과 달리 여기는 아직 하드코딩 색을 쓴다 —
+ * 토큰은 `--color-surface` 를 참조하는데 그 변수가 아직 정의돼 있지 않아
+ * 배경이 투명해져 버린다. 변수를 채우기 전까지는 이 상수가 단일 소스다.
+ */
+const FIELD = 'px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm outline-none focus:ring-2 focus:ring-indigo-500'
 
 export default function EditRecords({ settings }: EditRecordsProps) {
     const { showConfirm } = useModal()
@@ -120,6 +114,17 @@ export default function EditRecords({ settings }: EditRecordsProps) {
         loadData()
     }
 
+    // 평가 입력 7종 비우기 — 폼 전체 리셋과 '평가 없는 세션 선택' 두 경로가 같은 규칙을 쓴다.
+    const resetEvalFields = () => {
+        setScore(null)
+        setSelectedTags([])
+        setShowAllTags(false)
+        setShowEvalFields(false)
+        setCorrect('')
+        setTotal('')
+        setMemo('')
+    }
+
     const handleResetForm = () => {
         setEditingSessionId(null)
         setAddSubject(settings.subjects[0]?.name || '')
@@ -129,13 +134,7 @@ export default function EditRecords({ settings }: EditRecordsProps) {
         setInputMinutes('')
         setInputStartTime('')
         setInputEndTime('')
-        setScore(null)
-        setSelectedTags([])
-        setShowAllTags(false)
-        setShowEvalFields(false)
-        setCorrect('')
-        setTotal('')
-        setMemo('')
+        resetEvalFields()
     }
 
     const handleSelectSession = (session: StudySession) => {
@@ -163,13 +162,7 @@ export default function EditRecords({ settings }: EditRecordsProps) {
             setMemo(session.evaluation.memo || '')
             setShowEvalFields(true)
         } else {
-            setScore(null)
-            setSelectedTags([])
-            setShowAllTags(false)
-            setCorrect('')
-            setTotal('')
-            setMemo('')
-            setShowEvalFields(false)
+            resetEvalFields()
         }
     }
 
@@ -209,16 +202,20 @@ export default function EditRecords({ settings }: EditRecordsProps) {
             // Time range mode
             if (!inputStartTime || !inputEndTime) return
 
-            const [startH, startM] = inputStartTime.split(':').map(Number)
-            const [endH, endM] = inputEndTime.split(':').map(Number)
+            const startOffset = parseHhmm(inputStartTime)
+            const endOffset = parseHhmm(inputEndTime)
+            if (startOffset === null || endOffset === null) return
 
-            const startDate = new Date(selectedDate + 'T00:00:00')
-            startDate.setHours(startH, startM, 0, 0)
-            startTime = startDate.getTime()
+            // 자정 기준 오프셋을 '분'으로 넘긴다 — setHours 가 60분 초과분을 시로 올려 주므로
+            // 결과는 setHours(시, 분) 과 같고, epoch 덧셈과 달리 서머타임에도 안전하다.
+            const atOffset = (offsetMs: number) => {
+                const d = new Date(selectedDate + 'T00:00:00')
+                d.setHours(0, offsetMs / 60000, 0, 0)
+                return d.getTime()
+            }
 
-            const endDate = new Date(selectedDate + 'T00:00:00')
-            endDate.setHours(endH, endM, 0, 0)
-            endTime = endDate.getTime()
+            startTime = atOffset(startOffset)
+            endTime = atOffset(endOffset)
 
             // Handle overnight sessions
             if (endTime <= startTime) {
@@ -343,7 +340,7 @@ export default function EditRecords({ settings }: EditRecordsProps) {
                     <Icon icon="mdi:chevron-left" className="text-2xl" />
                 </Pressable>
                 <div className="flex flex-col items-center">
-                    <span className="text-lg font-bold tabular-nums">{formatDateKorean(selectedDate)}</span>
+                    <span className="text-lg font-bold tabular-nums">{koDate(selectedDate, 'paren')}</span>
                     {!isToday && (
                         <button
                             onClick={handleToday}
@@ -371,7 +368,7 @@ export default function EditRecords({ settings }: EditRecordsProps) {
                     <section className="glass-card p-6 flex flex-col gap-6">
                         <div className="flex items-center gap-2">
                             <Icon icon="mdi:calendar" className="text-xl text-indigo-400" />
-                            <h2 className="text-lg font-bold">{formatDateKorean(selectedDate)} 일정</h2>
+                            <h2 className="text-lg font-bold">{koDate(selectedDate, 'paren')} 일정</h2>
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
@@ -389,7 +386,7 @@ export default function EditRecords({ settings }: EditRecordsProps) {
                                         type="time"
                                         value={dailyRecord?.[item.field] || ''}
                                         onChange={(e) => handleUpdateDaily(item.field, e.target.value)}
-                                        className="px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                                        className={`${FIELD} transition-all`}
                                     />
                                 </div>
                             ))}
@@ -416,14 +413,14 @@ export default function EditRecords({ settings }: EditRecordsProps) {
                                         setAddSubject(e.target.value)
                                         setAddSubItem(undefined)
                                     }}
-                                    className="px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                                    className={FIELD}
                                 >
                                     {settings.subjects.map(s => <option key={s.name} value={s.name} className="bg-slate-900">{s.name}</option>)}
                                 </select>
                                 <select
                                     value={addType}
                                     onChange={(e) => setAddType(e.target.value)}
-                                    className="px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                                    className={FIELD}
                                 >
                                     {settings.types.map(t => <option key={t} value={t} className="bg-slate-900">{t}</option>)}
                                 </select>
@@ -434,7 +431,7 @@ export default function EditRecords({ settings }: EditRecordsProps) {
                                 <select
                                     value={addSubItem || ''}
                                     onChange={(e) => setAddSubItem(e.target.value || undefined)}
-                                    className="px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                                    className={FIELD}
                                 >
                                     <option value="" className="bg-slate-900">전체 (하위 항목 없음)</option>
                                     {currentSubjectData?.children?.map(child => (
@@ -479,7 +476,7 @@ export default function EditRecords({ settings }: EditRecordsProps) {
                                             placeholder="0"
                                             value={inputHours}
                                             onChange={(e) => setInputHours(e.target.value)}
-                                            className="w-full px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm outline-none focus:ring-2 focus:ring-indigo-500 pr-10"
+                                            className={`w-full ${FIELD} pr-10`}
                                         />
                                         <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs opacity-40 font-bold">시</span>
                                     </div>
@@ -489,7 +486,7 @@ export default function EditRecords({ settings }: EditRecordsProps) {
                                             placeholder="0"
                                             value={inputMinutes}
                                             onChange={(e) => setInputMinutes(e.target.value)}
-                                            className="w-full px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm outline-none focus:ring-2 focus:ring-indigo-500 pr-10"
+                                            className={`w-full ${FIELD} pr-10`}
                                         />
                                         <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs opacity-40 font-bold">분</span>
                                     </div>
@@ -505,7 +502,7 @@ export default function EditRecords({ settings }: EditRecordsProps) {
                                             type="time"
                                             value={inputStartTime}
                                             onChange={(e) => setInputStartTime(e.target.value)}
-                                            className="px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                                            className={FIELD}
                                         />
                                     </div>
                                     <div className="flex flex-col gap-1">
@@ -514,7 +511,7 @@ export default function EditRecords({ settings }: EditRecordsProps) {
                                             type="time"
                                             value={inputEndTime}
                                             onChange={(e) => setInputEndTime(e.target.value)}
-                                            className="px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                                            className={FIELD}
                                         />
                                     </div>
                                 </div>
@@ -577,17 +574,13 @@ export default function EditRecords({ settings }: EditRecordsProps) {
                                                 <span className="text-[10px] font-black text-[var(--color-text-secondary)] uppercase tracking-widest pl-1">태그</span>
                                                 <div className="flex flex-wrap gap-2">
                                                     {topTags.map(tag => (
-                                                        <button
+                                                        <Chip
                                                             key={tag.name}
-                                                            type="button"
+                                                            active={selectedTags.includes(tag.name)}
                                                             onClick={() => toggleTag(tag.name)}
-                                                            className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95 ${selectedTags.includes(tag.name)
-                                                                ? 'bg-indigo-500 text-white shadow-md shadow-indigo-500/20'
-                                                                : 'bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-indigo-500/10'
-                                                                }`}
                                                         >
                                                             {tag.name}
-                                                        </button>
+                                                        </Chip>
                                                     ))}
                                                     <button
                                                         type="button"
@@ -609,6 +602,7 @@ export default function EditRecords({ settings }: EditRecordsProps) {
                                                             {allTagsByCategory.map(([cat, tags]) => (
                                                                 <div key={cat} className="space-y-1.5">
                                                                     <p className="text-[10px] font-black uppercase tracking-widest text-[var(--color-text-secondary)]">{TAG_CATEGORY_LABELS[cat]}</p>
+                                                                    {/* 여기 칩은 선택 시 그림자가 없다 — ui/Chip 의 indigo 활성 톤과 다르므로 그대로 둔다. */}
                                                                     <div className="flex flex-wrap gap-2">
                                                                         {tags.map(tag => (
                                                                             <button
@@ -680,7 +674,7 @@ export default function EditRecords({ settings }: EditRecordsProps) {
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                             <Icon icon="mdi:script-text-outline" className="text-xl text-indigo-400" />
-                            <h2 className="text-lg font-bold">{formatDateKorean(selectedDate)} 세션</h2>
+                            <h2 className="text-lg font-bold">{koDate(selectedDate, 'paren')} 세션</h2>
                         </div>
                         <span className="text-[10px] font-bold opacity-40 uppercase tracking-widest">{recentSessions.length} sessions</span>
                     </div>
@@ -750,7 +744,7 @@ export default function EditRecords({ settings }: EditRecordsProps) {
 
                         {recentSessions.length === 0 && (
                             <div className="text-center py-20 bg-white/5 rounded-[2rem] border border-dashed border-white/10">
-                                <p className="text-sm opacity-30 italic">{formatDateKorean(selectedDate)} 기록된 세션이 없습니다.</p>
+                                <p className="text-sm opacity-30 italic">{koDate(selectedDate, 'paren')} 기록된 세션이 없습니다.</p>
                             </div>
                         )}
                     </div>
@@ -758,68 +752,55 @@ export default function EditRecords({ settings }: EditRecordsProps) {
             </div>
 
             {/* Overlap Warning Modal */}
-            <AnimatePresence>
-                {showOverlapWarning && overlappingSession && (
-                    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-6">
-                        {/* Backdrop layer */}
-                        <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            onClick={handleOverlapCancel}
-                            className="absolute inset-0 bg-black/40 backdrop-blur-xl"
-                        />
-
-                        {/* Modal content layer */}
-                        <motion.div
-                            initial={{ scale: 0.9, opacity: 0, y: 20 }}
-                            animate={{ scale: 1, opacity: 1, y: 0 }}
-                            exit={{ scale: 0.9, opacity: 0, y: 20 }}
-                            className="relative w-full max-w-md liquid-modal p-10 flex flex-col gap-6 shadow-2xl"
-                            onClick={(e) => e.stopPropagation()}
-                        >
-                            <div className="flex items-center gap-3">
-                                <Icon icon="mdi:alert" className="text-3xl text-amber-500" />
-                                <h3 className="text-xl font-bold">세션 시간 중복</h3>
-                            </div>
-
-                            <div className="bg-white/5 rounded-xl p-4 space-y-2">
-                                <p className="text-sm text-[var(--color-text-secondary)]">
-                                    선택한 시간에 이미 다음 세션이 존재합니다:
-                                </p>
-                                <div className="flex items-center gap-2">
-                                    <span className="font-bold">{overlappingSession.subject}</span>
-                                    {overlappingSession.subItem && (
-                                        <span className="text-indigo-400 text-sm">› {overlappingSession.subItem}</span>
-                                    )}
-                                </div>
-                                <div className="text-sm text-[var(--color-text-secondary)]">
-                                    {formatTimeHHMM(overlappingSession.startTime)} ~ {formatTimeHHMM(overlappingSession.endTime)}
-                                </div>
-                            </div>
-
-                            <p className="text-sm text-[var(--color-text-secondary)]">
-                                계속하면 기존 세션의 종료 시간이 새 세션 시작 시간 직전으로 자동 조정됩니다.
-                            </p>
-
-                            <div className="flex gap-3 mt-4">
-                                <button
-                                    onClick={handleOverlapCancel}
-                                    className="flex-1 py-4 rounded-2xl bg-white/5 hover:bg-white/10 text-[var(--color-text-secondary)] font-bold transition-all active:scale-95"
-                                >
-                                    취소
-                                </button>
-                                <button
-                                    onClick={handleOverlapConfirm}
-                                    className="flex-1 py-4 rounded-2xl bg-indigo-500 hover:bg-indigo-400 text-white font-black shadow-xl active:scale-95 transition-all"
-                                >
-                                    조정하고 추가
-                                </button>
-                            </div>
-                        </motion.div>
+            <Modal
+                open={showOverlapWarning && !!overlappingSession}
+                onClose={handleOverlapCancel}
+                width="max-w-md"
+                className="p-10 flex flex-col gap-6"
+                scrim="bg-black/40 backdrop-blur-xl"
+                ariaLabel="세션 시간 중복"
+            >
+                {overlappingSession && (<>
+                    <div className="flex items-center gap-3">
+                        <Icon icon="mdi:alert" className="text-3xl text-amber-500" />
+                        <h3 className="text-xl font-bold">세션 시간 중복</h3>
                     </div>
-                )}
-            </AnimatePresence>
+
+                    <div className="bg-white/5 rounded-xl p-4 space-y-2">
+                        <p className="text-sm text-[var(--color-text-secondary)]">
+                            선택한 시간에 이미 다음 세션이 존재합니다:
+                        </p>
+                        <div className="flex items-center gap-2">
+                            <span className="font-bold">{overlappingSession.subject}</span>
+                            {overlappingSession.subItem && (
+                                <span className="text-indigo-400 text-sm">› {overlappingSession.subItem}</span>
+                            )}
+                        </div>
+                        <div className="text-sm text-[var(--color-text-secondary)]">
+                            {formatTimeHHMM(overlappingSession.startTime)} ~ {formatTimeHHMM(overlappingSession.endTime)}
+                        </div>
+                    </div>
+
+                    <p className="text-sm text-[var(--color-text-secondary)]">
+                        계속하면 기존 세션의 종료 시간이 새 세션 시작 시간 직전으로 자동 조정됩니다.
+                    </p>
+
+                    <div className="flex gap-3 mt-4">
+                        <button
+                            onClick={handleOverlapCancel}
+                            className="flex-1 py-4 rounded-2xl bg-white/5 hover:bg-white/10 text-[var(--color-text-secondary)] font-bold transition-all active:scale-95"
+                        >
+                            취소
+                        </button>
+                        <button
+                            onClick={handleOverlapConfirm}
+                            className="flex-1 py-4 rounded-2xl bg-indigo-500 hover:bg-indigo-400 text-white font-black shadow-xl active:scale-95 transition-all"
+                        >
+                            조정하고 추가
+                        </button>
+                    </div>
+                </>)}
+            </Modal>
         </motion.div>
     )
 }
