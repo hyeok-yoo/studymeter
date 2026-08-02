@@ -9,6 +9,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Icon } from '@iconify/react'
 import type { Settings, WeeklyDiary } from '../lib/db'
 import { getWeekKey, getWeeklyDiary, saveWeeklyDiary, getSunday } from '../lib/db'
+import { toDate } from '../lib/format'
 import Pressable from './ui/Pressable'
 import { fadeRise, staggerItem, spring } from '../lib/motion'
 
@@ -18,8 +19,10 @@ interface WeeklyDiaryCardProps {
     bare?: boolean
 }
 
+// "8.3 (월) ~ 8.9 (일)" — lib/format 의 koDate 에 대응하는 표기가 없어 여기 남긴다.
+// 파싱(로컬 자정 고정)만 toDate 로 맞춘다.
 function formatRange(weekStart: string): string {
-    const monday = new Date(weekStart + 'T00:00:00')
+    const monday = toDate(weekStart)
     const sunday = getSunday(monday)
     const fmt = (d: Date) => `${d.getMonth() + 1}.${d.getDate()}`
     return `${fmt(monday)} (월) ~ ${fmt(sunday)} (일)`

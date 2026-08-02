@@ -9,15 +9,13 @@
  *  - 졸음 경고(z-10000)보다 아래(z-9000)에 두어 안전 경고를 가리지 않는다.
  */
 import { useState, useEffect } from 'react'
-import { createPortal } from 'react-dom'
-import { motion, AnimatePresence } from 'framer-motion'
 import { Icon } from '@iconify/react'
 import type { Settings } from '../lib/db'
 import { getTodayDate } from '../lib/db'
 import { isAmbientAiEnabled, generateMorningReport, morningReportKindFor } from '../lib/ai/aiService'
 import AiMarkdown from './AiMarkdown'
+import Modal from './ui/Modal'
 import Pressable from './ui/Pressable'
-import { materialize } from '../lib/motion'
 
 const SEEN_KEY_PREFIX = 'studymeter_morning_popup_'
 
@@ -54,52 +52,40 @@ export default function MorningReportPopup({ settings }: MorningReportPopupProps
 
     if (!open || !content) return null
 
-    return createPortal(
-        <AnimatePresence>
-            {open && (
-                <div className="fixed inset-0 z-[9000] flex items-center justify-center p-4 sm:p-6">
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="absolute inset-0 bg-black/60 backdrop-blur-lg"
-                        onClick={() => setOpen(false)}
-                    />
-                    <motion.div
-                        variants={materialize}
-                        initial="initial"
-                        animate="animate"
-                        exit="exit"
-                        className="relative w-full max-w-md liquid-modal shadow-2xl overflow-hidden"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        <div className="absolute inset-0 pointer-events-none bg-gradient-to-br from-amber-400/10 to-transparent" />
-                        <div className="relative p-6 sm:p-8 flex flex-col gap-4 max-h-[80vh]">
-                            <header className="flex items-center gap-3">
-                                <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-amber-400 to-orange-500 flex items-center justify-center shadow-lg shadow-amber-500/25 flex-shrink-0">
-                                    <Icon icon={kind === 'weekly-report' ? 'mdi:chart-timeline-variant' : 'mdi:weather-sunset-up'} className="text-xl text-white" />
-                                </div>
-                                <div className="min-w-0">
-                                    <h2 className="text-lg font-black text-[var(--color-text)] leading-tight">{title}</h2>
-                                    <p className="text-[11px] font-bold text-[var(--color-text-secondary)]">홈 화면에서 언제든 다시 볼 수 있어요</p>
-                                </div>
-                            </header>
+    return (
+        // 졸음 경고(10000)·다른 전역 팝업보다 아래에 오도록 9000 을 유지한다.
+        <Modal
+            open={open}
+            onClose={() => setOpen(false)}
+            width="max-w-md"
+            zIndex={9000}
+            scrim="bg-black/60 backdrop-blur-lg"
+            className="overflow-hidden"
+            ariaLabel={title}
+        >
+            <div className="absolute inset-0 pointer-events-none bg-gradient-to-br from-amber-400/10 to-transparent" />
+            <div className="relative p-6 sm:p-8 flex flex-col gap-4 max-h-[80vh]">
+                <header className="flex items-center gap-3">
+                    <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-amber-400 to-orange-500 flex items-center justify-center shadow-lg shadow-amber-500/25 flex-shrink-0">
+                        <Icon icon={kind === 'weekly-report' ? 'mdi:chart-timeline-variant' : 'mdi:weather-sunset-up'} className="text-xl text-white" />
+                    </div>
+                    <div className="min-w-0">
+                        <h2 className="text-lg font-black text-[var(--color-text)] leading-tight">{title}</h2>
+                        <p className="text-[11px] font-bold text-[var(--color-text-secondary)]">홈 화면에서 언제든 다시 볼 수 있어요</p>
+                    </div>
+                </header>
 
-                            <div className="overflow-y-auto no-scrollbar text-sm text-[var(--color-text)]/90 pr-1">
-                                <AiMarkdown>{content}</AiMarkdown>
-                            </div>
-
-                            <Pressable
-                                onClick={() => setOpen(false)}
-                                className="w-full py-4 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white font-black text-sm uppercase tracking-widest shadow-xl shadow-amber-500/25"
-                            >
-                                확인했어요
-                            </Pressable>
-                        </div>
-                    </motion.div>
+                <div className="overflow-y-auto no-scrollbar text-sm text-[var(--color-text)]/90 pr-1">
+                    <AiMarkdown>{content}</AiMarkdown>
                 </div>
-            )}
-        </AnimatePresence>,
-        document.body,
+
+                <Pressable
+                    onClick={() => setOpen(false)}
+                    className="w-full py-4 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white font-black text-sm uppercase tracking-widest shadow-xl shadow-amber-500/25"
+                >
+                    확인했어요
+                </Pressable>
+            </div>
+        </Modal>
     )
 }

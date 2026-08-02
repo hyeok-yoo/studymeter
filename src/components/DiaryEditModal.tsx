@@ -20,6 +20,11 @@ import Sheet from './ui/Sheet'
 import Pressable from './ui/Pressable'
 import { spring } from '../lib/motion'
 
+// 태그·보조 액션에 쓰이는 알약 버튼 클래스. 같은 조합이 열 번 넘게 복사돼 있었다.
+const PILL = 'px-3.5 py-2 rounded-full text-xs font-bold'
+const PILL_IDLE =
+    'bg-black/[0.04] dark:bg-white/5 text-[var(--color-text-secondary)] hover:bg-black/[0.08] dark:hover:bg-white/10'
+
 // ── 사진(종이 일기 스캔) ─────────────────────────────────────────────────────
 
 /** 사진 전체 보기 라이트박스. */
@@ -184,7 +189,7 @@ export function DiaryEntryView({ entry, onEdit, settings, onChanged }: {
                     <button
                         type="button"
                         onClick={onEdit}
-                        className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-black/[0.04] dark:bg-white/5 hover:bg-black/[0.08] dark:hover:bg-white/10 text-xs font-bold text-[var(--color-text-secondary)] transition-all"
+                        className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold transition-all ${PILL_IDLE}`}
                     >
                         <Icon icon="mdi:pencil-outline" className="text-sm" /> 수정
                     </button>
@@ -444,9 +449,9 @@ export function DiaryEditor({
                                 whileTap={{ scale: 0.9 }}
                                 animate={{ scale: selected ? 1.04 : 1 }}
                                 transition={spring.snappy}
-                                className={`px-3.5 py-2 rounded-full text-xs font-bold ${selected
+                                className={`${PILL} ${selected
                                     ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20'
-                                    : 'bg-black/[0.04] dark:bg-white/5 text-[var(--color-text-secondary)] hover:bg-black/[0.08] dark:hover:bg-white/10'
+                                    : PILL_IDLE
                                     }`}
                             >
                                 {tag.name}
@@ -456,7 +461,7 @@ export function DiaryEditor({
                     <Pressable
                         type="button"
                         onClick={() => setShowAllTags(v => !v)}
-                        className="px-3.5 py-2 rounded-full text-xs font-bold bg-black/[0.04] dark:bg-white/5 text-[var(--color-text-secondary)] hover:bg-black/[0.08] dark:hover:bg-white/10"
+                        className={`${PILL} ${PILL_IDLE}`}
                     >
                         {showAllTags ? '접기' : '더보기'}
                     </Pressable>
@@ -485,7 +490,7 @@ export function DiaryEditor({
                                                     transition={spring.snappy}
                                                     className={`px-3 py-1.5 rounded-full text-xs font-bold ${selected
                                                         ? 'bg-indigo-500 text-white'
-                                                        : 'bg-black/[0.04] dark:bg-white/5 text-[var(--color-text-secondary)] hover:bg-black/[0.08] dark:hover:bg-white/10'
+                                                        : PILL_IDLE
                                                         }`}
                                                 >
                                                     {tag.name}
@@ -530,7 +535,7 @@ export function DiaryEditor({
                         <Pressable
                             type="button"
                             onClick={() => setEditingText(false)}
-                            className="px-3.5 py-2 rounded-full text-xs font-bold bg-indigo-500 text-white"
+                            className={`${PILL} bg-indigo-500 text-white`}
                         >
                             <Icon icon="mdi:check" className="inline text-sm mr-1" />완료
                         </Pressable>
@@ -540,7 +545,7 @@ export function DiaryEditor({
                                 <Pressable
                                     type="button"
                                     onClick={useDraftAsIs}
-                                    className="px-3.5 py-2 rounded-full text-xs font-bold bg-black/[0.04] dark:bg-white/5 text-[var(--color-text-secondary)] hover:bg-black/[0.08] dark:hover:bg-white/10"
+                                    className={`${PILL} ${PILL_IDLE}`}
                                 >
                                     초안 그대로
                                 </Pressable>
@@ -550,7 +555,7 @@ export function DiaryEditor({
                                     type="button"
                                     onClick={handleRegenerateDraft}
                                     disabled={draftLoading}
-                                    className="px-3.5 py-2 rounded-full text-xs font-bold bg-black/[0.04] dark:bg-white/5 text-[var(--color-text-secondary)] hover:bg-black/[0.08] dark:hover:bg-white/10 disabled:opacity-50"
+                                    className={`${PILL} ${PILL_IDLE} disabled:opacity-50`}
                                 >
                                     <Icon icon="mdi:refresh" className={`inline text-sm mr-1 ${draftLoading ? 'animate-spin' : ''}`} />
                                     {draftLoading ? '생성 중…' : 'AI 초안 다시'}
@@ -559,7 +564,7 @@ export function DiaryEditor({
                             <Pressable
                                 type="button"
                                 onClick={() => setEditingText(true)}
-                                className="px-3.5 py-2 rounded-full text-xs font-bold bg-black/[0.04] dark:bg-white/5 text-[var(--color-text-secondary)] hover:bg-black/[0.08] dark:hover:bg-white/10"
+                                className={`${PILL} ${PILL_IDLE}`}
                             >
                                 <Icon icon="mdi:pencil-outline" className="inline text-sm mr-1" />직접 고치기
                             </Pressable>
@@ -568,9 +573,9 @@ export function DiaryEditor({
                                     type="button"
                                     onClick={startVoice}
                                     disabled={listening}
-                                    className={`px-3.5 py-2 rounded-full text-xs font-bold ${listening
+                                    className={`${PILL} ${listening
                                         ? 'bg-red-500/80 text-white animate-pulse'
-                                        : 'bg-black/[0.04] dark:bg-white/5 text-[var(--color-text-secondary)] hover:bg-black/[0.08] dark:hover:bg-white/10'
+                                        : PILL_IDLE
                                         }`}
                                 >
                                     <Icon icon="mdi:microphone" className="inline text-sm mr-1" />{listening ? '듣는 중…' : '음성'}
@@ -615,7 +620,7 @@ export function DiaryEditor({
                         type="button"
                         onClick={() => cameraRef.current?.click()}
                         disabled={uploading}
-                        className="px-3.5 py-2 rounded-full text-xs font-bold bg-black/[0.04] dark:bg-white/5 text-[var(--color-text-secondary)] hover:bg-black/[0.08] dark:hover:bg-white/10 disabled:opacity-50"
+                        className={`${PILL} ${PILL_IDLE} disabled:opacity-50`}
                     >
                         <Icon icon={uploading ? 'mdi:loading' : 'mdi:camera-outline'} className={`inline text-sm mr-1 ${uploading ? 'animate-spin' : ''}`} />
                         촬영
@@ -624,7 +629,7 @@ export function DiaryEditor({
                         type="button"
                         onClick={() => pickRef.current?.click()}
                         disabled={uploading}
-                        className="px-3.5 py-2 rounded-full text-xs font-bold bg-black/[0.04] dark:bg-white/5 text-[var(--color-text-secondary)] hover:bg-black/[0.08] dark:hover:bg-white/10 disabled:opacity-50"
+                        className={`${PILL} ${PILL_IDLE} disabled:opacity-50`}
                     >
                         <Icon icon={uploading ? 'mdi:loading' : 'mdi:image-multiple-outline'} className={`inline text-sm mr-1 ${uploading ? 'animate-spin' : ''}`} />
                         {uploading ? '처리 중…' : '불러오기'}
