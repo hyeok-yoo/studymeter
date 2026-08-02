@@ -8,6 +8,7 @@ import { motion } from 'framer-motion'
 import { Icon } from '@iconify/react'
 import type { Settings, Dday } from '../lib/db'
 import { getDefaultDdays, getDdayDiff, formatDday } from '../lib/db'
+import { toDate } from '../lib/format'
 import { staggerContainer, staggerItem } from '../lib/motion'
 
 interface DdayWidgetProps {
@@ -22,8 +23,10 @@ function accentFor(diff: number): { text: string; bg: string; border: string } {
     return { text: 'text-[var(--color-text-secondary)]', bg: 'bg-black/[0.03] dark:bg-white/5', border: 'border-white/10' }
 }
 
+// 목표일은 "2026.08.02" 점 구분 표기 — lib/format 의 ymd 는 하이픈이라 대체 불가.
+// 파싱(로컬 자정 고정)만 toDate 로 맞춘다.
 function formatTargetDate(date: string): string {
-    const d = new Date(date + 'T00:00:00')
+    const d = toDate(date)
     return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`
 }
 

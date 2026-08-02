@@ -11,6 +11,14 @@ import Sheet from './ui/Sheet'
 import Pressable from './ui/Pressable'
 import { spring, fadeRise } from '../lib/motion'
 
+// 선택되지 않은 태그·버튼의 공통 표면. 같은 조합이 네 번 복사돼 있었다.
+const IDLE =
+    'bg-black/[0.04] dark:bg-white/5 text-[var(--color-text-secondary)] hover:bg-black/[0.08] dark:hover:bg-white/10'
+
+// 메모·복기 노트 입력란. 포커스 테두리 색만 다르고 나머지는 동일하다.
+const NOTE_AREA =
+    'w-full px-5 py-4 rounded-[1.5rem] bg-black/[0.03] dark:bg-white/5 border border-white/10 text-[var(--color-text)] placeholder:text-[var(--color-text-secondary)]/30 resize-none outline-none focus:bg-black/[0.05] dark:focus:bg-white/[0.08] transition-all font-medium'
+
 interface SessionEvalModalProps {
     isOpen: boolean
     onClose: () => void
@@ -77,6 +85,7 @@ export default function SessionEvalModal({
         return () => { cancelled = true }
     }, [isOpen])
 
+    // 한국어 "3시간 5분" 표기 — lib/format 의 hm() 은 "3h 5m" 이라 여기선 쓸 수 없다.
     const formatDuration = (ms: number) => {
         const hours = Math.floor(ms / 3600000)
         const minutes = Math.floor((ms % 3600000) / 60000)
@@ -223,7 +232,7 @@ export default function SessionEvalModal({
                                     transition={spring.snappy}
                                     className={`px-3.5 py-2 rounded-full text-xs font-bold ${selected
                                         ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/25'
-                                        : 'bg-black/[0.04] dark:bg-white/5 text-[var(--color-text-secondary)] hover:bg-black/[0.08] dark:hover:bg-white/10'
+                                        : IDLE
                                         }`}
                                 >
                                     {tag.name}
@@ -233,7 +242,7 @@ export default function SessionEvalModal({
                         <Pressable
                             type="button"
                             onClick={() => setShowAllTags(v => !v)}
-                            className="px-3.5 py-2 rounded-full text-xs font-bold bg-black/[0.04] dark:bg-white/5 text-[var(--color-text-secondary)] hover:bg-black/[0.08] dark:hover:bg-white/10"
+                            className={`px-3.5 py-2 rounded-full text-xs font-bold ${IDLE}`}
                         >
                             {showAllTags ? '접기' : '더보기'}
                         </Pressable>
@@ -263,7 +272,7 @@ export default function SessionEvalModal({
                                                         transition={spring.snappy}
                                                         className={`px-3 py-1.5 rounded-full text-xs font-bold ${selected
                                                             ? 'bg-indigo-500 text-white'
-                                                            : 'bg-black/[0.04] dark:bg-white/5 text-[var(--color-text-secondary)] hover:bg-black/[0.08] dark:hover:bg-white/10'
+                                                            : IDLE
                                                             }`}
                                                     >
                                                         {tag.name}
@@ -344,7 +353,7 @@ export default function SessionEvalModal({
                                     onChange={(e) => setMemo(e.target.value)}
                                     placeholder="한 줄 메모 (선택)"
                                     rows={2}
-                                    className="w-full px-5 py-4 rounded-[1.5rem] bg-black/[0.03] dark:bg-white/5 border border-white/10 text-[var(--color-text)] placeholder:text-[var(--color-text-secondary)]/30 resize-none outline-none focus:border-indigo-400/40 focus:bg-black/[0.05] dark:focus:bg-white/[0.08] transition-all font-medium"
+                                    className={`${NOTE_AREA} focus:border-indigo-400/40`}
                                 />
 
                                 {/* 학습 복기용 노트 — 나중에 검색·복기하거나 AI가 참고할 수 있음 */}
@@ -357,7 +366,7 @@ export default function SessionEvalModal({
                                         onChange={(e) => setLearned(e.target.value)}
                                         placeholder="예: 이차함수 최댓값 구하는 법을 완전꼴로 정리했다"
                                         rows={2}
-                                        className="w-full px-5 py-4 rounded-[1.5rem] bg-black/[0.03] dark:bg-white/5 border border-white/10 text-[var(--color-text)] placeholder:text-[var(--color-text-secondary)]/30 resize-none outline-none focus:border-amber-400/40 focus:bg-black/[0.05] dark:focus:bg-white/[0.08] transition-all font-medium"
+                                        className={`${NOTE_AREA} focus:border-amber-400/40`}
                                     />
                                 </div>
                             </motion.div>
@@ -394,7 +403,7 @@ export default function SessionEvalModal({
                             type="button"
                             onClick={onClose}
                             disabled={saving}
-                            className="flex-1 py-5 rounded-[2rem] bg-black/[0.04] dark:bg-white/5 hover:bg-black/[0.08] dark:hover:bg-white/10 text-[var(--color-text-secondary)] font-black uppercase tracking-widest text-xs disabled:opacity-40"
+                            className={`flex-1 py-5 rounded-[2rem] font-black uppercase tracking-widest text-xs disabled:opacity-40 ${IDLE}`}
                         >
                             건너뛰기
                         </Pressable>

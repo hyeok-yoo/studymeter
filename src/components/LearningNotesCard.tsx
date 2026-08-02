@@ -10,6 +10,7 @@ import { Icon } from '@iconify/react'
 import type { Settings, LearningNote } from '../lib/db'
 import { getAllLearningNotes, deleteLearningNote } from '../lib/db'
 import { searchLearningNotes } from '../lib/ai/rag'
+import { toDate } from '../lib/format'
 import Pressable from './ui/Pressable'
 import { fadeRise, staggerItem } from '../lib/motion'
 
@@ -19,8 +20,10 @@ interface LearningNotesCardProps {
     bare?: boolean
 }
 
+// 날짜 배지는 "8.2" 점 표기 — lib/format 의 koDate('slash') 는 "8/2" 라 쓸 수 없다.
+// 파싱(로컬 자정 고정)만 toDate 로 맞추고 표기는 이 카드에 남긴다.
 function formatDateShort(date: string): string {
-    const d = new Date(date + 'T00:00:00')
+    const d = toDate(date)
     return `${d.getMonth() + 1}.${d.getDate()}`
 }
 
