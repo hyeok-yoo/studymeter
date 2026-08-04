@@ -17,18 +17,22 @@ const TONE = {
         on: 'text-white',
         off: 'text-[var(--color-text-secondary)]',
     },
+    // 공부 화면의 어두운 유리 위. 값은 이전 인라인 스타일과 정확히 같게 유지한다.
     glass: {
-        track: 'bg-white/[0.04] border border-transparent',
-        fill: 'bg-indigo-400/25 border border-indigo-400/35',
-        on: 'text-indigo-200',
-        off: 'text-white/35',
+        track: 'bg-[rgba(255,255,255,0.04)] border border-transparent',
+        fill: 'bg-[rgba(129,140,248,0.25)] border border-[rgba(129,140,248,0.35)]',
+        on: 'text-[#a5b4fc]',
+        off: 'text-[rgba(255,255,255,0.35)]',
     },
 } as const;
 
 const SIZE = {
     md: { track: 'p-1', button: 'py-2.5 px-3 text-sm' },
     sm: { track: 'p-0.5', button: 'py-1 px-2 text-[10px]' },
-    tab: { track: 'p-1', button: 'py-1.5 px-2 text-[11px] font-bold' },
+    /** 집중도 탭 바 */
+    tab: { track: 'p-1', button: 'py-1.5 text-[11px] font-bold' },
+    /** 측정 모드 선택 — 두 줄짜리 라벨이 들어가 조금 더 높다 */
+    mode: { track: 'p-1', button: 'py-2 text-[11px] font-extrabold' },
 } as const;
 
 interface SegmentedProps<T extends string> {
@@ -40,6 +44,8 @@ interface SegmentedProps<T extends string> {
     size?: keyof typeof SIZE;
     tone?: SegmentedTone;
     className?: string;
+    /** 전환을 막는다 (측정 시작 중 등) */
+    disabled?: boolean;
 }
 
 export default function Segmented<T extends string>({
@@ -50,6 +56,7 @@ export default function Segmented<T extends string>({
     size = 'md',
     tone = 'brand',
     className = '',
+    disabled = false,
 }: SegmentedProps<T>) {
     const t = TONE[tone];
     const s = SIZE[size];
@@ -62,7 +69,8 @@ export default function Segmented<T extends string>({
                         key={opt.value}
                         type="button"
                         onClick={() => onChange(opt.value)}
-                        className={`relative flex-1 rounded-lg font-medium transition-colors active:scale-[0.97] ${s.button}`}
+                        disabled={disabled}
+                        className={`relative flex-1 rounded-lg font-medium transition-colors active:scale-[0.97] disabled:cursor-not-allowed ${s.button}`}
                     >
                         {active && (
                             <motion.div

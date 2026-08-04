@@ -20,9 +20,21 @@ import {
   type AdminSession,
   type ChatMessage,
 } from '../lib/telemetry'
-import { formatDuration, formatDurationHourMinute, formatTimeHHMM, getTodayDate } from '../lib/db'
+import { getTodayDate } from '../lib/db'
+import { addDays, hhmm, hm, hms, koDate } from '../lib/format'
+import { isSelfStudy } from '../lib/sessions'
 
 type Screen = 'loading' | 'login' | 'dashboard'
+
+/**
+ * 관리자 화면 전용 다크 입력 필드 — 로그인·비밀번호 변경에서 그대로 반복되던 조합.
+ * 테두리 색만 화면마다(에러 여부) 달라 여기서는 뺀다.
+ */
+const ADMIN_INPUT =
+  'w-full px-4 py-3 rounded-xl bg-white/10 text-[var(--color-text)] placeholder-[var(--color-text-secondary)]/50 focus:outline-none focus:border-[var(--color-primary)]'
+
+/** 로딩·빈 상태 자리비움의 공통 골격. 세로 여백(py-*)만 자리마다 다르다. */
+const PLACEHOLDER = 'text-center text-[var(--color-text-secondary)] opacity-50'
 
 export default function Admin() {
   const [screen, setScreen] = useState<Screen>('loading')
@@ -160,6 +172,8 @@ export default function Admin() {
 
   const selectedUsers = users.filter((u) => selectedIds.has(u.id))
 
+  // Firestore Timestamp 를 받아 ko-KR 로케일로 찍는다 (null·비정상 값은 '-').
+  // lib/format 의 dateTimeShort 는 ms 숫자만 받고 '8/2 14:30' 형태라 표기가 달라 그대로 둔다.
   function formatDate(ts: TelemetryUser['lastSeen']): string {
     if (!ts) return '-'
     try {
@@ -296,12 +310,12 @@ export default function Admin() {
 
         {/* User list */}
         {loadingUsers ? (
-          <div className="text-center py-20 text-[var(--color-text-secondary)] opacity-50">
+          <div className={`${PLACEHOLDER} py-20`}>
             <Icon icon="mdi:loading" className="text-4xl animate-spin mb-3" />
             <p>불러오는 중...</p>
           </div>
         ) : users.length === 0 ? (
-          <div className="text-center py-20 text-[var(--color-text-secondary)] opacity-50">
+          <div className={`${PLACEHOLDER} py-20`}>
             <Icon icon="mdi:account-off-outline" className="text-5xl mb-3" />
             <p>아직 등록된 사용자가 없습니다.</p>
           </div>
@@ -495,10 +509,11 @@ function UserDetailModal({ user, onClose }: { user: TelemetryUser; onClose: () =
       .sort((a, b) => b.startTime - a.startTime)
   }, [sessions, selectedDate])
 
-  const totalTime = daySessions.reduce((sum, s) => sum + s.duration, 0)
-  const selfStudyTime = daySessions
-    .filter((s) => s.type === '자습' || s.type === '테스트')
-    .reduce((sum, s) => sum + s.duration, 0)
+  // 합계는 렌더마다 다시 돌 이유가 없어 daySessions 에 묶어 둔다.
+  const { totalTime, selfStudyTime } = useMemo(() => ({
+    totalTime: daySessions.reduce((sum, s) => sum + s.duration, 0),
+    selfStudyTime: daySessions.filter((s) => isSelfStudy(s.type)).reduce((sum, s) => sum + s.duration, 0),
+  }), [daySessions])
 
   // 과목별 집계
   const bySubject = useMemo(() => {
@@ -507,21 +522,6 @@ function UserDetailModal({ user, onClose }: { user: TelemetryUser; onClose: () =
     return Array.from(map.entries()).sort((a, b) => b[1] - a[1])
   }, [daySessions])
   const maxSubject = bySubject.length > 0 ? bySubject[0][1] : 0
-
-  function shiftDate(days: number) {
-    const d = new Date(selectedDate + 'T00:00:00')
-    d.setDate(d.getDate() + days)
-    const y = d.getFullYear()
-    const m = String(d.getMonth() + 1).padStart(2, '0')
-    const day = String(d.getDate()).padStart(2, '0')
-    setSelectedDate(`${y}-${m}-${day}`)
-  }
-
-  function formatDayLabel(dateStr: string): string {
-    const d = new Date(dateStr + 'T00:00:00')
-    const days = ['일', '월', '화', '수', '목', '금', '토']
-    return `${d.getMonth() + 1}월 ${d.getDate()}일 (${days[d.getDay()]})`
-  }
 
   const isToday = selectedDate === getTodayDate()
 
@@ -569,14 +569,14 @@ function UserDetailModal({ user, onClose }: { user: TelemetryUser; onClose: () =
         <>
         {/* 날짜 네비게이션 */}
         <div className="px-5 py-3 border-b border-white/10 flex items-center justify-center gap-2">
-          <button onClick={() => shiftDate(-1)} className="p-1.5 rounded-lg hover:bg-white/10 transition-all">
+          <button onClick={() => setSelectedDate(addDays(selectedDate, -1))} className="p-1.5 rounded-lg hover:bg-white/10 transition-all">
             <Icon icon="mdi:chevron-left" className="text-xl" />
           </button>
           <span className="text-sm font-bold min-w-[140px] text-center flex items-center justify-center gap-1.5">
             <Icon icon="mdi:calendar" className="text-base opacity-60" />
-            {formatDayLabel(selectedDate)}
+            {koDate(selectedDate, 'paren')}
           </span>
-          <button onClick={() => shiftDate(1)} className="p-1.5 rounded-lg hover:bg-white/10 transition-all">
+          <button onClick={() => setSelectedDate(addDays(selectedDate, 1))} className="p-1.5 rounded-lg hover:bg-white/10 transition-all">
             <Icon icon="mdi:chevron-right" className="text-xl" />
           </button>
           {!isToday && (
@@ -592,26 +592,24 @@ function UserDetailModal({ user, onClose }: { user: TelemetryUser; onClose: () =
         {/* 본문 */}
         <div className="flex-1 overflow-y-auto p-5">
           {sessions === null ? (
-            <div className="text-center py-16 text-[var(--color-text-secondary)] opacity-50">
+            <div className={`${PLACEHOLDER} py-16`}>
               <Icon icon="mdi:loading" className="text-4xl animate-spin mb-3" />
               <p>불러오는 중...</p>
             </div>
           ) : (
             <>
-              {/* 요약 카드 */}
+              {/* 요약 카드 — 총 공부만 그라디언트 강조 */}
               <div className="grid grid-cols-3 gap-3 mb-5">
-                <div className="bg-white/5 rounded-xl p-3 text-center">
-                  <p className="text-[11px] text-[var(--color-text-secondary)] opacity-60 mb-1">총 공부</p>
-                  <p className="text-base font-black gradient-text">{formatDuration(totalTime)}</p>
-                </div>
-                <div className="bg-white/5 rounded-xl p-3 text-center">
-                  <p className="text-[11px] text-[var(--color-text-secondary)] opacity-60 mb-1">순공</p>
-                  <p className="text-base font-black">{formatDuration(selfStudyTime)}</p>
-                </div>
-                <div className="bg-white/5 rounded-xl p-3 text-center">
-                  <p className="text-[11px] text-[var(--color-text-secondary)] opacity-60 mb-1">세션</p>
-                  <p className="text-base font-black">{daySessions.length}회</p>
-                </div>
+                {([
+                  ['총 공부', hms(totalTime), ' gradient-text'],
+                  ['순공', hms(selfStudyTime), ''],
+                  ['세션', `${daySessions.length}회`, ''],
+                ] as const).map(([label, value, accent]) => (
+                  <div key={label} className="bg-white/5 rounded-xl p-3 text-center">
+                    <p className="text-[11px] text-[var(--color-text-secondary)] opacity-60 mb-1">{label}</p>
+                    <p className={`text-base font-black${accent}`}>{value}</p>
+                  </div>
+                ))}
               </div>
 
               {/* 과목별 집계 */}
@@ -631,7 +629,7 @@ function UserDetailModal({ user, onClose }: { user: TelemetryUser; onClose: () =
                             }}
                           />
                         </div>
-                        <span className="text-xs font-bold w-16 text-right flex-shrink-0">{formatDurationHourMinute(ms)}</span>
+                        <span className="text-xs font-bold w-16 text-right flex-shrink-0">{hm(ms, { round: true })}</span>
                       </div>
                     ))}
                   </div>
@@ -641,12 +639,12 @@ function UserDetailModal({ user, onClose }: { user: TelemetryUser; onClose: () =
               {/* 세션 목록 */}
               <h3 className="text-xs font-bold text-[var(--color-text-secondary)] opacity-70 mb-2 uppercase tracking-wider">공부 기록</h3>
               {daySessions.length === 0 ? (
-                <div className="text-center py-10 text-[var(--color-text-secondary)] opacity-50">
+                <div className={`${PLACEHOLDER} py-10`}>
                   <Icon icon="mdi:bookshelf" className="text-4xl mb-2" />
                   <p className="text-sm">이 날의 공부 기록이 없습니다.</p>
                   {availableDates.length > 0 && (
                     <p className="text-xs mt-2 opacity-70">
-                      기록 있는 날: {availableDates.slice(0, 5).map(formatDayLabel).join(', ')}
+                      기록 있는 날: {availableDates.slice(0, 5).map((d) => koDate(d, 'paren')).join(', ')}
                       {availableDates.length > 5 ? ' …' : ''}
                     </p>
                   )}
@@ -662,32 +660,24 @@ function UserDetailModal({ user, onClose }: { user: TelemetryUser; onClose: () =
                           <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/10 text-[var(--color-text-secondary)]">{s.type}</span>
                         </div>
                         <div className="text-right flex-shrink-0 ml-2">
-                          <p className="font-bold text-sm">{formatDuration(s.duration)}</p>
+                          <p className="font-bold text-sm">{hms(s.duration)}</p>
                           <p className="text-[10px] text-[var(--color-text-secondary)] opacity-60">
-                            {formatTimeHHMM(s.startTime)} ~ {formatTimeHHMM(s.endTime)}
+                            {hhmm(s.startTime)} ~ {hhmm(s.endTime)}
                           </p>
                         </div>
                       </div>
                       {s.evaluation && (
                         <div className="flex items-center gap-3 pt-2 mt-2 border-t border-white/5 flex-wrap">
-                          <div className="flex items-center gap-1">
-                            <Icon icon="mdi:fire" className="text-sm text-orange-400" />
-                            <span className="text-[10px] text-[var(--color-text-secondary)]">집중</span>
-                            <span className="text-xs font-bold text-indigo-400">{s.evaluation.focus}/10</span>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <Icon icon="mdi:diamond-stone" className="text-sm text-cyan-400" />
-                            <span className="text-[10px] text-[var(--color-text-secondary)]">만족</span>
-                            <span className="text-xs font-bold text-emerald-400">{s.evaluation.satisfaction}/10</span>
-                          </div>
+                          <EvalStat icon="mdi:fire" iconColor="text-orange-400" label="집중" valueColor="text-indigo-400" value={`${s.evaluation.focus}/10`} />
+                          <EvalStat icon="mdi:diamond-stone" iconColor="text-cyan-400" label="만족" valueColor="text-emerald-400" value={`${s.evaluation.satisfaction}/10`} />
                           {s.evaluation.problemSolving && (
-                            <div className="flex items-center gap-1">
-                              <Icon icon="mdi:check-circle-outline" className="text-sm text-green-400" />
-                              <span className="text-[10px] text-[var(--color-text-secondary)]">문제</span>
-                              <span className="text-xs font-bold text-amber-400">
-                                {s.evaluation.problemSolving.correct}/{s.evaluation.problemSolving.total}
-                              </span>
-                            </div>
+                            <EvalStat
+                              icon="mdi:check-circle-outline"
+                              iconColor="text-green-400"
+                              label="문제"
+                              valueColor="text-amber-400"
+                              value={`${s.evaluation.problemSolving.correct}/${s.evaluation.problemSolving.total}`}
+                            />
                           )}
                           {s.evaluation.memo && (
                             <span className="text-xs text-[var(--color-text-secondary)] italic truncate flex-1 min-w-0">"{s.evaluation.memo}"</span>
@@ -704,6 +694,23 @@ function UserDetailModal({ user, onClose }: { user: TelemetryUser; onClose: () =
         </>
         )}
       </motion.div>
+    </div>
+  )
+}
+
+/** 세션 평가 한 칸 — 아이콘·라벨·값 색만 다른 세 벌이 반복돼 있었다. */
+function EvalStat({ icon, iconColor, label, value, valueColor }: {
+  icon: string
+  iconColor: string
+  label: string
+  value: string
+  valueColor: string
+}) {
+  return (
+    <div className="flex items-center gap-1">
+      <Icon icon={icon} className={`text-sm ${iconColor}`} />
+      <span className="text-[10px] text-[var(--color-text-secondary)]">{label}</span>
+      <span className={`text-xs font-bold ${valueColor}`}>{value}</span>
     </div>
   )
 }
@@ -754,11 +761,11 @@ function AdminMessageThread({ deviceId, name }: { deviceId: string; name: string
     <div className="flex-1 flex flex-col overflow-hidden">
       <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-2.5">
         {thread === null ? (
-          <div className="text-center py-16 text-[var(--color-text-secondary)] opacity-50">
+          <div className={`${PLACEHOLDER} py-16`}>
             <Icon icon="mdi:loading" className="text-4xl animate-spin" />
           </div>
         ) : thread.length === 0 ? (
-          <div className="text-center py-16 text-[var(--color-text-secondary)] opacity-50">
+          <div className={`${PLACEHOLDER} py-16`}>
             <Icon icon="mdi:message-outline" className="text-4xl mb-2" />
             <p className="text-sm">{name}님에게 첫 메시지를 보내보세요.</p>
           </div>
@@ -857,7 +864,7 @@ function LoginScreen({ onSuccess }: { onSuccess: () => void }) {
             placeholder="관리자 이메일"
             autoComplete="username"
             autoFocus
-            className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-[var(--color-text)] placeholder-[var(--color-text-secondary)]/50 focus:outline-none focus:border-[var(--color-primary)]"
+            className={`${ADMIN_INPUT} border border-white/20`}
           />
           <PasswordInput
             value={pw}
@@ -959,7 +966,7 @@ function PasswordInput({
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         autoFocus={autoFocus}
-        className={`w-full px-4 py-3 pr-11 rounded-xl bg-white/10 border ${error ? 'border-red-500/50' : 'border-white/20'} text-[var(--color-text)] placeholder-[var(--color-text-secondary)]/50 focus:outline-none focus:border-[var(--color-primary)]`}
+        className={`${ADMIN_INPUT} pr-11 border ${error ? 'border-red-500/50' : 'border-white/20'}`}
       />
       <button
         type="button"

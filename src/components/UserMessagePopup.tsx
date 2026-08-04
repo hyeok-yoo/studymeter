@@ -107,6 +107,7 @@ export default function UserMessagePopup() {
       onClose={handleClose}
       width="max-w-md"
       zIndex={9100}
+      padding="p-4 sm:p-6"
       scrim="bg-black/60 backdrop-blur-lg"
       className="overflow-hidden"
       ariaLabel="관리자 메시지"

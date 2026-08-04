@@ -53,6 +53,7 @@ export default function ChangelogModal() {
             onClose={close}
             width="max-w-md"
             zIndex={9200}
+            padding="p-4 sm:p-6"
             scrim="bg-black/60 backdrop-blur-lg"
             className="overflow-hidden"
             ariaLabel="새로워진 점"

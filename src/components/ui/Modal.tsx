@@ -25,6 +25,8 @@ interface ModalProps {
     scrim?: string;
     /** 졸음 경고(10000) 아래, 시트(9500) 위가 기본 */
     zIndex?: number;
+    /** 화면 가장자리와 패널 사이 여백 — 좁은 화면에서 더 붙이려면 'p-4 sm:p-6' */
+    padding?: string;
     ariaLabel?: string;
 }
 
@@ -36,6 +38,7 @@ export default function Modal({
     className = '',
     scrim,
     zIndex = 9999,
+    padding = 'p-6',
     ariaLabel,
 }: ModalProps) {
     useEffect(() => {
@@ -48,7 +51,7 @@ export default function Modal({
     return createPortal(
         <AnimatePresence>
             {open && (
-                <div className="fixed inset-0 flex items-center justify-center p-6" style={{ zIndex }}>
+                <div className={`fixed inset-0 flex items-center justify-center ${padding}`} style={{ zIndex }}>
                     <motion.div
                         className={`absolute inset-0 ${scrim ?? ''}`}
                         style={scrim ? undefined : { background: 'var(--scrim)' }}

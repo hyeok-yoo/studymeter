@@ -59,6 +59,7 @@ export default function MorningReportPopup({ settings }: MorningReportPopupProps
             onClose={() => setOpen(false)}
             width="max-w-md"
             zIndex={9000}
+            padding="p-4 sm:p-6"
             scrim="bg-black/60 backdrop-blur-lg"
             className="overflow-hidden"
             ariaLabel={title}

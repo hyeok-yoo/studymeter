@@ -967,6 +967,7 @@ function DiaryDetailModal({ entry, settings, onClose, onEdited }: {
                 open={!editing}
                 onClose={onClose}
                 zIndex={105}
+                padding="p-4 sm:p-6"
                 width="max-w-lg"
                 className="overflow-hidden"
                 scrim="bg-black/70 backdrop-blur-xl"

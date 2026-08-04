@@ -593,10 +593,11 @@ function LocalPanel({ engine, available, label, calibration = false, onSwitchMod
             {available && !running && (
                 <Segmented
                     layoutId="focus-measure-mode"
-                    size="tab"
+                    size="mode"
                     tone="glass"
+                    disabled={status === 'starting'}
                     value={lightMode ? 'light' : 'full'}
-                    onChange={(v) => status !== 'starting' && setLightMode(v === 'light')}
+                    onChange={(v) => setLightMode(v === 'light')}
                     options={[
                         { value: 'full', label: <span style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}><span>집중도 + 졸음</span><span style={{ fontSize: '8px', opacity: 0.6 }}>전체 측정</span></span> },
                         { value: 'light', label: <span style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}><span>졸음만 (라이트)</span><span style={{ fontSize: '8px', opacity: 0.6 }}>저전력</span></span> },

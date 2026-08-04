@@ -9,36 +9,14 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Icon } from '@iconify/react'
 import { getDatabaseStats, pruneDataOlderThan, clearChatConversations, clearLearningNotes, clearAiArtifacts, clearThoughtNotes, type DatabaseStats, type PruneResult } from '../lib/db'
 import Pressable from '../components/ui/Pressable'
+import { SectionLabel } from '../components/ui/Section'
+import { badge } from '../components/ui/styles'
+import { bytes } from '../lib/format'
 import { spring, staggerContainer, staggerItem } from '../lib/motion'
-
-// ── 바이트 → 사람이 읽기 좋은 단위 ───────────────────────────────────────────
-function formatBytes(bytes: number): string {
-    if (!Number.isFinite(bytes) || bytes < 0) return '0 B'
-    if (bytes === 0) return '0 B'
-    const units = ['B', 'KB', 'MB', 'GB', 'TB']
-    const exp = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1)
-    const value = bytes / Math.pow(1024, exp)
-    return `${exp === 0 ? value : value.toFixed(1)} ${units[exp]}`
-}
-
-// ── 섹션 라벨 (Settings.tsx 와 동일 스타일) ─────────────────────────────────
-function SectionLabel({ children }: { children: React.ReactNode }) {
-    return (
-        <p className="px-1.5 mb-2 text-[11px] font-bold uppercase tracking-wider text-[var(--color-text-secondary)] opacity-60">
-            {children}
-        </p>
-    )
-}
-
-interface CountItem {
-    icon: string
-    label: string
-    value: number
-}
 
 // ── 카테고리별 개수 카드 ─────────────────────────────────────────────────────
 function CountGrid({ stats }: { stats: DatabaseStats }) {
-    const items: CountItem[] = [
+    const items = [
         { icon: 'mdi:chat-outline', label: '대화 기록', value: stats.chatConversations },
         { icon: 'mdi:timer-outline', label: '공부 세션', value: stats.sessions },
         { icon: 'mdi:notebook-outline', label: '일기', value: stats.diaryEntries },
@@ -75,7 +53,7 @@ function StorageUsageBar({ stats }: { stats: DatabaseStats }) {
                     <span className="text-sm font-medium text-[var(--color-text)]">저장소 사용량</span>
                 </div>
                 <span className="text-xs font-bold text-[var(--color-text-secondary)] tabular-nums">
-                    {formatBytes(stats.storageUsedBytes)} / {formatBytes(stats.storageQuotaBytes)}
+                    {bytes(stats.storageUsedBytes)} / {bytes(stats.storageQuotaBytes)}
                 </span>
             </div>
             <div className="h-2.5 rounded-full bg-[var(--color-surface)] border border-[var(--color-border)] overflow-hidden">
@@ -93,7 +71,56 @@ function StorageUsageBar({ stats }: { stats: DatabaseStats }) {
     )
 }
 
-type ActionKey = 'prune' | 'chat' | 'notes' | 'ai' | 'thoughts'
+/**
+ * 카테고리 전체 삭제 — 4개 항목이 아이콘·문구·삭제 함수만 다르고 흐름은 같았다.
+ * 확인 모달 문구와 위험 구역 행이 서로 떨어져 있어 한쪽만 고치는 사고가 나기 쉬웠으므로
+ * 한 항목의 모든 텍스트를 여기 한 줄에 모아 둔다.
+ */
+const CLEAR_ACTIONS = [
+    {
+        key: 'chat',
+        icon: 'mdi:chat-remove-outline',
+        title: '대화 기록 전체 삭제',
+        desc: 'AI 챗봇과의 모든 대화를 삭제합니다.',
+        message: 'AI 챗봇과 나눈 모든 대화 기록을 삭제합니다. 되돌릴 수 없습니다. 계속할까요?',
+        count: (s: DatabaseStats) => s.chatConversations,
+        clear: clearChatConversations,
+        toast: (n: number) => `대화 ${n}개 삭제됨`,
+    },
+    {
+        key: 'notes',
+        icon: 'mdi:notebook-remove-outline',
+        title: '학습 복기 노트 전체 삭제',
+        desc: '작성한 모든 학습 복기 노트를 삭제합니다.',
+        message: '작성한 모든 학습 복기 노트를 삭제합니다. 되돌릴 수 없습니다. 계속할까요?',
+        count: (s: DatabaseStats) => s.learningNotes,
+        clear: clearLearningNotes,
+        toast: (n: number) => `학습 복기 노트 ${n}개 삭제됨`,
+    },
+    {
+        key: 'ai',
+        icon: 'mdi:robot-off-outline',
+        title: 'AI 생성물 캐시 삭제',
+        desc: '아침 리포트·일기 초안 등 재생성 가능한 캐시입니다.',
+        message: '아침 리포트·일기 초안 등 AI가 생성해둔 캐시를 삭제합니다. 필요하면 다시 생성할 수 있습니다. 계속할까요?',
+        count: (s: DatabaseStats) => s.aiArtifacts,
+        clear: clearAiArtifacts,
+        toast: (n: number) => `AI 캐시 ${n}개 삭제됨`,
+    },
+    {
+        key: 'thoughts',
+        icon: 'mdi:thought-bubble-outline',
+        title: '세션 메모(주차된 생각) 삭제',
+        desc: '공부 중 남긴 모든 세션 메모를 삭제합니다.',
+        message: '공부 중 남긴 모든 세션 메모(주차된 생각)를 삭제합니다. 되돌릴 수 없습니다. 계속할까요?',
+        count: (s: DatabaseStats) => s.thoughtNotes,
+        clear: clearThoughtNotes,
+        toast: (n: number) => `세션 메모 ${n}개 삭제됨`,
+    },
+] as const
+
+type ClearAction = (typeof CLEAR_ACTIONS)[number]
+type ActionKey = 'prune' | ClearAction['key']
 
 interface ConfirmState {
     key: ActionKey
@@ -160,50 +187,13 @@ export default function DataManagement() {
         })
     }
 
-    const handleClearChat = () => {
+    const askClear = (action: ClearAction) => {
         setConfirm({
-            key: 'chat',
-            title: '대화 기록 전체 삭제',
-            message: 'AI 챗봇과 나눈 모든 대화 기록을 삭제합니다. 되돌릴 수 없습니다. 계속할까요?',
-            onConfirm: () => runAction('chat', async () => {
-                const n = await clearChatConversations()
-                pushToast(`대화 ${n}개 삭제됨`)
-            }),
-        })
-    }
-
-    const handleClearNotes = () => {
-        setConfirm({
-            key: 'notes',
-            title: '학습 복기 노트 전체 삭제',
-            message: '작성한 모든 학습 복기 노트를 삭제합니다. 되돌릴 수 없습니다. 계속할까요?',
-            onConfirm: () => runAction('notes', async () => {
-                const n = await clearLearningNotes()
-                pushToast(`학습 복기 노트 ${n}개 삭제됨`)
-            }),
-        })
-    }
-
-    const handleClearAi = () => {
-        setConfirm({
-            key: 'ai',
-            title: 'AI 생성물 캐시 삭제',
-            message: '아침 리포트·일기 초안 등 AI가 생성해둔 캐시를 삭제합니다. 필요하면 다시 생성할 수 있습니다. 계속할까요?',
-            onConfirm: () => runAction('ai', async () => {
-                const n = await clearAiArtifacts()
-                pushToast(`AI 캐시 ${n}개 삭제됨`)
-            }),
-        })
-    }
-
-    const handleClearThoughts = () => {
-        setConfirm({
-            key: 'thoughts',
-            title: '세션 메모(주차된 생각) 삭제',
-            message: '공부 중 남긴 모든 세션 메모(주차된 생각)를 삭제합니다. 되돌릴 수 없습니다. 계속할까요?',
-            onConfirm: () => runAction('thoughts', async () => {
-                const n = await clearThoughtNotes()
-                pushToast(`세션 메모 ${n}개 삭제됨`)
+            key: action.key,
+            title: action.title,
+            message: action.message,
+            onConfirm: () => runAction(action.key, async () => {
+                pushToast(action.toast(await action.clear()))
             }),
         })
     }
@@ -300,7 +290,7 @@ export default function DataManagement() {
                                         ['세션 메모', lastPruneResult.thoughtNotes],
                                         ['AI 캐시', lastPruneResult.aiArtifacts],
                                     ] as const).filter(([, n]) => n > 0).map(([label, n]) => (
-                                        <span key={label} className="text-[10px] font-medium px-2 py-1 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-400/20">
+                                        <span key={label} className={badge}>
                                             {label} {n}개 삭제
                                         </span>
                                     ))}
@@ -316,43 +306,17 @@ export default function DataManagement() {
                             <p className="text-[11px] font-bold uppercase tracking-wider text-red-400/80">위험 구역 — 전체 삭제</p>
                         </div>
                         <div className="glass-card p-6 space-y-3 border border-red-500/15">
-                            <DangerRow
-                                icon="mdi:chat-remove-outline"
-                                title="대화 기록 전체 삭제"
-                                desc="AI 챗봇과의 모든 대화를 삭제합니다."
-                                count={stats.chatConversations}
-                                busy={pending === 'chat'}
-                                disabled={pending !== null}
-                                onClick={handleClearChat}
-                            />
-                            <DangerRow
-                                icon="mdi:notebook-remove-outline"
-                                title="학습 복기 노트 전체 삭제"
-                                desc="작성한 모든 학습 복기 노트를 삭제합니다."
-                                count={stats.learningNotes}
-                                busy={pending === 'notes'}
-                                disabled={pending !== null}
-                                onClick={handleClearNotes}
-                            />
-                            <DangerRow
-                                icon="mdi:robot-off-outline"
-                                title="AI 생성물 캐시 삭제"
-                                desc="아침 리포트·일기 초안 등 재생성 가능한 캐시입니다."
-                                count={stats.aiArtifacts}
-                                busy={pending === 'ai'}
-                                disabled={pending !== null}
-                                onClick={handleClearAi}
-                            />
-                            <DangerRow
-                                icon="mdi:thought-bubble-outline"
-                                title="세션 메모(주차된 생각) 삭제"
-                                desc="공부 중 남긴 모든 세션 메모를 삭제합니다."
-                                count={stats.thoughtNotes}
-                                busy={pending === 'thoughts'}
-                                disabled={pending !== null}
-                                onClick={handleClearThoughts}
-                                last
-                            />
+                            {CLEAR_ACTIONS.map((action, i) => (
+                                <DangerRow
+                                    key={action.key}
+                                    action={action}
+                                    count={action.count(stats)}
+                                    busy={pending === action.key}
+                                    disabled={pending !== null}
+                                    onSelect={askClear}
+                                    last={i === CLEAR_ACTIONS.length - 1}
+                                />
+                            ))}
                         </div>
                     </motion.div>
                 </div>
@@ -430,37 +394,35 @@ export default function DataManagement() {
 }
 
 // ── 위험 구역 개별 행 ────────────────────────────────────────────────────────
+// 표시 문구는 CLEAR_ACTIONS 항목이 그대로 들고 있으므로 항목 자체를 넘겨받는다.
+// (onSelect 를 여기서 감싸는 덕에 부모의 map 안에서 핸들러를 만들지 않아도 된다.)
 function DangerRow({
-    icon,
-    title,
-    desc,
+    action,
     count,
     busy,
     disabled,
-    onClick,
+    onSelect,
     last = false,
 }: {
-    icon: string
-    title: string
-    desc: string
+    action: ClearAction
     count: number
     busy: boolean
     disabled: boolean
-    onClick: () => void
+    onSelect: (a: ClearAction) => void
     last?: boolean
 }) {
     return (
         <div className={`flex items-center justify-between gap-3 ${last ? '' : 'pb-3 border-b border-red-500/10'}`}>
             <div className="flex items-start gap-3 min-w-0">
-                <Icon icon={icon} className="text-lg text-red-400/80 mt-0.5 flex-shrink-0" />
+                <Icon icon={action.icon} className="text-lg text-red-400/80 mt-0.5 flex-shrink-0" />
                 <div className="min-w-0">
-                    <p className="text-sm font-medium text-[var(--color-text)]">{title}</p>
-                    <p className="text-xs text-[var(--color-text-secondary)] mt-0.5">{desc}</p>
+                    <p className="text-sm font-medium text-[var(--color-text)]">{action.title}</p>
+                    <p className="text-xs text-[var(--color-text-secondary)] mt-0.5">{action.desc}</p>
                     <p className="text-[10px] text-[var(--color-text-secondary)] opacity-60 mt-0.5">현재 {count.toLocaleString()}개</p>
                 </div>
             </div>
             <Pressable
-                onClick={onClick}
+                onClick={() => onSelect(action)}
                 disabled={disabled || count === 0}
                 pressScale={0.94}
                 className="flex-shrink-0 px-3 py-2 rounded-lg bg-red-500/10 text-red-400 font-bold text-xs disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-1.5 whitespace-nowrap"

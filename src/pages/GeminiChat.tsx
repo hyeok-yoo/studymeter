@@ -2,11 +2,13 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Icon } from '@iconify/react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import type { Settings, ChatConversation } from '../lib/db'
+import type { Settings, ChatConversation, StudySession } from '../lib/db'
 import {
-    db, formatDuration, formatDateYYYYMMDD, getTodayDate,
+    db, getTodayDate,
     listChatConversations, getChatConversation, saveChatConversation, deleteChatConversation,
 } from '../lib/db'
+import { dateTimeShort, hms, ymd } from '../lib/format'
+import { groupTotals, sumTotals } from '../lib/sessions'
 import {
     generateContent,
     fetchGeminiModels,
@@ -44,6 +46,19 @@ interface Message {
     functionActivity?: FunctionActivityItem[]
     attachments?: DisplayAttachment[]
 }
+
+/** 헤더의 정사각 아이콘 버튼 (새 대화 · 이전 대화) */
+const ICON_BTN = 'w-9 h-9 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text-secondary)] flex items-center justify-center'
+
+/** 입력 바 옵션 알약 — 공통 골격과 비활성 색. 활성 색만 버튼마다 다르다. */
+const PILL = 'px-3 py-1.5 rounded-lg text-xs font-medium'
+const PILL_IDLE = 'bg-[var(--color-surface)] text-[var(--color-text-secondary)] border border-[var(--color-border)]'
+
+/** 헤더의 모델 능력 배지 — 지원하는 것만 순서대로 보여준다. */
+const CAPABILITY_BADGES = [
+    { key: 'supportsThinking', icon: 'mdi:brain', label: '추론', tone: 'bg-purple-500/15 text-purple-400 border border-purple-400/20' },
+    { key: 'supportsGrounding', icon: 'mdi:google', label: '검색 가능', tone: 'bg-cyan-500/15 text-cyan-400 border border-cyan-400/20' },
+] as const
 
 /** 대화 히스토리(contents)로 유지할 최대 항목 수. 넘으면 오래된 턴부터 자른다. */
 const MAX_HISTORY_ENTRIES = 40
@@ -137,12 +152,6 @@ function readFileAsBase64(file: File): Promise<{ mimeType: string; data: string 
     })
 }
 
-/** 저장된 대화 목록에 표시할 짧은 날짜/시간 문자열. */
-function formatConvTime(ts: number): string {
-    const d = new Date(ts)
-    return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
-}
-
 /** 첫 사용자 메시지에서 대화 제목을 유도한다 (최대 40자). */
 function deriveConversationTitle(finalMessages: Message[]): string {
     const firstUser = finalMessages.find((m) => m.role === 'user')
@@ -150,6 +159,38 @@ function deriveConversationTitle(finalMessages: Message[]): string {
     const trimmed = firstUser.content.trim()
     if (!trimmed) return '(첨부)'
     return trimmed.length > 40 ? `${trimmed.slice(0, 40)}…` : trimmed
+}
+
+/**
+ * 프롬프트에 붙일 공부 요약 블록. 오늘/이번 주 두 갈래가 제목만 다르고
+ * 본문 계산·표기는 완전히 같았으므로 한 함수로 합쳤다 (문구는 그대로 유지).
+ */
+function summarizeSessions(heading: string, sessions: StudySession[]): string {
+    const { total, selfStudy } = sumTotals(sessions)
+    const bySubject = Array.from(
+        groupTotals(sessions, (s) => s.subject),
+        ([subject, t]) => `${subject}: ${hms(t.total)}`,
+    )
+    return `${heading}
+- 총 공부 시간: ${hms(total)}
+- 순공 시간 (자습): ${hms(selfStudy)}
+- 세션 수: ${sessions.length}회
+- 과목별: ${bySubject.join(', ')}
+
+`
+}
+
+/** 이번 주(월~일) 범위. 일요일은 지난 월요일로 되감는다. */
+function currentWeekRange(): [string, string] {
+    const today = new Date()
+    const day = today.getDay()
+    const monday = new Date(today)
+    monday.setDate(today.getDate() + (day === 0 ? -6 : 1 - day))
+    monday.setHours(0, 0, 0, 0)
+
+    const sunday = new Date(monday)
+    sunday.setDate(monday.getDate() + 6)
+    return [ymd(monday), ymd(sunday)]
 }
 
 function deriveActiveCaps(model: GeminiModel | undefined, name: string) {
@@ -284,59 +325,18 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
     const getStudyDataSummary = async () => {
         if (shareData === 'none') return ''
 
-        const today = getTodayDate()
-
         if (shareData === 'day') {
-            const sessions = await db.sessions.where('date').equals(today).toArray()
-            const totalTime = sessions.reduce((sum, s) => sum + s.duration, 0)
-            const selfStudyTime = sessions.filter(s => s.type === '자습' || s.type === '테스트').reduce((sum, s) => sum + s.duration, 0)
-
-            const bySubject = new Map<string, number>()
-            sessions.forEach(s => {
-                bySubject.set(s.subject, (bySubject.get(s.subject) || 0) + s.duration)
-            })
-
-            return `[오늘 공부 데이터]
-- 총 공부 시간: ${formatDuration(totalTime)}
-- 순공 시간 (자습): ${formatDuration(selfStudyTime)}
-- 세션 수: ${sessions.length}회
-- 과목별: ${Array.from(bySubject.entries()).map(([k, v]) => `${k}: ${formatDuration(v)}`).join(', ')}
-
-`
-        } else {
-            // Week - using Monday to Sunday
-            const todayDate = new Date()
-            const day = todayDate.getDay()
-            const diff = day === 0 ? -6 : 1 - day
-            const monday = new Date(todayDate)
-            monday.setDate(todayDate.getDate() + diff)
-            monday.setHours(0, 0, 0, 0)
-
-            const sunday = new Date(monday)
-            sunday.setDate(monday.getDate() + 6)
-
-            const sessions = await db.sessions
-                .where('date')
-                // 로컬 날짜 기준 (toISOString은 UTC라 KST 자정~09시에 하루 어긋남)
-                .between(formatDateYYYYMMDD(monday), formatDateYYYYMMDD(sunday), true, true)
-                .toArray()
-
-            const totalTime = sessions.reduce((sum, s) => sum + s.duration, 0)
-            const selfStudyTime = sessions.filter(s => s.type === '자습' || s.type === '테스트').reduce((sum, s) => sum + s.duration, 0)
-
-            const bySubject = new Map<string, number>()
-            sessions.forEach(s => {
-                bySubject.set(s.subject, (bySubject.get(s.subject) || 0) + s.duration)
-            })
-
-            return `[이번 주 공부 데이터 (월~일)]
-- 총 공부 시간: ${formatDuration(totalTime)}
-- 순공 시간 (자습): ${formatDuration(selfStudyTime)}
-- 세션 수: ${sessions.length}회
-- 과목별: ${Array.from(bySubject.entries()).map(([k, v]) => `${k}: ${formatDuration(v)}`).join(', ')}
-
-`
+            const sessions = await db.sessions.where('date').equals(getTodayDate()).toArray()
+            return summarizeSessions('[오늘 공부 데이터]', sessions)
         }
+
+        const [monday, sunday] = currentWeekRange()
+        const sessions = await db.sessions
+            .where('date')
+            // 로컬 날짜 기준 (toISOString은 UTC라 KST 자정~09시에 하루 어긋남)
+            .between(monday, sunday, true, true)
+            .toArray()
+        return summarizeSessions('[이번 주 공부 데이터 (월~일)]', sessions)
     }
 
     /**
@@ -508,14 +508,14 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
                         <div className="flex items-center gap-1">
                             <Pressable
                                 onClick={startNewChat}
-                                className="w-9 h-9 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text-secondary)] flex items-center justify-center"
+                                className={ICON_BTN}
                                 title="새 대화"
                             >
                                 <Icon icon="mdi:message-plus-outline" className="text-lg" />
                             </Pressable>
                             <Pressable
                                 onClick={() => setHistoryPanelOpen(true)}
-                                className="w-9 h-9 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text-secondary)] flex items-center justify-center relative"
+                                className={`${ICON_BTN} relative`}
                                 title="이전 대화"
                             >
                                 <Icon icon="mdi:history" className="text-lg" />
@@ -528,16 +528,11 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
                         <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-[var(--color-text-secondary)]">
                             {activeModel.displayName}
                         </span>
-                        {activeModel.supportsThinking && (
-                            <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-purple-500/15 text-purple-400 border border-purple-400/20 flex items-center gap-1">
-                                <Icon icon="mdi:brain" className="text-xs" /> 추론
+                        {CAPABILITY_BADGES.filter((b) => activeModel[b.key]).map((b) => (
+                            <span key={b.key} className={`text-[10px] font-bold px-2 py-1 rounded-full ${b.tone} flex items-center gap-1`}>
+                                <Icon icon={b.icon} className="text-xs" /> {b.label}
                             </span>
-                        )}
-                        {activeModel.supportsGrounding && (
-                            <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-cyan-500/15 text-cyan-400 border border-cyan-400/20 flex items-center gap-1">
-                                <Icon icon="mdi:google" className="text-xs" /> 검색 가능
-                            </span>
-                        )}
+                        ))}
                         {activeModel.outputTokenLimit && (
                             <span className="text-[10px] font-medium px-2 py-1 rounded-full bg-white/5 text-[var(--color-text-secondary)] opacity-70">
                                 출력 {Math.round(activeModel.outputTokenLimit / 1000)}K
@@ -704,32 +699,20 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
                         {/* Options row */}
                         <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-xs text-[var(--color-text-secondary)]">📊 기록 공유:</span>
-                            <Pressable
-                                onClick={() => setShareData(shareData === 'day' ? 'none' : 'day')}
-                                className={`px-3 py-1.5 rounded-lg text-xs font-medium ${shareData === 'day'
-                                    ? 'bg-[var(--color-primary)] text-white'
-                                    : 'bg-[var(--color-surface)] text-[var(--color-text-secondary)] border border-[var(--color-border)]'
-                                    }`}
-                            >
-                                오늘
-                            </Pressable>
-                            <Pressable
-                                onClick={() => setShareData(shareData === 'week' ? 'none' : 'week')}
-                                className={`px-3 py-1.5 rounded-lg text-xs font-medium ${shareData === 'week'
-                                    ? 'bg-[var(--color-primary)] text-white'
-                                    : 'bg-[var(--color-surface)] text-[var(--color-text-secondary)] border border-[var(--color-border)]'
-                                    }`}
-                            >
-                                이번 주
-                            </Pressable>
+                            {([['day', '오늘'], ['week', '이번 주']] as const).map(([key, label]) => (
+                                <Pressable
+                                    key={key}
+                                    onClick={() => setShareData(shareData === key ? 'none' : key)}
+                                    className={`${PILL} ${shareData === key ? 'bg-[var(--color-primary)] text-white' : PILL_IDLE}`}
+                                >
+                                    {label}
+                                </Pressable>
+                            ))}
 
                             {activeModel.supportsGrounding && (
                                 <Pressable
                                     onClick={() => setUseGrounding((v) => !v)}
-                                    className={`ml-auto px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1 ${useGrounding
-                                        ? 'bg-cyan-500/80 text-white'
-                                        : 'bg-[var(--color-surface)] text-[var(--color-text-secondary)] border border-[var(--color-border)]'
-                                        }`}
+                                    className={`ml-auto ${PILL} flex items-center gap-1 ${useGrounding ? 'bg-cyan-500/80 text-white' : PILL_IDLE}`}
                                     title="Google 검색으로 최신 정보를 근거 삼아 답합니다 (기록 저장/조회와 함께 사용 가능)"
                                 >
                                     <Icon icon="mdi:google" className="text-xs" /> 검색
@@ -738,10 +721,7 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
                             {activeModel.supportsThinking && (
                                 <Pressable
                                     onClick={() => setUseThinking((v) => !v)}
-                                    className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1 ${useThinking
-                                        ? 'bg-purple-500/80 text-white'
-                                        : 'bg-[var(--color-surface)] text-[var(--color-text-secondary)] border border-[var(--color-border)]'
-                                        } ${activeModel.supportsGrounding ? '' : 'ml-auto'}`}
+                                    className={`${PILL} flex items-center gap-1 ${useThinking ? 'bg-purple-500/80 text-white' : PILL_IDLE} ${activeModel.supportsGrounding ? '' : 'ml-auto'}`}
                                     title="모델의 추론 과정을 함께 받아 펼쳐 볼 수 있습니다"
                                 >
                                     <Icon icon="mdi:brain" className="text-xs" /> 추론
@@ -852,7 +832,7 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
                                 >
                                     <div className="flex-1 min-w-0">
                                         <p className="text-sm font-medium truncate text-[var(--color-text)]">{conv.title}</p>
-                                        <p className="text-[10px] text-[var(--color-text-secondary)] opacity-70 mt-0.5">{formatConvTime(conv.updatedAt)}</p>
+                                        <p className="text-[10px] text-[var(--color-text-secondary)] opacity-70 mt-0.5">{dateTimeShort(conv.updatedAt)}</p>
                                     </div>
                                     <button
                                         type="button"

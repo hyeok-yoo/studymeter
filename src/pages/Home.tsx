@@ -7,9 +7,10 @@ import {
     isFirstVisitToday,
     getTodayTotalStudyTime,
     getTodayStudyTimeBySubject,
-    formatDuration,
     autoFinalizeMissedDiaries
 } from '../lib/db'
+import type { Totals } from '../lib/sessions'
+import { hms } from '../lib/format'
 import StartStudyModal from '../components/StartStudyModal'
 import MorningReportCard from '../components/MorningReportCard'
 import DiaryCard from '../components/DiaryCard'
@@ -41,7 +42,7 @@ export default function Home({ settings }: HomeProps) {
     const [isFirstVisit, setIsFirstVisit] = useState(true)
     const [showModal, setShowModal] = useState(false)
     const [todayTotal, setTodayTotal] = useState(0)
-    const [subjectTimes, setSubjectTimes] = useState<Map<string, { total: number; selfStudy: number }>>(new Map())
+    const [subjectTimes, setSubjectTimes] = useState<Map<string, Totals>>(new Map())
     const randomPhrase = useMemo(() => getRandomPhrase(HOME_PHRASES), [])
 
     // ── 홈 화면 추가 버튼 상태 ─────────────────────────────────────────────
@@ -84,15 +85,11 @@ export default function Home({ settings }: HomeProps) {
     // ─────────────────────────────────────────────────────────────────────
 
     useEffect(() => {
+        // 세 조회는 서로 의존하지 않지만, 기존과 같은 순서로 상태를 채운다.
         async function loadData() {
-            const firstVisit = await isFirstVisitToday()
-            setIsFirstVisit(firstVisit)
-
-            const total = await getTodayTotalStudyTime()
-            setTodayTotal(total)
-
-            const bySubject = await getTodayStudyTimeBySubject()
-            setSubjectTimes(bySubject)
+            setIsFirstVisit(await isFirstVisitToday())
+            setTodayTotal(await getTodayTotalStudyTime())
+            setSubjectTimes(await getTodayStudyTimeBySubject())
         }
         loadData()
     }, [])
@@ -157,7 +154,7 @@ export default function Home({ settings }: HomeProps) {
 
                     <div className="flex flex-col items-center gap-5">
                         <span className="text-display text-7xl md:text-[8.5rem] font-black tabular-nums gradient-text leading-none">
-                            {formatDuration(todayTotal)}
+                            {hms(todayTotal)}
                         </span>
                         <div className="h-1.5 w-20 bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-secondary)] rounded-full"></div>
                     </div>
@@ -168,13 +165,13 @@ export default function Home({ settings }: HomeProps) {
                         animate="animate"
                         className="flex flex-wrap justify-center gap-2.5 mt-10 items-center"
                     >
-                        {Array.from(subjectTimes.entries()).map(([subject, times]) => (
+                        {Array.from(subjectTimes, ([subject, times]) => (
                             <motion.div
                                 key={subject}
                                 variants={staggerItem}
                                 className="px-4 py-2 rounded-full glass-card-elevated text-xs font-bold text-[var(--color-text)]"
                             >
-                                {subject} · {formatDuration(times.total)}
+                                {subject} · {hms(times.total)}
                             </motion.div>
                         ))}
                         {subjectTimes.size === 0 && (
