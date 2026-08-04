@@ -7,6 +7,7 @@ import type { ModelInfo } from '../lib/focusSync'
 import { useLocalFocusLab } from '../lib/useLocalFocusLab'
 import { spring, fadeRise, staggerContainer, staggerItem } from '../lib/motion'
 import Pressable from '../components/ui/Pressable'
+import Segmented from '../components/ui/Segmented'
 
 const GITHUB_URL = 'https://github.com/hyeok-yoo'
 const SPONSORS_URL = 'https://github.com/sponsors/hyeok-yoo'
@@ -45,45 +46,18 @@ const HIGHLIGHTS = [
     },
 ]
 
-// ── Segmented control — 선택 배경이 layoutId 스프링으로 이동 (Settings.tsx 와 동일 패턴) ──
-function SegmentedControl<T extends string>({
-    layoutId,
-    options,
-    value,
-    onChange,
-}: {
-    layoutId: string
-    options: Array<{ value: T; label: React.ReactNode; icon: string }>
-    value: T
-    onChange: (v: T) => void
+/** 개발자 도구의 결과/상태 박스 — 성공·실패·중립 세 가지만 쓴다. */
+const BOX_TONE = {
+    neutral: 'bg-white/5 border-white/10',
+    ok: 'bg-emerald-500/12 border-emerald-400/25',
+    error: 'bg-red-500/12 border-red-400/25',
+} as const
+
+function StatusBox({ tone = 'neutral', children }: {
+    tone?: keyof typeof BOX_TONE
+    children: React.ReactNode
 }) {
-    return (
-        <div className="relative flex gap-2 p-1 rounded-2xl bg-white/5 border border-white/10">
-            {options.map((opt) => {
-                const active = opt.value === value
-                return (
-                    <button
-                        key={opt.value}
-                        type="button"
-                        onClick={() => onChange(opt.value)}
-                        className="relative flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-black transition-colors active:scale-[0.97]"
-                    >
-                        {active && (
-                            <motion.div
-                                layoutId={layoutId}
-                                className="absolute inset-0 rounded-xl bg-indigo-500/25 border border-indigo-400/40"
-                                transition={spring.default}
-                            />
-                        )}
-                        <span className={`relative z-10 flex items-center justify-center gap-2 ${active ? 'text-indigo-300' : 'text-[var(--color-text-secondary)] opacity-60'}`}>
-                            <Icon icon={opt.icon} className="text-lg" />
-                            {opt.label}
-                        </span>
-                    </button>
-                )
-            })}
-        </div>
-    )
+    return <div className={`px-4 py-3 rounded-2xl border ${BOX_TONE[tone]}`}>{children}</div>
 }
 
 export default function DeveloperPage() {
@@ -264,13 +238,15 @@ function DeveloperTools() {
             </div>
 
             {/* 모드 전환: 온디바이스(기본) ↔ PC 서버 — segmented control */}
-            <SegmentedControl
+            <Segmented
                 layoutId="devtools-mode"
+                size="lg"
+                tone="accent"
                 value={mode}
                 onChange={switchMode}
                 options={[
-                    { value: 'local', label: '온디바이스', icon: 'mdi:cellphone' },
-                    { value: 'server', label: 'PC 서버', icon: 'mdi:server' },
+                    { value: 'local', label: <><Icon icon="mdi:cellphone" className="text-lg" />온디바이스</> },
+                    { value: 'server', label: <><Icon icon="mdi:server" className="text-lg" />PC 서버</> },
                 ]}
             />
 
@@ -446,7 +422,7 @@ function LocalLabTools() {
                         수집 정지
                     </Pressable>
                 </div>
-                <div className="px-4 py-3 rounded-2xl bg-white/5 border border-white/10">
+                <StatusBox>
                     {collecting ? (
                         <p className="text-sm font-bold text-[var(--color-text)]">
                             <span className="text-emerald-400">● 수집 중</span>
@@ -459,7 +435,7 @@ function LocalLabTools() {
                             {lab.rowCount > 0 && ` (집중 ${lab.focusedCount.toLocaleString()} / 산만 ${lab.distractedCount.toLocaleString()})`}
                         </p>
                     )}
-                </div>
+                </StatusBox>
                 {/* CSV 관리 */}
                 <div className="flex flex-wrap gap-2">
                     <Pressable
@@ -539,7 +515,7 @@ function LocalLabTools() {
                 )}
                 {lab.trainResult && !lab.training && (
                     lab.trainResult.ok ? (
-                        <div className="px-4 py-3 rounded-2xl bg-emerald-500/12 border border-emerald-400/25">
+                        <StatusBox tone="ok">
                             <p className="text-sm font-bold text-emerald-400 break-all">
                                 ✓ {lab.trainResult.name}
                                 {typeof lab.trainResult.valAccuracy === 'number' &&
@@ -548,13 +524,13 @@ function LocalLabTools() {
                                     ` (F1 ${lab.trainResult.valF1.toFixed(3)}, n=${lab.trainResult.nSamples?.toLocaleString()})`}
                                 {' — 자동 적용됨'}
                             </p>
-                        </div>
+                        </StatusBox>
                     ) : (
-                        <div className="px-4 py-3 rounded-2xl bg-red-500/12 border border-red-400/25">
+                        <StatusBox tone="error">
                             <p className="text-sm font-bold text-red-400 break-all">
                                 학습 실패 — {lab.trainResult.error ?? '알 수 없는 오류'}
                             </p>
-                        </div>
+                        </StatusBox>
                     )
                 )}
             </section>
@@ -690,7 +666,7 @@ function CollectSection({
                     수집 정지
                 </Pressable>
             </div>
-            <div className="px-4 py-3 rounded-2xl bg-white/5 border border-white/10">
+            <StatusBox>
                 {active ? (
                     <p className="text-sm font-bold text-[var(--color-text)]">
                         <span className="text-emerald-400">● 수집 중</span>
@@ -704,7 +680,7 @@ function CollectSection({
                         {output ? <span className="opacity-70"> — {output}</span> : null}
                     </p>
                 )}
-            </div>
+            </StatusBox>
         </section>
     )
 }
@@ -740,7 +716,7 @@ function TrainSection({
             </Pressable>
             {result && !running && (
                 result.ok ? (
-                    <div className="px-4 py-3 rounded-2xl bg-emerald-500/12 border border-emerald-400/25">
+                    <StatusBox tone="ok">
                         <p className="text-sm font-bold text-emerald-400 break-all">
                             ✓ {result.model ?? '모델'}
                             {result.stats ? (() => {
@@ -755,13 +731,13 @@ function TrainSection({
                             })() : ''}
                             {' — 자동 적용됨'}
                         </p>
-                    </div>
+                    </StatusBox>
                 ) : (
-                    <div className="px-4 py-3 rounded-2xl bg-red-500/12 border border-red-400/25">
+                    <StatusBox tone="error">
                         <p className="text-sm font-bold text-red-400 break-all">
                             학습 실패 — {result.error ?? '알 수 없는 오류'}
                         </p>
-                    </div>
+                    </StatusBox>
                 )
             )}
         </section>
