@@ -11,6 +11,8 @@ import { useFocusNative } from '../lib/useFocusNative'
 import { TabletCamera } from '../components/TabletCamera'
 import { HelpButton } from '../components/HelpButton'
 import DevAccessModal from '../components/DevAccessModal'
+import { ChangelogHistoryModal } from '../components/ChangelogModal'
+import { APP_VERSION } from '../lib/changelog'
 import HaSettingsSection from '../components/HaSettingsSection'
 import { isOwner } from '../lib/telemetry'
 import { fetchGeminiModels, type GeminiModel } from '../lib/gemini'
@@ -186,6 +188,7 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
 
     // 숨겨진 개발자 진입: 버전명 5회 탭
     const [showDevAccess, setShowDevAccess] = useState(false)
+    const [showChangelog, setShowChangelog] = useState(false)
     const [devAdmin, setDevAdmin] = useState(isOwner())
     const versionTapCount = useRef(0)
     const versionTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -1628,6 +1631,25 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                         </Pressable>
                     )}
 
+                    <Pressable
+                        onClick={() => setShowChangelog(true)}
+                        pressScale={0.98}
+                        className="w-full flex items-center justify-between px-5 py-3.5 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10"
+                    >
+                        <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white flex-shrink-0">
+                                <Icon icon="mdi:history" className="text-base" />
+                            </div>
+                            <div className="text-left">
+                                <p className="text-sm font-bold text-[var(--color-text)] leading-tight">업데이트 내역</p>
+                                <p className="text-[11px] font-bold text-[var(--color-text-secondary)] leading-tight">
+                                    v{APP_VERSION}까지 새로워진 점 모두 보기
+                                </p>
+                            </div>
+                        </div>
+                        <Icon icon="mdi:chevron-right" className="text-xl text-[var(--color-text-secondary)] opacity-50" />
+                    </Pressable>
+
                     <div className="text-center flex flex-col items-center gap-0.5">
                         <p
                             onClick={handleVersionTap}
@@ -1657,6 +1679,8 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                     />
                 )}
             </AnimatePresence>
+
+            <ChangelogHistoryModal open={showChangelog} onClose={() => setShowChangelog(false)} />
         </motion.div>
     )
 }

@@ -2,14 +2,17 @@
  * changelog.ts — 앱 버전 + 변경 이력 데이터.
  *
  * 업데이트 후 최초 실행(PWA·APK 포함) 시 ChangelogModal 이 최신 항목을 보여준다.
- * 새 릴리스를 낼 때: APP_VERSION 을 올리고 CHANGELOG 맨 앞에 항목을 추가한다.
- * (package.json 의 version 과 맞춰 두면 관리가 편하다.)
+ * 이력은 지우지 않고 계속 쌓는다 — 설정 → "업데이트 내역"에서 언제든 예전 버전까지
+ * 스크롤해 볼 수 있다.
+ *
+ * 새 릴리스를 낼 때 손댈 곳은 두 군데뿐:
+ *   1. CHANGELOG **맨 앞**에 새 항목을 추가한다 (기존 항목은 절대 지우지 않는다).
+ *   2. package.json 의 version 을 같은 값으로 올린다.
+ * APP_VERSION 은 CHANGELOG[0] 에서 자동으로 따오므로 따로 고칠 필요가 없고,
+ * 개발 모드에서는 package.json 과 어긋나면 콘솔에 경고가 뜬다.
  */
 
 import { db } from './db';
-
-/** 현재 앱 버전. 이 값이 바뀐 뒤 최초 실행 시 체인지로그가 뜬다. */
-export const APP_VERSION = '1.7.0';
 
 export interface ChangelogItem {
     /** iconify 아이콘 (mdi:*) — 없으면 기본 점 표시 */
@@ -24,7 +27,7 @@ export interface ChangelogEntry {
     items: ChangelogItem[];
 }
 
-/** 최신이 맨 앞. */
+/** 최신이 맨 앞. 아래로 갈수록 예전 버전 — 이력은 지우지 말고 계속 쌓는다. */
 export const CHANGELOG: ChangelogEntry[] = [
     {
         version: '1.7.0',
@@ -54,6 +57,20 @@ export const CHANGELOG: ChangelogEntry[] = [
         ],
     },
 ];
+
+/**
+ * 현재 앱 버전 = 이력 맨 앞 항목의 버전.
+ * 손으로 두 번 적으면 반드시 어긋나므로 (실제로 1.7 릴리스에서 어긋났다) 파생시킨다.
+ */
+export const APP_VERSION: string = CHANGELOG[0]?.version ?? '0.0.0';
+
+// 빌드에 박히는 package.json 버전과 어긋나면 개발 중에 바로 알아채도록 경고한다.
+if (import.meta.env.DEV && typeof __APP_VERSION__ === 'string' && __APP_VERSION__ !== APP_VERSION) {
+    console.warn(
+        `[changelog] 버전 불일치: package.json = ${__APP_VERSION__}, CHANGELOG[0] = ${APP_VERSION}. ` +
+        '릴리스할 때 두 값을 맞춰 주세요.',
+    );
+}
 
 const LAST_SEEN_KEY = 'studymeter_last_seen_version';
 
