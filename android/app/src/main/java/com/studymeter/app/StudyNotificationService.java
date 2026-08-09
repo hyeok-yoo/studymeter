@@ -27,6 +27,24 @@ public class StudyNotificationService extends Service {
     public static final String CHANNEL_ID = "study_session_channel";
     private static final int NOTIFICATION_ID = 1001;
 
+    /**
+     * 세션 종료 신호 알림.
+     *
+     * 나우바 알림은 세션이 끝나면 "사라질" 뿐 새 알림이 오지 않는다. 삼성 "모드 및 루틴"의
+     * 알림 조건은 알림이 **도착할 때만** 발동하므로, 켜기는 자동인데 끄기는 수동이 된다.
+     * 그래서 세션이 끝나는 순간 제목이 고정된 알림을 한 번 띄워 루틴이 잡을 수 있게 한다.
+     *
+     * 제목은 반드시 나우바 알림 텍스트와 겹치지 않아야 한다 — 겹치면 끄기 신호가 켜기 루틴을
+     * 다시 발동시킨다. 나우바는 "{과목} {시간}" / "집중 중" / "일시정지" 를 쓰므로
+     * "공부 세션 종료" 는 안전하다.
+     */
+    private static final String END_CHANNEL_ID = "study_session_end_channel";
+    private static final int END_NOTIFICATION_ID = 1002;
+    /** 루틴이 잡고 난 뒤 알림창에 남지 않도록 스스로 사라지는 시간. */
+    private static final long END_NOTIFICATION_TIMEOUT_MS = 10_000L;
+    /** 모드 및 루틴에서 "특정 단어가 포함된 알림" 조건에 넣을 문구. */
+    public static final String END_SIGNAL_TITLE = "공부 세션 종료";
+
     // 알림 액션 영속화 저장소 (WebView가 frozen일 때 소급 반영용)
     public static final String PENDING_PREFS = "StudyMeterPendingActions";
     public static final String PENDING_KEY = "queue";
@@ -40,6 +58,7 @@ public class StudyNotificationService extends Service {
     private long baseTotalStudyMs = 0;      // 현재 세션을 제외한 오늘 총 누적 공부 시간
     private long baseSubjectStudyMs = 0;    // 현재 세션을 제외한 현재 과목 누적 공부 시간
     private long countdownDurationMs = 0;   // 테스트(카운트다운) 총 시간. 0이면 일반 스톱워치 모드
+    private boolean sessionStarted = false; // 세션이 실제로 시작됐는지 — 종료 신호를 띄울지 판단
 
     @Override
     public void onCreate() {
@@ -72,6 +91,7 @@ public class StudyNotificationService extends Service {
             countdownDurationMs = intent.getLongExtra("countdownMs", 0);
 
             ensureNotificationChannel();
+            sessionStarted = true;
             long initElapsed = System.currentTimeMillis() - sessionStartTime;
             startForegroundNotification(initElapsed);
             startUpdating();
@@ -98,6 +118,7 @@ public class StudyNotificationService extends Service {
             if (mgr != null && mgr.getNotificationChannel(CHANNEL_ID) == null) {
                 ensureNotificationChannel();
             }
+            sessionStarted = true;
             long initElapsed = System.currentTimeMillis() - sessionStartTime;
             startForegroundNotification(initElapsed);
 
@@ -414,6 +435,50 @@ public class StudyNotificationService extends Service {
         }
     }
 
+    /**
+     * 세션 종료 신호를 한 번 띄운다. 나우바와 별개의 알림·채널이라 "새 알림 도착"으로 잡힌다.
+     *
+     * 무음·저중요도이고 {@link #END_NOTIFICATION_TIMEOUT_MS} 뒤 시스템이 알아서 지운다
+     * (서비스가 이미 죽은 뒤라 Handler 로는 못 지우므로 setTimeoutAfter 에 맡긴다).
+     * 루틴을 안 쓰는 사람에게도 "오늘 얼마 했는지" 한 줄 요약이 되도록 본문을 채운다.
+     */
+    private void postSessionEndSignal() {
+        NotificationManager manager = getSystemService(NotificationManager.class);
+        if (manager == null) return;
+
+        try {
+            NotificationChannel channel = new NotificationChannel(
+                    END_CHANNEL_ID,
+                    "공부 세션 종료 신호",
+                    NotificationManager.IMPORTANCE_LOW);
+            channel.setDescription("세션이 끝날 때 한 번 울리는 알림입니다. '모드 및 루틴'에서 공부 모드를 자동으로 끄는 데 씁니다.");
+            channel.setShowBadge(false);
+            channel.setSound(null, null);
+            channel.enableVibration(false);
+            manager.createNotificationChannel(channel);
+
+            // 일시정지 상태로 끝났다면 멈춘 시각까지만 센다.
+            long at = (!isRunning && pauseStartTime > 0) ? pauseStartTime : System.currentTimeMillis();
+            long sessionElapsed = Math.max(0, at - sessionStartTime);
+            long totalToday = Math.max(0, baseTotalStudyMs + sessionElapsed);
+
+            Notification notification = new Notification.Builder(this, END_CHANNEL_ID)
+                    .setContentTitle(END_SIGNAL_TITLE)
+                    .setContentText("세션 " + formatElapsed(sessionElapsed) + " · 오늘 " + formatElapsed(totalToday))
+                    .setSmallIcon(R.drawable.ic_stat_studymeter)
+                    .setColor(Color.parseColor("#6366f1"))
+                    .setAutoCancel(true)
+                    .setTimeoutAfter(END_NOTIFICATION_TIMEOUT_MS)
+                    .build();
+
+            manager.notify(END_NOTIFICATION_ID, notification);
+            Log.d(TAG, "Session end signal posted");
+        } catch (Exception e) {
+            // 신호는 부가 기능이다 — 실패해도 세션 종료 자체를 막지 않는다.
+            Log.e(TAG, "postSessionEndSignal failed", e);
+        }
+    }
+
     private String formatElapsed(long elapsed) {
         if (elapsed < 0)
             elapsed = 0;
@@ -431,6 +496,12 @@ public class StudyNotificationService extends Service {
     @Override
     public void onDestroy() {
         stopUpdating();
+        // 종료 경로가 둘이다: JS 의 stopNowBar() 는 stopService() 라 onStartCommand 를 타지 않고,
+        // 알림 "종료" 버튼은 STOP_SESSION → stopSelf() 로 온다. 둘 다 여기로 모이므로 신호는 여기서 띄운다.
+        if (sessionStarted) {
+            sessionStarted = false;
+            postSessionEndSignal();
+        }
         Log.d(TAG, "StudyNotificationService destroyed");
         super.onDestroy();
     }
