@@ -54,6 +54,10 @@ function App() {
       // 로컬 DB 읽기 완료 즉시 로딩 해제 → Firebase 네트워크 대기 없이 UI 진입
       setLoading(false);
 
+      // 세션 종료 신호는 WebView 없이 네이티브가 판단하므로, 설정값을 미리 밀어 넣어 둔다.
+      // (백업 복원처럼 설정만 바뀐 경우 네이티브 쪽 기본값과 어긋날 수 있다.)
+      NativeBridge.setEndSignalEnabled(s.endSignalEnabled ?? true);
+
       // 이하 Firebase/텔레메트리는 백그라운드에서 처리 (UI 블로킹 없음)
       let tel: Awaited<typeof telemetryPromise>
       try {

@@ -153,6 +153,11 @@ export interface Settings {
     evalTags?: EvalTag[];
     morningReportHour?: number;      // 아침 리포트 알림 시각 (0-23). 기본 7
     morningReportEnabled?: boolean;  // 아침 리포트 알림. 기본 true
+    /**
+     * 세션 종료 시 "공부 세션 종료" 알림을 한 번 띄운다 (Android 전용). 기본 true.
+     * 오늘 누적 요약이자, 자동화 도구(Tasker·MacroDroid 등)가 세션 종료를 잡는 훅이다.
+     */
+    endSignalEnabled?: boolean;
     /** D-day 목록 (undefined = 기본 프리셋 사용). 개수·날짜 자유 커스텀. */
     ddays?: Dday[];
     /** 테스트 타이머 프리셋 (undefined = DEFAULT_TIMER_PRESETS 사용) */

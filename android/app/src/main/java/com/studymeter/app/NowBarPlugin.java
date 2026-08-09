@@ -146,6 +146,25 @@ public class NowBarPlugin extends Plugin {
         }
     }
 
+    /**
+     * 세션 종료 신호 알림 on/off. 서비스가 죽는 시점(onDestroy)에는 WebView 를 부를 수 없으므로
+     * 설정이 바뀔 때마다 SharedPreferences 에 미리 써 둔다.
+     */
+    @PluginMethod
+    public void setEndSignalEnabled(PluginCall call) {
+        Boolean enabled = call.getBoolean("enabled", true);
+        try {
+            getContext().getSharedPreferences(StudyNotificationService.SIGNAL_PREFS, Context.MODE_PRIVATE)
+                    .edit()
+                    .putBoolean(StudyNotificationService.END_SIGNAL_KEY, enabled != null ? enabled : true)
+                    .apply();
+            call.resolve();
+        } catch (Exception e) {
+            Log.e(TAG, "setEndSignalEnabled failed", e);
+            call.reject("Failed to persist end signal setting: " + e.getMessage());
+        }
+    }
+
     @PluginMethod
     public void checkPermissions(PluginCall call) {
         JSObject result = new JSObject();

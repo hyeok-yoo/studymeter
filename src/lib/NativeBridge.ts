@@ -6,6 +6,7 @@ interface NowBarPlugin {
     startNowBar(options: { subject: string; startTime: number; isRunning: boolean; totalStudyMs: number; subjectStudyMs: number; countdownMs: number }): Promise<void>;
     stopNowBar(): Promise<void>;
     updateNowBar(options: { subject: string; startTime: number; isRunning: boolean; totalStudyMs: number; subjectStudyMs: number; countdownMs: number }): Promise<void>;
+    setEndSignalEnabled(options: { enabled: boolean }): Promise<void>;
     checkPermissions(): Promise<{ display: PermissionState }>;
     requestPermissions(): Promise<{ display: PermissionState }>;
     consumePendingActions(): Promise<{ actions: { action: string; at: number }[] }>;
@@ -130,6 +131,21 @@ export const NativeBridge = {
             await NowBar.updateNowBar({ subject, startTime, isRunning, totalStudyMs, subjectStudyMs, countdownMs });
         } catch (e) {
             console.error('UpdateNowBar failed', e);
+        }
+    },
+
+    /**
+     * 세션 종료 신호 알림 on/off 를 네이티브에 미리 저장한다.
+     *
+     * 세션이 끝나는 시점엔 WebView 가 이미 얼어 있거나 죽어 있을 수 있어 그때 물어볼 수 없다.
+     * 설정이 바뀔 때와 앱이 뜰 때 한 번씩 밀어 넣어 두면 네이티브가 알아서 읽는다.
+     */
+    async setEndSignalEnabled(enabled: boolean) {
+        if (!this.isNative()) return;
+        try {
+            await NowBar.setEndSignalEnabled({ enabled });
+        } catch (e) {
+            console.error('SetEndSignalEnabled failed', e);
         }
     },
 

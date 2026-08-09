@@ -15,6 +15,7 @@ import { ChangelogHistoryModal } from '../components/ChangelogModal'
 import { APP_VERSION } from '../lib/changelog'
 import HaSettingsSection from '../components/HaSettingsSection'
 import { isOwner } from '../lib/telemetry'
+import { NativeBridge } from '../lib/NativeBridge'
 import { fetchGeminiModels, type GeminiModel } from '../lib/gemini'
 import { PROMPT_LABELS, DEFAULT_PROMPTS, getPrompt, type PromptKey } from '../lib/ai/prompts'
 import { getModelList, isModelExhausted } from '../lib/ai/router'
@@ -162,6 +163,7 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
     const [advancedMode, setAdvancedMode] = useState(!!settings.advancedMode)
     const [aiAmbientEnabled, setAiAmbientEnabled] = useState(settings.aiAmbientEnabled ?? true)
     const [morningReportEnabled, setMorningReportEnabled] = useState(settings.morningReportEnabled ?? true)
+    const [endSignalEnabled, setEndSignalEnabled] = useState(settings.endSignalEnabled ?? true)
     const [aiRoleModels, setAiRoleModels] = useState<Partial<Record<AiRole, string>>>(settings.aiRoleModels ?? {})
     const [aiGroundingDefault, setAiGroundingDefault] = useState(settings.aiGroundingDefault !== false)
     const [aiThinkingLevels, setAiThinkingLevels] = useState<Partial<Record<AiRole, AiThinkingLevel>>>(settings.aiThinkingLevels ?? {})
@@ -333,6 +335,13 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
     const handleToggleMorningReport = () => {
         setMorningReportEnabled(!morningReportEnabled)
         patch({ morningReportEnabled: !morningReportEnabled })
+    }
+
+    const handleToggleEndSignal = () => {
+        const next = !endSignalEnabled
+        setEndSignalEnabled(next)
+        patch({ endSignalEnabled: next })
+        NativeBridge.setEndSignalEnabled(next)
     }
 
     const handleToggleGrounding = () => {
@@ -982,6 +991,22 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                             </div>
                             <Toggle enabled={morningReportEnabled} onChange={handleToggleMorningReport} />
                         </Row>
+
+                        {NativeBridge.isNative() && (
+                            <Row>
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2">
+                                        <label className="text-sm font-medium text-[var(--color-text)]">세션 종료 알림</label>
+                                        <HelpButton title="세션 종료 알림" items={[
+                                            { description: '공부를 끝내면 "공부 세션 종료 · 세션 1:12:30 · 오늘 4:05:12" 알림이 한 번 뜹니다. 무음이고 10초 뒤 저절로 사라집니다.' },
+                                            { title: '자동화에 쓰기', description: 'Tasker·MacroDroid 같은 도구에서 "공부 세션 종료"라는 단어가 포함된 알림을 조건으로 걸면, 세션이 끝나는 순간 앱 차단을 풀거나 다른 동작을 이어붙일 수 있습니다.' },
+                                        ]} />
+                                    </div>
+                                    <p className="text-xs text-[var(--color-text-secondary)] mt-1">세션이 끝날 때 오늘 누적을 한 줄로 알려줍니다. (무음 · 10초 후 자동 사라짐)</p>
+                                </div>
+                                <Toggle enabled={endSignalEnabled} onChange={handleToggleEndSignal} />
+                            </Row>
+                        )}
 
                         <Row>
                             <div className="flex-1 min-w-0">

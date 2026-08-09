@@ -42,8 +42,15 @@ public class StudyNotificationService extends Service {
     private static final int END_NOTIFICATION_ID = 1002;
     /** 루틴이 잡고 난 뒤 알림창에 남지 않도록 스스로 사라지는 시간. */
     private static final long END_NOTIFICATION_TIMEOUT_MS = 10_000L;
-    /** 모드 및 루틴에서 "특정 단어가 포함된 알림" 조건에 넣을 문구. */
+    /** 자동화 도구에서 "특정 단어가 포함된 알림" 조건에 넣을 문구. */
     public static final String END_SIGNAL_TITLE = "공부 세션 종료";
+
+    /**
+     * 종료 신호 on/off (설정 → 알림). JS 가 NowBar.setEndSignalEnabled 로 써 두면
+     * 서비스가 죽는 시점에 읽는다 — 종료 경로가 WebView 없이도 도니까 필드가 아니라 prefs 다.
+     */
+    public static final String SIGNAL_PREFS = "StudyMeterSignals";
+    public static final String END_SIGNAL_KEY = "endSignalEnabled";
 
     // 알림 액션 영속화 저장소 (WebView가 frozen일 때 소급 반영용)
     public static final String PENDING_PREFS = "StudyMeterPendingActions";
@@ -500,7 +507,10 @@ public class StudyNotificationService extends Service {
         // 알림 "종료" 버튼은 STOP_SESSION → stopSelf() 로 온다. 둘 다 여기로 모이므로 신호는 여기서 띄운다.
         if (sessionStarted) {
             sessionStarted = false;
-            postSessionEndSignal();
+            // 설정을 켠 적이 없으면 기본 on.
+            boolean enabled = getSharedPreferences(SIGNAL_PREFS, Context.MODE_PRIVATE)
+                    .getBoolean(END_SIGNAL_KEY, true);
+            if (enabled) postSessionEndSignal();
         }
         Log.d(TAG, "StudyNotificationService destroyed");
         super.onDestroy();
