@@ -154,8 +154,11 @@ export interface Settings {
     morningReportHour?: number;      // 아침 리포트 알림 시각 (0-23). 기본 7
     morningReportEnabled?: boolean;  // 아침 리포트 알림. 기본 true
     /**
-     * 세션 종료 시 "공부 세션 종료" 알림을 한 번 띄운다 (Android 전용). 기본 true.
-     * 오늘 누적 요약이자, 자동화 도구(Tasker·MacroDroid 등)가 세션 종료를 잡는 훅이다.
+     * 세션 시작·종료 때 "공부 세션 시작" / "공부 세션 종료" 알림을 한 번씩 띄운다
+     * (Android 전용). 기본 true.
+     *
+     * 나우바는 1초마다 갱신돼 자동화 트리거로 못 쓴다 — 이 신호가 그 대역이다.
+     * 자동화를 안 쓰더라도 종료 알림이 오늘 누적 요약 역할을 한다.
      */
     endSignalEnabled?: boolean;
     /** D-day 목록 (undefined = 기본 프리셋 사용). 개수·날짜 자유 커스텀. */

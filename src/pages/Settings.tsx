@@ -996,13 +996,14 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                             <Row>
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2">
-                                        <label className="text-sm font-medium text-[var(--color-text)]">세션 종료 알림</label>
-                                        <HelpButton title="세션 종료 알림" items={[
-                                            { description: '공부를 끝내면 "공부 세션 종료 · 세션 1:12:30 · 오늘 4:05:12" 알림이 한 번 뜹니다. 무음이고 10초 뒤 저절로 사라집니다.' },
-                                            { title: '자동화에 쓰기', description: 'Tasker·MacroDroid 같은 도구에서 "공부 세션 종료"라는 단어가 포함된 알림을 조건으로 걸면, 세션이 끝나는 순간 앱 차단을 풀거나 다른 동작을 이어붙일 수 있습니다.' },
+                                        <label className="text-sm font-medium text-[var(--color-text)]">세션 시작·종료 신호</label>
+                                        <HelpButton title="세션 시작·종료 신호" items={[
+                                            { description: '공부를 시작하면 "공부 세션 시작", 끝내면 "공부 세션 종료 · 세션 1:12:30 · 오늘 4:05:12" 알림이 한 번씩 뜹니다. 무음이고 10초 뒤 저절로 사라집니다.' },
+                                            { title: '자동화에 쓰기', description: 'MacroDroid·Tasker에서 "공부 세션 시작" / "공부 세션 종료"가 포함된 알림을 각각 조건으로 걸면, 세션에 맞춰 앱 차단을 걸고 풀 수 있습니다.' },
+                                            { title: '왜 따로 있나요?', description: '공부 중에 뜨는 타이머 알림은 1초마다 갱신되기 때문에 자동화 조건으로 쓰면 매크로가 초당 한 번씩 반복 실행됩니다. 이 신호는 시작·종료 순간에 딱 한 번만 뜹니다.' },
                                         ]} />
                                     </div>
-                                    <p className="text-xs text-[var(--color-text-secondary)] mt-1">세션이 끝날 때 오늘 누적을 한 줄로 알려줍니다. (무음 · 10초 후 자동 사라짐)</p>
+                                    <p className="text-xs text-[var(--color-text-secondary)] mt-1">자동화 도구용 1회성 알림. 종료 알림은 오늘 누적 요약도 됩니다. (무음 · 10초 후 자동 사라짐)</p>
                                 </div>
                                 <Toggle enabled={endSignalEnabled} onChange={handleToggleEndSignal} />
                             </Row>

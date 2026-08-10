@@ -28,25 +28,30 @@ public class StudyNotificationService extends Service {
     private static final int NOTIFICATION_ID = 1001;
 
     /**
-     * 세션 종료 신호 알림.
+     * 세션 시작·종료 신호 알림 — 자동화 도구(MacroDroid·Tasker 등)가 잡을 "사건" 두 개.
      *
-     * 나우바 알림은 세션이 끝나면 "사라질" 뿐 새 알림이 오지 않는다. 삼성 "모드 및 루틴"의
-     * 알림 조건은 알림이 **도착할 때만** 발동하므로, 켜기는 자동인데 끄기는 수동이 된다.
-     * 그래서 세션이 끝나는 순간 제목이 고정된 알림을 한 번 띄워 루틴이 잡을 수 있게 한다.
+     * 나우바 알림은 이 용도로 쓸 수 없다. 1초마다 갱신되며 다시 게시되기 때문에
+     * "알림 수신" 트리거가 초당 한 번씩 발동해 매크로가 무한히 재실행된다.
+     * 그리고 세션이 끝날 때는 "사라질" 뿐 새 알림이 오지 않아 끄는 쪽 트리거가 아예 없다.
      *
-     * 제목은 반드시 나우바 알림 텍스트와 겹치지 않아야 한다 — 겹치면 끄기 신호가 켜기 루틴을
-     * 다시 발동시킨다. 나우바는 "{과목} {시간}" / "집중 중" / "일시정지" 를 쓰므로
-     * "공부 세션 종료" 는 안전하다.
+     * 그래서 시작·종료 순간에만 딱 한 번 게시되는 별도 알림을 둔다. 제목이 고정이라
+     * "특정 단어가 포함된 알림" 조건으로 정확히 잡히고, 갱신되지 않으니 반복 발동이 없다.
+     *
+     * 두 제목은 서로, 그리고 나우바 텍스트("{과목} {시간}" / "집중 중" / "일시정지")와
+     * 겹치면 안 된다. 겹치면 한쪽 신호가 반대쪽 매크로를 발동시킨다.
      */
-    private static final String END_CHANNEL_ID = "study_session_end_channel";
+    private static final String SIGNAL_CHANNEL_ID = "study_session_signal_channel";
+    /** 종료 신호만 있던 시절의 채널 — 알림 설정에 유령 항목으로 남지 않도록 지운다. */
+    private static final String LEGACY_END_CHANNEL_ID = "study_session_end_channel";
+    private static final int START_NOTIFICATION_ID = 1003;
     private static final int END_NOTIFICATION_ID = 1002;
-    /** 루틴이 잡고 난 뒤 알림창에 남지 않도록 스스로 사라지는 시간. */
-    private static final long END_NOTIFICATION_TIMEOUT_MS = 10_000L;
-    /** 자동화 도구에서 "특정 단어가 포함된 알림" 조건에 넣을 문구. */
+    /** 자동화 도구가 잡고 난 뒤 알림창에 남지 않도록 스스로 사라지는 시간. */
+    private static final long SIGNAL_TIMEOUT_MS = 10_000L;
+    public static final String START_SIGNAL_TITLE = "공부 세션 시작";
     public static final String END_SIGNAL_TITLE = "공부 세션 종료";
 
     /**
-     * 종료 신호 on/off (설정 → 알림). JS 가 NowBar.setEndSignalEnabled 로 써 두면
+     * 신호 알림 on/off (설정 → 알림). JS 가 NowBar.setEndSignalEnabled 로 써 두면
      * 서비스가 죽는 시점에 읽는다 — 종료 경로가 WebView 없이도 도니까 필드가 아니라 prefs 다.
      */
     public static final String SIGNAL_PREFS = "StudyMeterSignals";
@@ -98,10 +103,13 @@ public class StudyNotificationService extends Service {
             countdownDurationMs = intent.getLongExtra("countdownMs", 0);
 
             ensureNotificationChannel();
+            // 시작 신호는 세션당 한 번만 — START 가 다시 와도 이미 켜져 있으면 보내지 않는다.
+            boolean firstStart = !sessionStarted;
             sessionStarted = true;
             long initElapsed = System.currentTimeMillis() - sessionStartTime;
             startForegroundNotification(initElapsed);
             startUpdating();
+            if (firstStart && signalsEnabled()) postSessionStartSignal();
 
         } else if ("UPDATE".equals(action)) {
             isRunning = intent.getBooleanExtra("isRunning", true);
@@ -442,48 +450,67 @@ public class StudyNotificationService extends Service {
         }
     }
 
+    /** 설정을 켠 적이 없으면 기본 on. */
+    private boolean signalsEnabled() {
+        return getSharedPreferences(SIGNAL_PREFS, Context.MODE_PRIVATE).getBoolean(END_SIGNAL_KEY, true);
+    }
+
     /**
-     * 세션 종료 신호를 한 번 띄운다. 나우바와 별개의 알림·채널이라 "새 알림 도착"으로 잡힌다.
+     * 시작·종료 신호를 한 번 띄운다. 나우바와 별개의 알림·채널이라 "새 알림 도착"으로 잡히고,
+     * 갱신되지 않으므로 자동화 트리거가 딱 한 번만 발동한다.
      *
-     * 무음·저중요도이고 {@link #END_NOTIFICATION_TIMEOUT_MS} 뒤 시스템이 알아서 지운다
-     * (서비스가 이미 죽은 뒤라 Handler 로는 못 지우므로 setTimeoutAfter 에 맡긴다).
-     * 루틴을 안 쓰는 사람에게도 "오늘 얼마 했는지" 한 줄 요약이 되도록 본문을 채운다.
+     * 무음·저중요도이고 {@link #SIGNAL_TIMEOUT_MS} 뒤 시스템이 알아서 지운다
+     * (종료 신호는 서비스가 이미 죽은 뒤라 Handler 로는 못 지운다 — setTimeoutAfter 에 맡긴다).
      */
-    private void postSessionEndSignal() {
+    private void postSignal(int id, String title, String body) {
         NotificationManager manager = getSystemService(NotificationManager.class);
         if (manager == null) return;
 
         try {
+            // 종료 신호만 있던 시절의 채널이 남아 있으면 정리한다.
+            if (manager.getNotificationChannel(LEGACY_END_CHANNEL_ID) != null) {
+                manager.deleteNotificationChannel(LEGACY_END_CHANNEL_ID);
+            }
+
             NotificationChannel channel = new NotificationChannel(
-                    END_CHANNEL_ID,
-                    "공부 세션 종료 신호",
+                    SIGNAL_CHANNEL_ID,
+                    "공부 세션 시작·종료 신호",
                     NotificationManager.IMPORTANCE_LOW);
-            channel.setDescription("세션이 끝날 때 한 번 울리는 알림입니다. '모드 및 루틴'에서 공부 모드를 자동으로 끄는 데 씁니다.");
+            channel.setDescription("세션이 시작·종료될 때 한 번씩 뜨는 알림입니다. MacroDroid·Tasker 등에서 앱 차단을 자동으로 걸고 푸는 데 씁니다.");
             channel.setShowBadge(false);
             channel.setSound(null, null);
             channel.enableVibration(false);
             manager.createNotificationChannel(channel);
 
-            // 일시정지 상태로 끝났다면 멈춘 시각까지만 센다.
-            long at = (!isRunning && pauseStartTime > 0) ? pauseStartTime : System.currentTimeMillis();
-            long sessionElapsed = Math.max(0, at - sessionStartTime);
-            long totalToday = Math.max(0, baseTotalStudyMs + sessionElapsed);
-
-            Notification notification = new Notification.Builder(this, END_CHANNEL_ID)
-                    .setContentTitle(END_SIGNAL_TITLE)
-                    .setContentText("세션 " + formatElapsed(sessionElapsed) + " · 오늘 " + formatElapsed(totalToday))
+            Notification notification = new Notification.Builder(this, SIGNAL_CHANNEL_ID)
+                    .setContentTitle(title)
+                    .setContentText(body)
                     .setSmallIcon(R.drawable.ic_stat_studymeter)
                     .setColor(Color.parseColor("#6366f1"))
                     .setAutoCancel(true)
-                    .setTimeoutAfter(END_NOTIFICATION_TIMEOUT_MS)
+                    .setTimeoutAfter(SIGNAL_TIMEOUT_MS)
                     .build();
 
-            manager.notify(END_NOTIFICATION_ID, notification);
-            Log.d(TAG, "Session end signal posted");
+            manager.notify(id, notification);
+            Log.d(TAG, "Signal posted: " + title);
         } catch (Exception e) {
-            // 신호는 부가 기능이다 — 실패해도 세션 종료 자체를 막지 않는다.
-            Log.e(TAG, "postSessionEndSignal failed", e);
+            // 신호는 부가 기능이다 — 실패해도 세션 시작·종료 자체를 막지 않는다.
+            Log.e(TAG, "postSignal failed: " + title, e);
         }
+    }
+
+    private void postSessionStartSignal() {
+        postSignal(START_NOTIFICATION_ID, START_SIGNAL_TITLE, currentSubject + " 시작");
+    }
+
+    /** 루틴을 안 쓰는 사람에게도 의미가 있도록 오늘 누적을 한 줄로 담는다. */
+    private void postSessionEndSignal() {
+        // 일시정지 상태로 끝났다면 멈춘 시각까지만 센다.
+        long at = (!isRunning && pauseStartTime > 0) ? pauseStartTime : System.currentTimeMillis();
+        long sessionElapsed = Math.max(0, at - sessionStartTime);
+        long totalToday = Math.max(0, baseTotalStudyMs + sessionElapsed);
+        postSignal(END_NOTIFICATION_ID, END_SIGNAL_TITLE,
+                "세션 " + formatElapsed(sessionElapsed) + " · 오늘 " + formatElapsed(totalToday));
     }
 
     private String formatElapsed(long elapsed) {
@@ -507,10 +534,7 @@ public class StudyNotificationService extends Service {
         // 알림 "종료" 버튼은 STOP_SESSION → stopSelf() 로 온다. 둘 다 여기로 모이므로 신호는 여기서 띄운다.
         if (sessionStarted) {
             sessionStarted = false;
-            // 설정을 켠 적이 없으면 기본 on.
-            boolean enabled = getSharedPreferences(SIGNAL_PREFS, Context.MODE_PRIVATE)
-                    .getBoolean(END_SIGNAL_KEY, true);
-            if (enabled) postSessionEndSignal();
+            if (signalsEnabled()) postSessionEndSignal();
         }
         Log.d(TAG, "StudyNotificationService destroyed");
         super.onDestroy();
