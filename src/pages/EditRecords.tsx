@@ -70,6 +70,8 @@ export default function EditRecords({ settings }: EditRecordsProps) {
     // Overlap warning state
     const [showOverlapWarning, setShowOverlapWarning] = useState(false)
     const [overlappingSession, setOverlappingSession] = useState<StudySession | null>(null)
+    /** 기존 세션의 종료 시간을 앞당겨 겹침을 풀 수 있는지 (기존 세션이 먼저 시작했을 때만) */
+    const [canTrimOverlap, setCanTrimOverlap] = useState(true)
     const [pendingSubmit, setPendingSubmit] = useState<{
         startTime: number;
         endTime: number;
@@ -229,8 +231,11 @@ export default function EditRecords({ settings }: EditRecordsProps) {
         // Check for overlapping session (전체 범위 겹침 확인)
         const overlapping = await findOverlappingSession(selectedDate, startTime, editingSessionId ?? undefined, endTime)
         if (overlapping) {
-            // timeRange 모드상으로 직접 입력된 세션이면 경고만 표시
+            // timeRange 모드상으로 직접 입력된 세션이면 경고만 표시.
+            // 단, 기존 세션이 새 세션보다 늦게 시작했다면 "종료 시간을 앞당기는" 조정이
+            // 성립하지 않는다(길이가 음수가 된다) — 그때는 조정을 제안하지 않는다.
             setOverlappingSession(overlapping)
+            setCanTrimOverlap(overlapping.startTime < startTime)
             setPendingSubmit({ startTime, endTime, duration })
             setShowOverlapWarning(true)
             return
@@ -286,8 +291,13 @@ export default function EditRecords({ settings }: EditRecordsProps) {
 
     const handleOverlapConfirm = async () => {
         if (overlappingSession && pendingSubmit) {
-            // Adjust the overlapping session's end time to 1ms before the new session starts
-            await adjustOverlappingSession(overlappingSession.id!, pendingSubmit.startTime - 1)
+            // Adjust the overlapping session's end time to 1ms before the new session starts.
+            // 조정이 거절되면(음수 길이가 될 상황) 겹침이 그대로 남으므로 새 세션도 저장하지 않는다.
+            const trimmed = await adjustOverlappingSession(overlappingSession.id!, pendingSubmit.startTime - 1)
+            if (!trimmed) {
+                setCanTrimOverlap(false)
+                return
+            }
             await saveSession(pendingSubmit.startTime, pendingSubmit.endTime, pendingSubmit.duration)
         }
         setShowOverlapWarning(false)
@@ -782,7 +792,9 @@ export default function EditRecords({ settings }: EditRecordsProps) {
                     </div>
 
                     <p className="text-sm text-[var(--color-text-secondary)]">
-                        계속하면 기존 세션의 종료 시간이 새 세션 시작 시간 직전으로 자동 조정됩니다.
+                        {canTrimOverlap
+                            ? '계속하면 기존 세션의 종료 시간이 새 세션 시작 시간 직전으로 자동 조정됩니다.'
+                            : '기존 세션이 새 세션보다 늦게 시작하므로 종료 시간을 앞당겨 겹침을 풀 수 없습니다. 새 세션의 시간을 바꾸거나, 기존 세션을 먼저 수정·삭제해 주세요.'}
                     </p>
 
                     <div className="flex gap-3 mt-4">
@@ -790,14 +802,16 @@ export default function EditRecords({ settings }: EditRecordsProps) {
                             onClick={handleOverlapCancel}
                             className="flex-1 py-4 rounded-2xl bg-white/5 hover:bg-white/10 text-[var(--color-text-secondary)] font-bold transition-all active:scale-95"
                         >
-                            취소
+                            {canTrimOverlap ? '취소' : '닫기'}
                         </button>
-                        <button
-                            onClick={handleOverlapConfirm}
-                            className="flex-1 py-4 rounded-2xl bg-indigo-500 hover:bg-indigo-400 text-white font-black shadow-xl active:scale-95 transition-all"
-                        >
-                            조정하고 추가
-                        </button>
+                        {canTrimOverlap && (
+                            <button
+                                onClick={handleOverlapConfirm}
+                                className="flex-1 py-4 rounded-2xl bg-indigo-500 hover:bg-indigo-400 text-white font-black shadow-xl active:scale-95 transition-all"
+                            >
+                                조정하고 추가
+                            </button>
+                        )}
                     </div>
                 </>)}
             </Modal>

@@ -11,7 +11,7 @@ import { hm, hms, hmsDecimal, ymd, toDate, addDays } from '../lib/format'
 import { groupTotals, sumDuration, sumTotals, isSelfStudy } from '../lib/sessions'
 import { useStudyTimer } from '../lib/useStudyTimer'
 import type { Settings, StudySession, SessionEvaluation, ThoughtNote } from '../lib/db'
-import { db, getTodayDate, getDateFromTimestamp, getSessionsOn, getMonday, getSunday, addThoughtNote } from '../lib/db'
+import { db, getTodayDate, getDateFromTimestamp, getSessionsOn, getMonday, getSunday, getStudyToday, addThoughtNote } from '../lib/db'
 import TestTimerModal from '../components/TestTimerModal'
 import RoomPanel from '../components/RoomPanel'
 import { useSessionEvents } from '../lib/ha/useSessionEvents'
@@ -95,7 +95,7 @@ export default function Study({ settings }: StudyProps) {
             selfStudy: sumTotals(sessions).selfStudy,
         })
 
-        const monday = getMonday(new Date())
+        const monday = getMonday(getStudyToday())
         const week = (from: Date) =>
             db.sessions.where('date').between(ymd(from), ymd(getSunday(from)), true, true).toArray()
         const [thisWeek, lastWeek] = await Promise.all([week(monday), week(toDate(addDays(monday, -7)))])
@@ -119,12 +119,18 @@ export default function Study({ settings }: StudyProps) {
     }, [])
 
     // ── 카운트다운 종료 ─────────────────────────────────────────────────────
+    // 울렸는지를 세션 시작 시각으로 래치한다. 모달의 표시 여부로 막으면 "확인"을
+    // 누르는 순간 조건이 되살아나 팝업과 종료음이 곧바로 되돌아왔다. 시작 시각을
+    // 쓰면 다음 테스트(restart)에서는 값이 달라져 제대로 다시 울린다.
+    const countdownFiredAt = useRef<number | null>(null)
     useEffect(() => {
-        if (!countdownMs || timer.elapsed < countdownMs || showCountdownDone) return
+        if (!countdownMs || timer.elapsed < countdownMs) return
+        if (countdownFiredAt.current === timer.startedAt.current) return
+        countdownFiredAt.current = timer.startedAt.current
         setShowCountdownDone(true)
         // 미디어 볼륨으로 재생되어 벨소리/진동 모드와 무관하게 들리고, 이어폰이 있으면 그쪽으로 간다.
         playTimerEndSound()
-    }, [countdownMs, timer.elapsed, showCountdownDone])
+    }, [countdownMs, timer.elapsed, timer.startedAt])
 
     // ── Now Bar (Android 알림) ──────────────────────────────────────────────
     const nowBarStarted = useRef(false)

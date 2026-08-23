@@ -529,19 +529,24 @@ export async function findActiveSessionAtTime(timestamp: number): Promise<StudyS
     ) || null;
 }
 
-// 겹치는 세션의 종료 시간 조정
+/**
+ * 겹치는 세션의 종료 시간을 앞당긴다. 조정에 성공하면 true.
+ *
+ * 새 종료 시각이 그 세션의 시작보다 앞이면 길이가 음수가 된다. 음수 duration 은
+ * 화면에선 절댓값으로 보여 눈에 띄지 않지만 모든 합계(오늘·주간·일기 통계)를
+ * 조용히 갉아먹으므로, 그런 조정은 성립하지 않는 것으로 보고 거절한다.
+ */
 export async function adjustOverlappingSession(
     sessionId: number,
     newEndTime: number
-): Promise<void> {
+): Promise<boolean> {
     const session = await db.sessions.get(sessionId);
-    if (session) {
-        const newDuration = newEndTime - session.startTime;
-        await db.sessions.update(sessionId, {
-            endTime: newEndTime,
-            duration: newDuration
-        });
-    }
+    if (!session || newEndTime <= session.startTime) return false;
+    await db.sessions.update(sessionId, {
+        endTime: newEndTime,
+        duration: newEndTime - session.startTime
+    });
+    return true;
 }
 
 // ── 생각 주차장 헬퍼 ─────────────────────────────────────────────────────────
@@ -892,10 +897,24 @@ export async function getDatabaseStats(): Promise<DatabaseStats> {
     return { sessions, diaryEntries, chatConversations, learningNotes, todos, aiArtifacts, thoughtNotes, weeklyDiaries, storageUsedBytes, storageQuotaBytes };
 }
 
-/** 오늘로부터 months 개월 전 날짜(YYYY-MM-DD). */
+const daysInMonth = (year: number, monthIndex: number): number =>
+    new Date(year, monthIndex + 1, 0).getDate();
+
+/**
+ * 오늘로부터 months 개월 전 날짜(YYYY-MM-DD).
+ *
+ * `setMonth` 을 그냥 부르면 말일에서 넘칠 때 다음 달로 튄다 — 3월 31일에서 한 달을
+ * 빼면 "2월 31일"이 3월 3일이 되어, 기준선이 최대 3일 **최근 쪽으로** 밀린다.
+ * 그만큼은 남기겠다고 약속한 기록이 조용히 지워진다. 되돌릴 수 없는 삭제의 기준선이므로
+ * 1일로 내린 뒤 달을 빼고, 그 달에 없는 일자는 말일로 자른다.
+ */
 function dateMonthsAgo(months: number): string {
-    const d = new Date();
+    const now = new Date();
+    const day = now.getDate();
+    const d = new Date(now);
+    d.setDate(1);
     d.setMonth(d.getMonth() - months);
+    d.setDate(Math.min(day, daysInMonth(d.getFullYear(), d.getMonth())));
     return formatDateYYYYMMDD(d);
 }
 

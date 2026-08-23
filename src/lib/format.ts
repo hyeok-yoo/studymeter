@@ -27,10 +27,18 @@ export const hms = (ms: number): string => {
     return `${pad(h)}:${pad(m)}:${pad(s)}`;
 };
 
-/** HH:MM:SS.s — 0.1초까지 흐르는 메인 타이머 */
+/**
+ * HH:MM:SS.s — 0.1초까지 흐르는 메인 타이머.
+ *
+ * 반올림은 반드시 분해 **전에** 한다. 초만 따로 `toFixed(1)` 하면 59.95초가
+ * "60.0" 으로 올라가 매 분마다 "00:00:60.0" 이 한 틱씩 보였다.
+ */
 export const hmsDecimal = (ms: number): string => {
-    const t = ms / 1000;
-    return `${pad(Math.floor(t / 3600))}:${pad(Math.floor((t % 3600) / 60))}:${pad((t % 60).toFixed(1), 4)}`;
+    const ds = Math.round(Math.abs(ms) / 100); // 데시초(0.1s) 단위로 먼저 확정
+    const h = Math.floor(ds / 36_000);
+    const m = Math.floor((ds % 36_000) / 600);
+    const s = (ds % 600) / 10;
+    return `${pad(h)}:${pad(m)}:${pad(s.toFixed(1), 4)}`;
 };
 
 /**
@@ -117,7 +125,7 @@ const BYTE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB'];
 
 /** 1024 진법 바이트 표기 — B 단위는 정수, 그 이상은 소수 첫째 자리. */
 export const bytes = (n: number): string => {
-    if (!Number.isFinite(n) || n <= 0) return '0 B';
+    if (!Number.isFinite(n) || n < 1) return '0 B';
     const exp = Math.min(Math.floor(Math.log(n) / Math.log(1024)), BYTE_UNITS.length - 1);
     const value = n / 1024 ** exp;
     return `${exp === 0 ? value : value.toFixed(1)} ${BYTE_UNITS[exp]}`;

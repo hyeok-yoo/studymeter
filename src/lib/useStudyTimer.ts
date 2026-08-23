@@ -102,6 +102,10 @@ export function useStudyTimer(initial: SessionDescriptor, onStop: () => void) {
     }, []);
 
     // ── 저장 ────────────────────────────────────────────────────────────────
+    // 저장되는 값은 전부 절대 시각(ref)이라 `elapsed` 와는 무관하다. 예전에는
+    // `elapsed` 가 deps 에 있어 tick 마다, 즉 초당 10번 똑같은 JSON 을 다시 썼다.
+    // 세 ref 가 바뀌는 지점(복원·toggle·restart·reconcile)은 모두 isRunning 이나
+    // session 도 함께 바꾸므로, 그 둘만 보면 저장 시점을 하나도 놓치지 않는다.
     useEffect(() => {
         if (!ready || ended.current) return;
         localStorage.setItem(
@@ -114,7 +118,7 @@ export function useStudyTimer(initial: SessionDescriptor, onStop: () => void) {
                 pausedAtTime: pausedAt.current,
             } satisfies Persisted),
         );
-    }, [session, isRunning, elapsed, ready]);
+    }, [session, isRunning, ready]);
 
     // ── tick ────────────────────────────────────────────────────────────────
     // 값 자체는 절대 시각에서 나오므로 이 interval 은 "화면을 다시 그릴 때"만 정한다.
