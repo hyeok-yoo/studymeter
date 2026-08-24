@@ -113,6 +113,10 @@ export function useFocusWeb() {
             setStatus('running');
             const interval = Math.round(1000 / TARGET_FPS);
             loopRef.current = window.setInterval(async () => {
+                // 화면이 가려져 있으면(앱 전환·화면 꺼짐) 한 프레임도 처리하지 않는다.
+                // MediaPipe(WASM) + ONNX 추론이 초당 15회 도는 것이 백그라운드 발열의
+                // 주범이고, 보이지 않는 동안의 집중도·시선 값은 어차피 의미가 없다.
+                if (document.visibilityState !== 'visible') return;
                 const p = pipelineRef.current; const v = videoRef.current;
                 if (!p || !v || processingRef.current || v.readyState < 2) return;
                 processingRef.current = true;

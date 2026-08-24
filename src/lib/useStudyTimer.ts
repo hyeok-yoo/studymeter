@@ -122,15 +122,36 @@ export function useStudyTimer(initial: SessionDescriptor, onStop: () => void) {
 
     // ── tick ────────────────────────────────────────────────────────────────
     // 값 자체는 절대 시각에서 나오므로 이 interval 은 "화면을 다시 그릴 때"만 정한다.
+    // 그래서 화면이 가려지면 그냥 멈춘다 — 초당 10번의 리렌더는 보이지 않는 동안
+    // 순수한 낭비고(발열·전력), 복귀 시 elapsedNow() 로 다시 계산하므로 시간은
+    // 1ms 도 어긋나지 않는다. 이 훅의 존재 이유가 바로 그 성질이다.
     useEffect(() => {
         if (!isRunning) {
             NativeBridge.allowSleep();
             return;
         }
         NativeBridge.keepAwake();
-        const id = window.setInterval(() => setElapsed(elapsedNow()), 100);
-        return () => {
+
+        let id = 0;
+        const tick = () => setElapsed(elapsedNow());
+        const startTicking = () => {
+            if (id) return;
+            tick(); // 복귀 직후 옛 값이 한 틱 남지 않도록 즉시 한 번
+            id = window.setInterval(tick, 100);
+        };
+        const stopTicking = () => {
+            if (!id) return;
             clearInterval(id);
+            id = 0;
+        };
+        const onVisibility = () =>
+            document.visibilityState === 'visible' ? startTicking() : stopTicking();
+
+        onVisibility();
+        document.addEventListener('visibilitychange', onVisibility);
+        return () => {
+            stopTicking();
+            document.removeEventListener('visibilitychange', onVisibility);
             NativeBridge.allowSleep();
         };
     }, [isRunning, elapsedNow]);
