@@ -1,4 +1,6 @@
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { Suspense } from 'react'
+import { NativeBridge } from '../lib/NativeBridge'
 import { Icon } from '@iconify/react'
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
@@ -106,6 +108,7 @@ export default function Layout({ settings }: LayoutProps) {
                             end={item.path === '/'}
                             className="relative flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5 select-none"
                             style={{ WebkitTapHighlightColor: 'transparent' }}
+                            onClick={() => { if (!active) NativeBridge.haptic('tick') }}
                         >
                             {active && (
                                 <motion.span
@@ -130,7 +133,11 @@ export default function Layout({ settings }: LayoutProps) {
             {/* Main Content Area */}
             <main className="flex-1 md:ml-72 p-6 md:p-12 pb-32 md:pb-12 min-h-screen pt-[calc(1.5rem+env(safe-area-inset-top))] md:pt-12">
                 <div className="max-w-6xl mx-auto animate-fade-in">
-                    <Outlet />
+                    {/* 화면 코드가 아직 안 받아졌을 때 앱 전체(탭바 포함)가 하얗게 비지 않도록
+                        본문만 기다리게 한다. */}
+                    <Suspense fallback={null}>
+                        <Outlet />
+                    </Suspense>
                 </div>
             </main>
         </div>

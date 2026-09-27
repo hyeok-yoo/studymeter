@@ -447,6 +447,38 @@ export async function syncAllHistory(): Promise<number> {
   return uploaded
 }
 
+// 특정 날짜들의 기록만 다시 올린다 (로컬에서 잘못된 기록을 정리한 뒤 서버 사본을 맞출 때).
+export async function syncDays(dates: string[]): Promise<void> {
+  if (!dates.length || !isConfigured() || !isRegistered()) return
+  const deviceId = getDeviceId()
+  if (!deviceId) return
+  for (const date of dates) {
+    try {
+      const sessions = await db.sessions.where('date').equals(date).toArray()
+      const plain = JSON.parse(JSON.stringify(
+        sessions.map((s) => ({
+          id: s.id,
+          date: s.date,
+          subject: s.subject,
+          subItem: s.subItem,
+          type: s.type,
+          startTime: s.startTime,
+          endTime: s.endTime,
+          duration: s.duration,
+          evaluation: s.evaluation,
+        }))
+      ))
+      await setDoc(doc(getDb(), 'users', deviceId, 'days', date), {
+        date,
+        updatedAt: serverTimestamp(),
+        sessions: plain,
+      })
+    } catch {
+      // 오프라인 등 — 다음 동기화 때 오늘 것은 다시 맞춰진다
+    }
+  }
+}
+
 // ── 관리자 ↔ 사용자 양방향 메시지 ────────────────────────────────────────────
 //
 // 경로: users/{deviceId}/messages/{autoId}

@@ -849,6 +849,31 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                     </div>
                 </motion.div>
 
+                {/* 화면 보호 (번인 방지) */}
+                <motion.div variants={staggerItem}>
+                    <SectionHead
+                        label="공부 화면 화면 보호"
+                        help={<HelpButton title="공부 화면 화면 보호" items={[
+                        { description: '공부 화면에서 설정한 시간 동안 아무것도 누르지 않으면, 과목 선택기·통계·버튼을 모두 숨기고 검은 화면에 시계만 남깁니다. 아무 곳이나 한 번 누르면 원래대로 돌아옵니다.' },
+                        { title: '번인 방지', description: 'OLED 화면은 검은 픽셀이 꺼져 있어 켜진 픽셀이 크게 줄어듭니다. 남은 숫자도 가는 글꼴·낮은 밝기로 그리고, 1분마다 몇 픽셀씩 천천히 위치를 옮겨 같은 자리에 잔상이 쌓이지 않게 합니다.' },
+                    ]} />}
+                    />
+                    <div className="glass-card p-4">
+                        <Segmented
+                            layoutId="ambient-delay-picker"
+                            value={String(settings.ambientDelaySec ?? 60)}
+                            onChange={(v) => patch({ ambientDelaySec: Number(v) })}
+                            options={[
+                                { value: '0', label: '끔' },
+                                { value: '30', label: '30초' },
+                                { value: '60', label: '1분' },
+                                { value: '180', label: '3분' },
+                                { value: '300', label: '5분' },
+                            ]}
+                        />
+                    </div>
+                </motion.div>
+
                 {/* 홈 어시스턴트 */}
                 <HaSettingsSection settings={settings} onSettingsChange={onSettingsChange} />
 

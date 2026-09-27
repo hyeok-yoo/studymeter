@@ -69,6 +69,22 @@ public class NowBarPlugin extends Plugin {
         call.resolve(ret);
     }
 
+    /** 서비스 생존 여부와 마지막 생존 신호 시각 — JS 가 복원 시 "죽은 동안 흐른 시간"을 걸러낸다. */
+    @PluginMethod
+    public void getServiceState(PluginCall call) {
+        JSObject ret = new JSObject();
+        ret.put("running", StudyNotificationService.running);
+        long hb = 0;
+        try {
+            hb = getContext().getSharedPreferences(StudyNotificationService.PENDING_PREFS, Context.MODE_PRIVATE)
+                    .getLong(StudyNotificationService.HEARTBEAT_KEY, 0);
+        } catch (Exception e) {
+            Log.w(TAG, "getServiceState failed", e);
+        }
+        ret.put("heartbeat", hb);
+        call.resolve(ret);
+    }
+
     @PluginMethod
     public void startNowBar(PluginCall call) {
         Log.d(TAG, "startNowBar called");
@@ -104,15 +120,24 @@ public class NowBarPlugin extends Plugin {
     @PluginMethod
     public void stopNowBar(PluginCall call) {
         Log.d(TAG, "stopNowBar called");
+        // stopService() 를 바로 부르면, 직전에 보낸 START 를 서비스가 아직 처리하지 못했을 때
+        // (startForeground 호출 전) 시스템이 "startForegroundService() did not then call
+        // startForeground()" 로 앱을 죽인다. 앱을 열자마자 시작→종료가 연달아 오는 경로(알림에서
+        // 종료한 뒤 앱 복귀)가 정확히 그렇다. STOP 을 같은 명령 큐로 보내면 START 가 먼저
+        // 처리된 뒤에 멈추므로 계약이 깨지지 않는다.
+        Intent intent = new Intent(getContext(), StudyNotificationService.class);
+        intent.setAction("STOP");
         try {
-            Intent intent = new Intent(getContext(), StudyNotificationService.class);
-            intent.setAction("STOP");
-            getContext().stopService(intent);
-            call.resolve();
+            getContext().startService(intent);
         } catch (Exception e) {
-            Log.e(TAG, "stopNowBar failed", e);
-            call.reject("Failed to stop notification: " + e.getMessage());
+            // 백그라운드 제한 등. 서비스가 이미 포그라운드로 돌고 있을 때만 stopService 가 안전하다
+            // (돌고 있지 않다면 멈출 것도 없다).
+            Log.w(TAG, "stopNowBar via command failed", e);
+            if (StudyNotificationService.running) {
+                try { getContext().stopService(intent); } catch (Exception ignored) { }
+            }
         }
+        call.resolve();
     }
 
     @PluginMethod

@@ -30,6 +30,18 @@ export interface ChangelogEntry {
 /** 최신이 맨 앞. 아래로 갈수록 예전 버전 — 이력은 지우지 말고 계속 쌓는다. */
 export const CHANGELOG: ChangelogEntry[] = [
     {
+        version: '1.8.0',
+        date: '2026-09-28',
+        title: '튼튼해진 타이머, 화면 보호 모드',
+        items: [
+            { icon: 'mdi:shield-check', text: '알림(나우바)에서 종료했거나 앱을 오래 안 열었다가 들어올 때 한참 멈췄다가 튕기던 문제를 고쳤어요.' },
+            { icon: 'mdi:timer-alert-outline', text: '앱이 시스템에 의해 꺼진 동안 시계만 흘러 수십 시간짜리 기록이 생기던 문제를 막았어요. 이런 경우 타이머가 꺼진 시각에서 멈추고, 이미 생긴 비현실적인 기록은 자동으로 정리됩니다.' },
+            { icon: 'mdi:alarm-check', text: '테스트 타이머가 끝난 뒤 "확인"을 눌러도 팝업이 계속 다시 뜨던 문제를 고쳤어요.' },
+            { icon: 'mdi:monitor-shimmer', text: '공부 화면 화면 보호 — 1분간 손대지 않으면 검은 화면에 시계만 남겨요. OLED 번인을 막기 위해 글자를 어둡고 가늘게, 위치도 조금씩 옮깁니다. (설정에서 시간 변경·끄기)' },
+            { icon: 'mdi:gesture-tap', text: '더 앱답게 — 버튼 햅틱, 뒤로가기 동작, 화면 전환 시 빈 화면 번쩍임 제거, 길게 눌러도 글자가 선택되지 않게 다듬었어요.' },
+        ],
+    },
+    {
         version: '1.7.0',
         date: '2026-07-22',
         title: '더 깔끔하게, 종이 일기 그대로',

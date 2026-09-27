@@ -85,6 +85,37 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* ── 네이티브 손맛 ────────────────────────────────────────────────────────
+   웹뷰 티가 나는 세 가지를 끈다: 길게 누르면 글자가 파랗게 선택되는 것,
+   이미지·링크를 길게 누르면 뜨는 콜아웃/드래그, 두 번 탭 확대 대기.
+   입력칸·편집 영역·명시적으로 고른 곳(.selectable, 채팅·마크다운 본문)은 그대로 선택된다. */
+body {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
+}
+
+input,
+textarea,
+select,
+[contenteditable],
+[contenteditable] *,
+.selectable,
+.selectable *,
+.md-content,
+.md-content *,
+.whitespace-pre-wrap {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
+
+img,
+a {
+  -webkit-user-drag: none;
+}
+
 .safe-area-top {
   padding-top: env(safe-area-inset-top);
 }

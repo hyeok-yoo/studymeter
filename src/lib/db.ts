@@ -161,6 +161,11 @@ export interface Settings {
      * 자동화를 안 쓰더라도 종료 알림이 오늘 누적 요약 역할을 한다.
      */
     endSignalEnabled?: boolean;
+    /**
+     * 공부 화면 화면 보호(번인 방지): 이 시간(초) 동안 손대지 않으면 시계만 남기고
+     * 나머지를 숨긴다. 0 = 끔. 기본 60.
+     */
+    ambientDelaySec?: number;
     /** D-day 목록 (undefined = 기본 프리셋 사용). 개수·날짜 자유 커스텀. */
     ddays?: Dday[];
     /** 테스트 타이머 프리셋 (undefined = DEFAULT_TIMER_PRESETS 사용) */
@@ -485,6 +490,43 @@ export const formatDurationWithDecimal = hmsDecimal;
 // 세션 삭제
 export async function deleteStudySession(id: number): Promise<void> {
     await db.sessions.delete(id);
+}
+
+/**
+ * 사람이 할 수 없는 기록을 한 번 정리한다 (앱이 죽은 채 시계만 흘러 생긴 40시간짜리 세션 등).
+ *
+ * 한 번만 도는 이유: 이후엔 저장 시점에 사용자에게 직접 묻는다("그대로 기록"을 고르면
+ * 존중해야 하므로 매번 지우면 안 된다). 지운 행은 localStorage 에 원본 그대로 남겨 둔다.
+ *
+ * @returns 기록이 바뀐 날짜들 (서버 동기화 갱신용)
+ */
+export async function purgeImplausibleSessionsOnce(maxMs: number): Promise<string[]> {
+    const FLAG = 'studymeter_purge_implausible_v1';
+    try {
+        if (localStorage.getItem(FLAG)) return [];
+    } catch {
+        return [];
+    }
+    const bad = await db.sessions
+        .filter((s) =>
+            !Number.isFinite(s.duration) ||
+            s.duration <= 0 ||
+            s.duration > maxMs ||
+            (Number.isFinite(s.startTime) && Number.isFinite(s.endTime) && s.endTime < s.startTime),
+        )
+        .toArray();
+    if (bad.length) {
+        try {
+            const prev = JSON.parse(localStorage.getItem('studymeter_purged_sessions') || '[]');
+            localStorage.setItem('studymeter_purged_sessions', JSON.stringify([...prev, ...bad]));
+        } catch {
+            // 백업을 못 남기면 지우지 않는다 — 되돌릴 길 없는 삭제는 하지 않는다.
+            return [];
+        }
+        await db.sessions.bulkDelete(bad.map((s) => s.id!).filter((id) => id != null));
+    }
+    localStorage.setItem(FLAG, String(Date.now()));
+    return [...new Set(bad.map((s) => s.date).filter(Boolean))];
 }
 
 // 세션 수정

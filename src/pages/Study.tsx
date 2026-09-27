@@ -9,7 +9,9 @@ import { Stat } from '../components/ui/Stat'
 import { spring, fadeRise, materialize } from '../lib/motion'
 import { hm, hms, hmsDecimal, ymd, toDate, addDays } from '../lib/format'
 import { groupTotals, sumDuration, sumTotals, isSelfStudy } from '../lib/sessions'
-import { useStudyTimer } from '../lib/useStudyTimer'
+import { useStudyTimer, MAX_PLAUSIBLE_SESSION_MS } from '../lib/useStudyTimer'
+import { useModal } from '../lib/ModalContext'
+import AmbientClock from '../components/AmbientClock'
 import type { Settings, StudySession, SessionEvaluation, ThoughtNote } from '../lib/db'
 import { db, getTodayDate, getDateFromTimestamp, getSessionsOn, getMonday, getSunday, getStudyToday, addThoughtNote } from '../lib/db'
 import TestTimerModal from '../components/TestTimerModal'
@@ -43,12 +45,25 @@ interface WeeklyStats {
     change: number
 }
 
+/** 카운트다운 종료를 이미 알린 세션(시작 시각). 리마운트·재실행해도 다시 울리지 않게 저장한다. */
+const COUNTDOWN_FIRED_KEY = 'studymeter_countdown_fired'
+
+function readCountdownFired(): number | null {
+    try {
+        const v = Number(localStorage.getItem(COUNTDOWN_FIRED_KEY))
+        return Number.isFinite(v) && v > 0 ? v : null
+    } catch {
+        return null
+    }
+}
+
 const ZERO_TOTALS: TodayTotals = { all: 0, subject: 0, subjectType: 0, selfStudy: 0 }
 const ZERO_WEEK: WeeklyStats = { bySubject: [], total: 0, change: 0 }
 
 export default function Study({ settings }: StudyProps) {
     const navigate = useNavigate()
     const { state } = useLocation()
+    const { showConfirm } = useModal()
 
     /** 알림의 종료 버튼 → handleEnd. 훅보다 뒤에 정의되므로 ref 를 거친다. */
     const endRef = useRef<() => void>(() => {})
@@ -77,6 +92,8 @@ export default function Study({ settings }: StudyProps) {
     const [roomAvailable, setRoomAvailable] = useState(false)
     /** 카메라 파이프라인이 무거우므로 펼칠 때만 마운트한다 */
     const [focusOpen, setFocusOpen] = useState(false)
+    /** 화면 보호(번인 방지) 모드 — 한동안 손대지 않으면 시계만 남긴다 */
+    const [ambient, setAmbient] = useState(false)
 
     const savingRef = useRef(false)
     const endingRef = useRef(false)
@@ -122,28 +139,40 @@ export default function Study({ settings }: StudyProps) {
     // 울렸는지를 세션 시작 시각으로 래치한다. 모달의 표시 여부로 막으면 "확인"을
     // 누르는 순간 조건이 되살아나 팝업과 종료음이 곧바로 되돌아왔다. 시작 시각을
     // 쓰면 다음 테스트(restart)에서는 값이 달라져 제대로 다시 울린다.
-    const countdownFiredAt = useRef<number | null>(null)
+    // 래치는 localStorage 에도 둔다 — 앱을 다시 열거나 화면이 다시 마운트돼도 끝난
+    // 테스트의 팝업이 또 뜨지 않는다. 복원이 끝나기 전(ready 전)에는 판단하지 않는다.
+    const countdownFiredAt = useRef<number | null>(readCountdownFired())
     useEffect(() => {
-        if (!countdownMs || timer.elapsed < countdownMs) return
+        if (!timer.ready || isEnding || !countdownMs || timer.elapsed < countdownMs) return
         if (countdownFiredAt.current === timer.startedAt.current) return
         countdownFiredAt.current = timer.startedAt.current
+        try {
+            localStorage.setItem(COUNTDOWN_FIRED_KEY, String(timer.startedAt.current))
+        } catch {
+            /* 무시 */
+        }
         setShowCountdownDone(true)
+        setAmbient(false)
         // 미디어 볼륨으로 재생되어 벨소리/진동 모드와 무관하게 들리고, 이어폰이 있으면 그쪽으로 간다.
         playTimerEndSound()
-    }, [countdownMs, timer.elapsed, timer.startedAt])
+    }, [countdownMs, timer.elapsed, timer.startedAt, timer.ready, isEnding])
 
     // ── Now Bar (Android 알림) ──────────────────────────────────────────────
     const nowBarStarted = useRef(false)
     useEffect(() => {
         if (!timer.ready || !NativeBridge.isNative()) return
-        if (isEnding) {
+        if (isEnding || endingRef.current) {
             NativeBridge.stopNowBar()
             nowBarStarted.current = false
             return
         }
+        // 아래 비동기 작업이 끝나기 전에 세션이 끝나거나 값이 또 바뀌면 이 호출은 버린다.
+        // (예전엔 종료 직후 늦게 도착한 START 가 끝난 세션의 나우바를 되살렸다.)
+        let stale = false
         ;(async () => {
             // Java 쪽에서 더할 필요가 없도록 현재 세션까지 포함한 합산값을 넘긴다.
             const sessions = await getSessionsOn()
+            if (stale || endingRef.current) return
             const elapsed = timer.elapsedNow()
             const total = sumDuration(sessions) + elapsed
             const bySubject = (groupTotals(sessions, (s) => s.subject).get(subject)?.total ?? 0) + elapsed
@@ -151,10 +180,12 @@ export default function Study({ settings }: StudyProps) {
             if (nowBarStarted.current) {
                 NativeBridge.updateNowBar(subject, base, timer.isRunning, total, bySubject, countdownMs ?? 0)
             } else if (await NativeBridge.requestNotificationPermission()) {
+                if (stale || endingRef.current) return
                 NativeBridge.startNowBar(subject, base, timer.isRunning, total, bySubject, countdownMs ?? 0)
                 nowBarStarted.current = true
             }
         })()
+        return () => { stale = true }
     }, [subject, type, subItem, countdownMs, timer.isRunning, timer.ready, timer.elapsedNow, isEnding])
 
     // ── HA 세션 이벤트 ──────────────────────────────────────────────────────
@@ -177,6 +208,20 @@ export default function Study({ settings }: StudyProps) {
         const duration = timer.elapsedNow()
         if (duration < 1000 || savingRef.current) return null
         savingRef.current = true
+        // 사람이 한 번에 공부할 수 없는 길이 — 앱이 죽은 채로 시계만 흐른 흔적일 가능성이 높다.
+        if (duration > MAX_PLAUSIBLE_SESSION_MS) {
+            const keep = await showConfirm(
+                '비정상적으로 긴 세션',
+                `이 세션이 ${hm(duration, { always: true })}로 기록됩니다. 앱이 꺼진 사이 시계만 흐른 것 같다면 버려 주세요.`,
+                { confirmText: '그대로 기록', cancelText: '버리기' },
+            )
+            if (!keep) {
+                timer.clear()
+                if (withEval) timer.finish()
+                savingRef.current = false
+                return null
+            }
+        }
         if (withEval) setIsEnding(true)
         try {
             const drowsyCount = consumeSessionDrowsyCount()
@@ -206,6 +251,7 @@ export default function Study({ settings }: StudyProps) {
 
     /** 저장 → 새 세션 시작 → 누적치 갱신. 모든 전환이 이 한 경로를 탄다. */
     const switchTo = async (next: Partial<typeof timer.session>) => {
+        NativeBridge.haptic('tick')
         await saveSession()
         timer.restart(next)
         await refreshTotals(next.subject ?? subject, next.type ?? type)
@@ -216,6 +262,8 @@ export default function Study({ settings }: StudyProps) {
         if (endingRef.current) return
         endingRef.current = true
         setIsEnding(true)
+        setAmbient(false)
+        NativeBridge.haptic('confirm')
         NativeBridge.stopNowBar()
         sendSessionEvent('end', { subject, type, subItem, countdownMs: countdownMs ?? 0, elapsedMs: timer.elapsed })
         if (await saveSession(true)) setShowEvalModal(true)
@@ -240,6 +288,41 @@ export default function Study({ settings }: StudyProps) {
     }, [settings.id, settings.subjects])
 
     const elapsed = timer.elapsed
+
+    // ── 화면 보호 (번인 방지) ───────────────────────────────────────────────
+    // 설정한 시간(기본 1분) 동안 터치·키 입력이 없으면 켠다. 무언가를 물어보는 창이
+    // 떠 있는 동안에는 켜지 않는다 — 대답해야 할 것을 검은 화면이 가리면 안 된다.
+    const ambientDelayMs = (settings.ambientDelaySec ?? 60) * 1000
+    const ambientBlocked =
+        !timer.ready || isEnding || showEvalModal || showTestTimer || showParking || showCountdownDone || !!timer.recovery
+    useEffect(() => {
+        if (!ambientDelayMs || ambientBlocked || ambient) return
+        let t = 0
+        const arm = () => {
+            clearTimeout(t)
+            t = window.setTimeout(() => setAmbient(true), ambientDelayMs)
+        }
+        const opts = { capture: true, passive: true }
+        arm()
+        window.addEventListener('pointerdown', arm, opts)
+        window.addEventListener('keydown', arm, opts)
+        window.addEventListener('wheel', arm, opts)
+        return () => {
+            clearTimeout(t)
+            window.removeEventListener('pointerdown', arm, opts)
+            window.removeEventListener('keydown', arm, opts)
+            window.removeEventListener('wheel', arm, opts)
+        }
+    }, [ambientDelayMs, ambientBlocked, ambient])
+
+    // 막는 창이 뜨면(테스트 종료 팝업 등) 검은 화면은 바로 걷힌다.
+    const ambientOn = ambient && !!ambientDelayMs && !ambientBlocked
+
+    // 화면 보호 중에는 하단 내비게이션 바까지 숨긴다.
+    useEffect(() => {
+        NativeBridge.setImmersive(ambientOn)
+    }, [ambientOn])
+    useEffect(() => () => NativeBridge.setImmersive(false), [])
 
     return (
         <div className="sm-study true-black h-[100dvh] min-h-[100dvh] bg-black text-white flex flex-col justify-between safe-area-bottom p-6 md:p-12 overflow-y-auto">
@@ -443,7 +526,10 @@ export default function Study({ settings }: StudyProps) {
                     </div>
 
                     <Pressable
-                        onClick={timer.toggle}
+                        onClick={() => {
+                            NativeBridge.haptic('press')
+                            timer.toggle()
+                        }}
                         pressScale={0.9}
                         hoverLift
                         aria-label={timer.isRunning ? '일시정지' : '재개'}
@@ -483,6 +569,58 @@ export default function Study({ settings }: StudyProps) {
                     ))}
                 </div>
             </footer>
+
+            <AmbientClock
+                active={ambientOn}
+                time={countdownMs ? hms(Math.max(0, countdownMs - elapsed)) : hms(totals.all + elapsed)}
+                label={`${subject}${subItem ? ` › ${subItem}` : ''} · ${type}`}
+                running={timer.isRunning}
+                countdown={!!countdownMs}
+                onWake={() => setAmbient(false)}
+            />
+
+            <AnimatePresence>
+                {timer.recovery && !isEnding && (
+                    <div className="fixed inset-0 z-[9998] flex items-center justify-center p-6">
+                        <motion.div
+                            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                            transition={{ duration: 0.22 }}
+                            className="absolute inset-0"
+                            style={{ background: 'var(--scrim)' }}
+                        />
+                        <motion.div
+                            variants={materialize} initial="initial" animate="animate" exit="exit"
+                            className="relative liquid-modal p-8 flex flex-col gap-4 max-w-sm w-full shadow-2xl"
+                        >
+                            <Icon icon="mdi:timer-alert-outline" className="text-5xl text-amber-400" />
+                            <h3 className="text-2xl font-black tracking-tight text-display">타이머를 멈춰 두었어요</h3>
+                            <p className="text-sm font-medium opacity-70 leading-relaxed">
+                                {new Date(timer.recovery.stoppedAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                {NativeBridge.isNative()
+                                    ? '에 앱이 시스템에 의해 종료되어 알림 타이머도 함께 꺼졌습니다. 그 이후'
+                                    : '이후로 앱이 한참 닫혀 있어 그때 멈춘 것으로 봤습니다. 그 이후'}
+                                {' '}{hm(timer.recovery.cutMs, { always: true })}는 기록에서 뺐어요.
+                            </p>
+                            <div className="flex flex-col gap-2 mt-2">
+                                <Pressable
+                                    onClick={timer.dismissRecovery}
+                                    pressScale={0.97}
+                                    className="w-full py-4 bg-indigo-500 text-white rounded-2xl font-black text-base shadow-xl"
+                                >
+                                    확인 (멈춘 채로 두기)
+                                </Pressable>
+                                <Pressable
+                                    onClick={timer.undoRecovery}
+                                    pressScale={0.97}
+                                    className="w-full py-3 glass-card-elevated text-[var(--color-text-secondary)] rounded-2xl font-bold text-sm"
+                                >
+                                    그동안도 계속 공부 중이었어요
+                                </Pressable>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
 
             <AnimatePresence>
                 {showCountdownDone && (

@@ -10,6 +10,7 @@ interface NowBarPlugin {
     checkPermissions(): Promise<{ display: PermissionState }>;
     requestPermissions(): Promise<{ display: PermissionState }>;
     consumePendingActions(): Promise<{ actions: { action: string; at: number }[] }>;
+    getServiceState(): Promise<{ running: boolean; heartbeat: number }>;
     addListener(eventName: 'timerAction', listenerFunc: (info: { action: string }) => void): Promise<import('@capacitor/core').PluginListenerHandle>;
 }
 
@@ -27,6 +28,16 @@ interface DeviceSoundPlugin {
 }
 
 const DeviceSound = registerPlugin<DeviceSoundPlugin>('DeviceSound');
+
+/** 시스템 햅틱 + 내비게이션 바 숨김 (NativeUiPlugin.java). */
+interface NativeUiPlugin {
+    haptic(options: { kind: HapticKind }): Promise<void>;
+    setImmersive(options: { enabled: boolean }): Promise<void>;
+}
+
+const NativeUi = registerPlugin<NativeUiPlugin>('NativeUi');
+
+export type HapticKind = 'tick' | 'press' | 'confirm' | 'reject' | 'long';
 
 export type RingerMode = 'normal' | 'vibrate' | 'silent';
 
@@ -199,6 +210,31 @@ export const NativeBridge = {
             console.error('consumePendingActions failed', e);
             return [];
         }
+    },
+
+    /**
+     * 나우바 서비스가 지금 살아 있는지, 마지막 생존 신호는 언제였는지.
+     * 비네이티브/실패 시 null — 판단 근거가 없다는 뜻이다.
+     */
+    async getServiceState(): Promise<{ running: boolean; heartbeat: number } | null> {
+        if (!this.isNative()) return null;
+        try {
+            return await NowBar.getServiceState();
+        } catch {
+            return null;
+        }
+    },
+
+    /** 시스템 햅틱. 사용자가 터치 진동을 꺼두면 조용하다. 실패는 무시한다. */
+    haptic(kind: HapticKind = 'tick') {
+        if (!this.isNative()) return;
+        NativeUi.haptic({ kind }).catch(() => {});
+    },
+
+    /** 내비게이션 바 숨김/복원 (화면 보호 모드). */
+    setImmersive(enabled: boolean) {
+        if (!this.isNative()) return;
+        NativeUi.setImmersive({ enabled }).catch(() => {});
     },
 
     /**

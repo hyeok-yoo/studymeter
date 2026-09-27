@@ -24,7 +24,14 @@ import java.lang.reflect.Method;
 
 public class StudyNotificationService extends Service {
     private static final String TAG = "StudyMeter";
-    public static final String CHANNEL_ID = "study_session_channel";
+    /**
+     * 나우바 채널. 예전 채널(study_session_channel)은 중요도를 올리려고 START 마다
+     * "지우고 다시 만들기"를 했는데, 서비스가 이미 그 채널로 포그라운드 알림을 띄운 상태에서
+     * 채널을 지우면 시스템이 SecurityException 을 던져 앱이 통째로 죽는다(앱을 오래 안 열었다가
+     * 들어오면 WebView 가 새로 뜨며 START 가 다시 오는 경로). 새 ID 로 옮기고 다시는 지우지 않는다.
+     */
+    public static final String CHANNEL_ID = "study_session_live";
+    public static final String LEGACY_CHANNEL_ID = "study_session_channel";
     private static final int NOTIFICATION_ID = 1001;
 
     /**
@@ -61,6 +68,18 @@ public class StudyNotificationService extends Service {
     public static final String PENDING_PREFS = "StudyMeterPendingActions";
     public static final String PENDING_KEY = "queue";
 
+    /**
+     * 생존 신호. 시계가 도는 동안 주기적으로 기록한다. 프로세스가 통째로 죽으면(시스템 정리·크래시)
+     * onDestroy 없이 사라지므로 여기 남은 마지막 시각이 "나우바가 실제로 멈춘 시각"이 된다.
+     * JS 는 복원 시 서비스가 없고 이 값이 오래됐으면 세션을 그 시각에 멈춘 것으로 본다
+     * — 앱이 죽은 채로 이틀이 지나 40시간짜리 세션이 찍히던 문제의 방어선.
+     */
+    public static final String HEARTBEAT_KEY = "heartbeat";
+    private static final int HEARTBEAT_EVERY_TICKS = 15;
+    /** 이 프로세스에서 서비스가 살아 있는지. 프로세스가 죽으면 자연히 false 로 돌아온다. */
+    public static volatile boolean running = false;
+    private int tickCount = 0;
+
     private Handler handler;
     private Runnable updateRunnable;
     private String currentSubject = "공부";
@@ -76,6 +95,7 @@ public class StudyNotificationService extends Service {
     public void onCreate() {
         super.onCreate();
         handler = new Handler(Looper.getMainLooper());
+        running = true;
         Log.d(TAG, "StudyNotificationService created");
     }
 
@@ -83,6 +103,16 @@ public class StudyNotificationService extends Service {
     public int onStartCommand(Intent intent, int flags, int startId) {
         if (intent == null)
             return START_NOT_STICKY;
+        try {
+            handleCommand(intent);
+        } catch (Throwable t) {
+            // 알림 하나 때문에 앱 전체가 죽지 않게 한다. 공부 기록은 JS 쪽 절대 시각이 원본이다.
+            Log.e(TAG, "onStartCommand failed", t);
+        }
+        return START_NOT_STICKY;
+    }
+
+    private void handleCommand(Intent intent) {
 
         String action = intent.getAction();
         Log.d(TAG, "onStartCommand action=" + action);
@@ -129,10 +159,7 @@ public class StudyNotificationService extends Service {
             // startForegroundService() 계약 준수: UPDATE도 항상 startForeground를 호출한다.
             // (호출하지 않으면 서비스가 foreground가 아닌 상태에서 재시작될 때
             //  "startForegroundService did not then call startForeground" 크래시가 발생함)
-            NotificationManager mgr = getSystemService(NotificationManager.class);
-            if (mgr != null && mgr.getNotificationChannel(CHANNEL_ID) == null) {
-                ensureNotificationChannel();
-            }
+            ensureNotificationChannel();
             sessionStarted = true;
             long initElapsed = System.currentTimeMillis() - sessionStartTime;
             startForegroundNotification(initElapsed);
@@ -189,7 +216,15 @@ public class StudyNotificationService extends Service {
             stopForeground(true);
             stopSelf();
         }
-        return START_NOT_STICKY;
+    }
+
+    private void writeHeartbeat() {
+        try {
+            getSharedPreferences(PENDING_PREFS, Context.MODE_PRIVATE)
+                    .edit().putLong(HEARTBEAT_KEY, System.currentTimeMillis()).apply();
+        } catch (Exception e) {
+            Log.w(TAG, "writeHeartbeat failed", e);
+        }
     }
 
     /**
@@ -214,12 +249,18 @@ public class StudyNotificationService extends Service {
 
     private void startUpdating() {
         stopUpdating();
+        tickCount = 0;
         updateRunnable = new Runnable() {
             @Override
             public void run() {
                 if (isRunning) {
                     long elapsed = System.currentTimeMillis() - sessionStartTime;
-                    updateNotification(elapsed);
+                    try {
+                        updateNotification(elapsed);
+                    } catch (Throwable t) {
+                        Log.w(TAG, "updateNotification failed", t);
+                    }
+                    if (tickCount++ % HEARTBEAT_EVERY_TICKS == 0) writeHeartbeat();
                     handler.postDelayed(this, 1000);
                 }
             }
@@ -428,14 +469,9 @@ public class StudyNotificationService extends Service {
 
     private void ensureNotificationChannel() {
         NotificationManager manager = getSystemService(NotificationManager.class);
-        if (manager != null) {
-            // 기존 채널 삭제 후 재생성 (중요도 변경 적용)
-            NotificationChannel existing = manager.getNotificationChannel(CHANNEL_ID);
-            if (existing != null) {
-                manager.deleteNotificationChannel(CHANNEL_ID);
-                Log.d(TAG, "Deleted old channel for recreation");
-            }
-
+        if (manager == null) return;
+        // 이미 있으면 그대로 둔다 — 포그라운드 알림이 붙은 채널은 지울 수 없다(지우면 크래시).
+        if (manager.getNotificationChannel(CHANNEL_ID) == null) {
             NotificationChannel channel = new NotificationChannel(
                     CHANNEL_ID,
                     "공부 세션 타이머",
@@ -446,7 +482,19 @@ public class StudyNotificationService extends Service {
             channel.setSound(null, null);
             channel.enableVibration(false);
             manager.createNotificationChannel(channel);
-            Log.d(TAG, "Notification channel created with IMPORTANCE_HIGH: " + CHANNEL_ID);
+            Log.d(TAG, "Notification channel created: " + CHANNEL_ID);
+        }
+        deleteLegacyChannel(manager);
+    }
+
+    /** 예전 채널 정리 — 업데이트 직후 그 채널로 알림이 떠 있으면 실패하므로 조용히 넘긴다. */
+    static void deleteLegacyChannel(NotificationManager manager) {
+        try {
+            if (manager.getNotificationChannel(LEGACY_CHANNEL_ID) != null) {
+                manager.deleteNotificationChannel(LEGACY_CHANNEL_ID);
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "legacy channel still in use: " + e.getMessage());
         }
     }
 
@@ -529,6 +577,7 @@ public class StudyNotificationService extends Service {
 
     @Override
     public void onDestroy() {
+        running = false;
         stopUpdating();
         // 종료 경로가 둘이다: JS 의 stopNowBar() 는 stopService() 라 onStartCommand 를 타지 않고,
         // 알림 "종료" 버튼은 STOP_SESSION → stopSelf() 로 온다. 둘 다 여기로 모이므로 신호는 여기서 띄운다.

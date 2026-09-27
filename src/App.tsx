@@ -1,8 +1,11 @@
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
-import { initializeSettings, type Settings, db } from './lib/db'
+import { initializeSettings, type Settings, db, purgeImplausibleSessionsOnce } from './lib/db'
+import { MAX_PLAUSIBLE_SESSION_MS } from './lib/useStudyTimer'
 import Layout from './components/Layout'
 import { NativeBridge } from './lib/NativeBridge'
+import { App as CapApp } from '@capacitor/app'
+import { readActiveSession } from './lib/useStudyTimer'
 const NameRegistrationModal = lazy(() => import('./components/NameRegistrationModal'))
 const MorningReportPopup = lazy(() => import('./components/MorningReportPopup'))
 const UserMessagePopup = lazy(() => import('./components/UserMessagePopup'))
@@ -39,10 +42,53 @@ function App() {
   // 진행 중인 세션(실행/일시정지)이 있으면 공부 화면으로 자동 이동.
   // 네비게이션마다 확인해 세션 중에는 공부 화면에 머무르게 한다.
   useEffect(() => {
-    if (localStorage.getItem('studymeter_active_session') && location.pathname !== '/study') {
+    if (readActiveSession() && location.pathname !== '/study') {
       navigate('/study', { replace: true });
     }
   }, [location.pathname, navigate]);
+
+  // 안드로이드 뒤로가기(버튼·제스처): 웹뷰 기본 동작은 루트에서 액티비티를 끝내 버려서
+  // 다음 실행이 매번 콜드 스타트(웹뷰 재로딩)가 된다. 네이티브 앱처럼 루트·공부 화면에서는
+  // 앱을 뒤로 보내고(프로세스·세션 유지), 그 밖에서는 이전 화면으로 돌아간다.
+  const pathRef = useRef(location.pathname)
+  useEffect(() => {
+    pathRef.current = location.pathname
+  }, [location.pathname])
+  useEffect(() => {
+    if (!NativeBridge.isNative()) return
+    let handle: { remove: () => Promise<void> } | null = null
+    let disposed = false
+    CapApp.addListener('backButton', ({ canGoBack }) => {
+      const path = pathRef.current
+      if (path === '/' || path === '/study') CapApp.minimizeApp()
+      else if (canGoBack) navigate(-1)
+      else navigate('/', { replace: true })
+    }).then((h) => {
+      if (disposed) h.remove()
+      else handle = h
+    }).catch(() => {})
+    return () => {
+      disposed = true
+      handle?.remove()
+    }
+  }, [navigate])
+
+  // 첫 화면이 뜬 뒤 한가할 때 나머지 화면 코드를 미리 받아 둔다 — 탭을 처음 누를 때
+  // 잠깐 빈 화면이 번쩍이는(웹앱 티가 나는) 순간을 없앤다.
+  useEffect(() => {
+    if (loading) return
+    const load = () => {
+      void import('./pages/Home')
+      void import('./pages/Study')
+      void import('./pages/Records')
+      void import('./pages/EditRecords')
+      void import('./pages/GeminiChat')
+      void import('./pages/Settings')
+    }
+    const w = window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }
+    if (w.requestIdleCallback) w.requestIdleCallback(load, { timeout: 4000 })
+    else window.setTimeout(load, 2000)
+  }, [loading])
 
   // 초기 설정 로드 + 텔레메트리 (앱 시작 시 1회만 실행)
   useEffect(() => {
@@ -57,6 +103,9 @@ function App() {
       // 세션 종료 신호는 WebView 없이 네이티브가 판단하므로, 설정값을 미리 밀어 넣어 둔다.
       // (백업 복원처럼 설정만 바뀐 경우 네이티브 쪽 기본값과 어긋날 수 있다.)
       NativeBridge.setEndSignalEnabled(s.endSignalEnabled ?? true);
+
+      // 앱이 죽은 채 시계만 흘러 생긴 비현실적 기록(수십 시간짜리 세션)을 한 번 정리한다.
+      const purgedDates = await purgeImplausibleSessionsOnce(MAX_PLAUSIBLE_SESSION_MS).catch(() => [] as string[]);
 
       // 이하 Firebase/텔레메트리는 백그라운드에서 처리 (UI 블로킹 없음)
       let tel: Awaited<typeof telemetryPromise>
@@ -79,6 +128,7 @@ function App() {
         } else {
           tel.updateLastSeen();
           tel.maybeSyncToday();
+          if (purgedDates.length) tel.syncDays(purgedDates);
         }
       }
     });
