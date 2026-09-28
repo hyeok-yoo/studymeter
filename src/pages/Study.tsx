@@ -290,28 +290,56 @@ export default function Study({ settings }: StudyProps) {
     const elapsed = timer.elapsed
 
     // ── 화면 보호 (번인 방지) ───────────────────────────────────────────────
-    // 설정한 시간(기본 1분) 동안 터치·키 입력이 없으면 켠다. 무언가를 물어보는 창이
-    // 떠 있는 동안에는 켜지 않는다 — 대답해야 할 것을 검은 화면이 가리면 안 된다.
+    // "앱을 보고 있는데 손을 안 대는 상태"가 설정한 시간(기본 1분) 이어질 때만 켠다.
+    //  · 다른 앱으로 가 있거나(화면 가려짐) 분할 화면에서 다른 앱을 쓰는 중(창 포커스 잃음)
+    //    에는 시간을 세지 않는다. 예전엔 뒤에 가 있는 동안에도 카운트가 흘러서, 돌아오자마자
+    //    검은 화면으로 떨어졌다.
+    //  · 앱으로 돌아온 것 자체를 조작으로 본다 — 원래 화면을 보여주고 처음부터 다시 센다.
+    //  · 무언가를 물어보는 창이 떠 있는 동안에는 켜지 않는다.
     const ambientDelayMs = (settings.ambientDelaySec ?? 60) * 1000
     const ambientBlocked =
         !timer.ready || isEnding || showEvalModal || showTestTimer || showParking || showCountdownDone || !!timer.recovery
     useEffect(() => {
-        if (!ambientDelayMs || ambientBlocked || ambient) return
+        if (!ambientDelayMs || ambientBlocked) return
         let t = 0
-        const arm = () => {
+        /** 창 포커스를 잃은 상태 (분할 화면의 다른 앱, 알림창 내림 등) */
+        let away = false
+        const stop = () => {
             clearTimeout(t)
+            t = 0
+        }
+        const arm = () => {
+            stop()
+            if (ambient || away || document.visibilityState !== 'visible') return
             t = window.setTimeout(() => setAmbient(true), ambientDelayMs)
         }
+        const leave = () => {
+            away = true
+            stop()
+        }
+        const comeBack = () => {
+            away = false
+            setAmbient(false)
+            arm()
+        }
+        const onVisibility = () => (document.visibilityState === 'visible' ? comeBack() : leave())
+
         const opts = { capture: true, passive: true }
         arm()
         window.addEventListener('pointerdown', arm, opts)
         window.addEventListener('keydown', arm, opts)
         window.addEventListener('wheel', arm, opts)
+        window.addEventListener('blur', leave)
+        window.addEventListener('focus', comeBack)
+        document.addEventListener('visibilitychange', onVisibility)
         return () => {
-            clearTimeout(t)
+            stop()
             window.removeEventListener('pointerdown', arm, opts)
             window.removeEventListener('keydown', arm, opts)
             window.removeEventListener('wheel', arm, opts)
+            window.removeEventListener('blur', leave)
+            window.removeEventListener('focus', comeBack)
+            document.removeEventListener('visibilitychange', onVisibility)
         }
     }, [ambientDelayMs, ambientBlocked, ambient])
 

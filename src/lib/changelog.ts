@@ -30,6 +30,14 @@ export interface ChangelogEntry {
 /** 최신이 맨 앞. 아래로 갈수록 예전 버전 — 이력은 지우지 말고 계속 쌓는다. */
 export const CHANGELOG: ChangelogEntry[] = [
     {
+        version: '1.8.1',
+        date: '2026-09-28',
+        title: '화면 보호가 눈치껏',
+        items: [
+            { icon: 'mdi:monitor-shimmer', text: '다른 앱에 갔다 오거나 분할 화면에서 다른 앱을 쓰는 동안에는 화면 보호 시간을 세지 않아요. 앱으로 돌아오면 원래 화면이 보이고, 그때부터 다시 1분을 셉니다.' },
+        ],
+    },
+    {
         version: '1.8.0',
         date: '2026-09-28',
         title: '튼튼해진 타이머, 화면 보호 모드',
