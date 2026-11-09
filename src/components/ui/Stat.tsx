@@ -19,13 +19,13 @@ export function Metric({ label, value, unit = '', decimals = 0, scale = 1, color
 }) {
     const valid = value != null && Number.isFinite(value);
     return (
-        <div className="bg-white/5 border border-white/10 rounded-2xl p-3 text-center">
-            <span className="flex items-center justify-center gap-1 text-[9px] font-black uppercase tracking-widest opacity-40 mb-1">
+        <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-3 text-center">
+            <span className="flex items-center justify-center gap-1 text-[12px] text-white/45 mb-1">
                 {label}
                 {help}
             </span>
             <span
-                className="text-base font-bold tabular-nums"
+                className="text-[16px] font-medium tabular-nums"
                 style={{ color: valid ? color : 'rgba(255,255,255,0.2)' }}
             >
                 {valid ? `${(value * scale).toFixed(decimals)}${unit}` : placeholder}
@@ -43,12 +43,12 @@ export function Stat({ label, value, color, help }: {
     help?: React.ReactNode;
 }) {
     return (
-        <div className="sm-metric-card bg-white/[0.06] border border-white/10 rounded-2xl p-4 text-center">
-            <div className="flex items-center justify-center gap-1.5 mb-1">
-                <span className="text-[10px] font-black uppercase tracking-widest opacity-40">{label}</span>
+        <div className="sm-metric-card bg-white/[0.05] border border-white/[0.08] rounded-[20px] px-5 py-4">
+            <div className="flex items-center gap-1 mb-1.5 h-5">
+                <span className="text-[12px] text-white/45 truncate">{label}</span>
                 {help}
             </div>
-            <span className={`sm-metric-value text-2xl md:text-3xl font-bold tabular-nums ${color ?? ''}`}>
+            <span className={`sm-metric-value block text-[22px] md:text-[26px] font-light tabular-nums leading-none ${color ?? 'text-white/90'}`}>
                 {value}
             </span>
         </div>

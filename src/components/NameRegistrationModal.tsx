@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
+import BrandMark from './ui/BrandMark'
 import { registerUser } from '../lib/telemetry'
 
 interface Props {
@@ -28,17 +29,20 @@ export default function NameRegistrationModal({ onDone }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-md">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70">
       <motion.div
-        initial={{ opacity: 0, scale: 0.85, y: 20 }}
+        initial={{ opacity: 0, scale: 0.98, y: 8 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        transition={{ type: 'spring', damping: 20 }}
-        className="glass-card p-8 max-w-sm w-full mx-4 border border-white/20"
+        transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+        className="liquid-modal p-6 max-w-sm w-full mx-4"
       >
-        <div className="text-center mb-8">
-          <span className="gradient-text text-4xl font-black">StudyMeter</span>
-          <h2 className="text-xl font-bold mt-4 text-[var(--color-text)]">처음 오셨군요!</h2>
-          <p className="text-sm text-[var(--color-text-secondary)] mt-2 leading-relaxed opacity-70">
+        <div className="mb-6">
+          <div className="flex items-center gap-2">
+            <BrandMark className="w-5 h-5 text-[var(--color-text)]" />
+            <span className="text-[17px] font-semibold">StudyMeter</span>
+          </div>
+          <h2 className="text-[22px] font-medium mt-5 text-[var(--color-text)]">처음 오셨군요</h2>
+          <p className="text-[15px] text-[var(--color-text-secondary)] mt-1.5 leading-relaxed">
             앱에서 사용할 한글 이름을 입력해주세요.<br />
             한 번만 입력하면 됩니다.
           </p>
@@ -50,7 +54,7 @@ export default function NameRegistrationModal({ onDone }: Props) {
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="홍길동"
-            className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-[var(--color-text)] placeholder-[var(--color-text-secondary)]/50 focus:outline-none focus:border-[var(--color-primary)] text-lg text-center font-bold"
+            className="w-full h-12 px-4 rounded-xl text-[var(--color-text)] text-[17px]"
             autoFocus
             maxLength={20}
             disabled={loading}
@@ -61,9 +65,9 @@ export default function NameRegistrationModal({ onDone }: Props) {
           <button
             type="submit"
             disabled={loading || !name.trim()}
-            className="btn btn-primary py-3.5 font-bold text-base disabled:opacity-40 disabled:cursor-not-allowed"
+            className="btn btn-primary h-12 text-[15px] disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            {loading ? '등록 중...' : '시작하기'}
+            {loading ? '등록 중…' : '시작하기'}
           </button>
         </form>
       </motion.div>

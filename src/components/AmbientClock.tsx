@@ -82,7 +82,7 @@ export default function AmbientClock({ active, time, label, running, countdown, 
                             {time}
                         </span>
                         <span
-                            className="text-sm font-medium tracking-[0.3em] uppercase"
+                            className="text-sm font-medium uppercase"
                             style={{ color: 'rgba(255, 255, 255, 0.22)' }}
                         >
                             {running ? label : `일시정지 · ${label}`}

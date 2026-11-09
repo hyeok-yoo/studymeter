@@ -112,14 +112,11 @@ export default function UserMessagePopup() {
       className="overflow-hidden"
       ariaLabel="관리자 메시지"
     >
-      <div className="absolute inset-0 pointer-events-none bg-gradient-to-br from-indigo-400/10 to-transparent" />
       <div className="relative p-6 sm:p-8 flex flex-col gap-4 max-h-[85vh]">
         <header className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/25 flex-shrink-0">
-            <Icon icon="mdi:message-badge" className="text-xl text-white" />
-          </div>
+          <Icon icon="mdi:message-badge" className="text-[18px] text-[var(--color-text-muted)] flex-shrink-0" />
           <div className="min-w-0">
-            <h2 className="text-lg font-black text-[var(--color-text)] leading-tight">관리자 메시지</h2>
+            <h2 className="text-[16px] font-medium text-[var(--color-text)] leading-tight">관리자 메시지</h2>
             <p className="text-[11px] font-bold text-[var(--color-text-secondary)]">
               {messages.length > 1 ? `${messages.length}개의 새 메시지` : '새 메시지가 도착했어요'}
             </p>
@@ -130,11 +127,11 @@ export default function UserMessagePopup() {
         <div className="overflow-y-auto no-scrollbar flex flex-col gap-2.5 pr-1">
           {messages.map((m) => (
             <div key={m.id} className="flex flex-col gap-1">
-              <div className="self-start max-w-[85%] rounded-2xl rounded-tl-sm bg-white/8 border border-white/10 px-4 py-2.5">
+              <div className="self-start max-w-[85%] rounded-2xl rounded-tl-sm bg-[var(--surface-raised)] border border-[var(--color-border)] px-4 py-2.5">
                 <p className="text-sm text-[var(--color-text)] whitespace-pre-wrap break-words">{m.text}</p>
               </div>
               {timeLabel(m) && (
-                <span className="text-[10px] text-[var(--color-text-secondary)] opacity-50 pl-1">{timeLabel(m)}</span>
+                <span className="text-[11px] text-[var(--color-text-secondary)] opacity-50 pl-1">{timeLabel(m)}</span>
               )}
             </div>
           ))}
@@ -154,12 +151,12 @@ export default function UserMessagePopup() {
               placeholder="답장을 입력하세요…"
               rows={2}
               maxLength={2000}
-              className="w-full px-4 py-3 rounded-2xl bg-white/10 border border-white/20 text-sm text-[var(--color-text)] placeholder-[var(--color-text-secondary)]/50 focus:outline-none focus:border-[var(--color-primary)] resize-none"
+              className="w-full px-4 py-3 rounded-2xl bg-[var(--surface-raised)] border border-[var(--hairline-strong)] text-sm text-[var(--color-text)] placeholder-[var(--color-text-secondary)]/50 focus:outline-none focus:border-[var(--color-primary)] resize-none"
             />
             <Pressable
               onClick={handleSend}
               disabled={sending || !reply.trim()}
-              className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-400 hover:to-purple-500 text-white font-black text-sm uppercase tracking-widest shadow-xl shadow-indigo-500/25 disabled:opacity-40"
+              className="btn btn-primary w-full h-12 text-[15px] disabled:opacity-40"
             >
               {sending ? '보내는 중…' : '보내기'}
             </Pressable>

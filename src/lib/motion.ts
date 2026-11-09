@@ -37,16 +37,16 @@ export const pressStrong = {
 
 /** 아래에서 살짝 떠오르며 등장 (퇴장은 같은 경로로 — 공간적 일관성) */
 export const fadeRise: Variants = {
-    initial: { opacity: 0, y: 14 },
+    initial: { opacity: 0, y: 8 },
     animate: { opacity: 1, y: 0, transition: spring.default },
-    exit: { opacity: 0, y: 14, transition: { duration: 0.18 } },
+    exit: { opacity: 0, y: 8, transition: { duration: 0.18 } },
 };
 
-/** 머티리얼 등장 — 블러+스케일을 함께 (유리가 "도착"하는 느낌) */
+/** 표면 등장 — 짧은 페이드와 8px 상승 (블러 애니메이션은 저사양 기기에서 끊겨 뺐다) */
 export const materialize: Variants = {
-    initial: { opacity: 0, scale: 0.96, filter: 'blur(8px)' },
-    animate: { opacity: 1, scale: 1, filter: 'blur(0px)', transition: spring.default },
-    exit: { opacity: 0, scale: 0.96, filter: 'blur(8px)', transition: { duration: 0.18 } },
+    initial: { opacity: 0, y: 8, scale: 0.98 },
+    animate: { opacity: 1, y: 0, scale: 1, transition: spring.default },
+    exit: { opacity: 0, y: 8, scale: 0.98, transition: { duration: 0.16 } },
 };
 
 /** 리스트 컨테이너 stagger */
@@ -55,7 +55,7 @@ export const staggerContainer: Variants = {
 };
 
 export const staggerItem: Variants = {
-    initial: { opacity: 0, y: 10 },
+    initial: { opacity: 0, y: 8 },
     animate: { opacity: 1, y: 0, transition: spring.default },
 };
 

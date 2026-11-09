@@ -239,17 +239,17 @@ function LightRow({ light, state, onToggle, onCommitBrightness }: {
             <Icon
                 icon={lit ? 'mdi:lightbulb' : 'mdi:lightbulb-outline'}
                 className="relative text-[17px] shrink-0"
-                style={{ color: lit ? '#a5b4fc' : 'rgba(255,255,255,0.3)' }}
+                style={{ color: lit ? '#ecb562' : 'rgba(255,255,255,0.3)' }}
             />
             <span className="relative min-w-0 flex-1">
                 <span
                     className="block text-[12px] font-bold truncate"
-                    style={{ color: lit ? '#c7d2fe' : 'rgba(255,255,255,0.55)' }}
+                    style={{ color: lit ? '#f4d199' : 'rgba(255,255,255,0.55)' }}
                 >
                     {light.name}
                 </span>
                 <span
-                    className="block text-[10px] font-medium"
+                    className="block text-[11px] font-medium"
                     style={{ color: lit ? 'rgba(199,210,254,0.7)' : 'rgba(255,255,255,0.3)' }}
                 >
                     {lit ? (shownPct != null ? `${shownPct}%` : '켜짐') : '꺼짐'}
@@ -263,11 +263,11 @@ function LightRow({ light, state, onToggle, onCommitBrightness }: {
         return (
             <Pressable
                 onClick={onToggle}
-                pressScale={0.95}
+                pressScale={0.97}
                 className="flex items-center gap-2 px-3 py-2.5 rounded-2xl border text-left"
                 style={{
-                    background: on ? 'rgba(99,102,241,0.18)' : 'rgba(255,255,255,0.04)',
-                    borderColor: on ? 'rgba(99,102,241,0.35)' : 'rgba(255,255,255,0.08)',
+                    background: on ? 'rgba(233,162,60,0.144)' : 'rgba(255,255,255,0.04)',
+                    borderColor: on ? 'rgba(233,162,60,0.28)' : 'rgba(255,255,255,0.08)',
                 }}
             >
                 {face}
@@ -297,8 +297,8 @@ function LightRow({ light, state, onToggle, onCommitBrightness }: {
             className="relative overflow-hidden flex items-center gap-2 px-3 py-2.5 rounded-2xl border text-left
                        touch-pan-y select-none cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/50"
             style={{
-                background: lit ? 'rgba(99,102,241,0.14)' : 'rgba(255,255,255,0.04)',
-                borderColor: lit ? 'rgba(99,102,241,0.35)' : 'rgba(255,255,255,0.08)',
+                background: lit ? 'rgba(233,162,60,0.112)' : 'rgba(255,255,255,0.04)',
+                borderColor: lit ? 'rgba(233,162,60,0.28)' : 'rgba(255,255,255,0.08)',
             }}
         >
             {/*
@@ -309,7 +309,7 @@ function LightRow({ light, state, onToggle, onCommitBrightness }: {
             <motion.span
                 aria-hidden
                 className="absolute inset-y-0 left-0 w-full origin-left"
-                style={{ background: 'rgba(99,102,241,0.30)' }}
+                style={{ background: 'rgba(233,162,60,0.24)' }}
                 initial={false}
                 animate={{ scaleX: lit ? (shownPct ?? 0) / 100 : 0 }}
                 transition={dragging ? { duration: 0 } : spring.default}
@@ -337,7 +337,7 @@ function StatChip({ label, value, unit, tone, trend }: {
             }}
         >
             <div
-                className="text-[10px] font-bold tracking-wide mb-0.5"
+                className="text-[11px] font-bold tracking-wide mb-0.5"
                 style={{ color: warn ? '#fcd34d' : 'rgba(255,255,255,0.45)' }}
             >
                 {label}
@@ -470,17 +470,17 @@ export default function RoomPanel({
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={spring.default}
-            className="mt-6 w-full max-w-3xl mx-auto rounded-3xl border border-white/10 bg-white/[0.06] p-5"
+            className="mt-4 w-full max-w-3xl mx-auto rounded-[24px] border border-white/10 bg-white/[0.04] p-5"
             style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}
         >
             {/* 헤더 */}
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                     <Icon icon="mdi:home-outline" className="text-[17px] opacity-50" />
-                    <span className="text-[10px] font-black uppercase tracking-widest opacity-40">내 방</span>
+                    <span className="text-[12px] text-white/45">내 방</span>
                 </div>
                 {lastError && (
-                    <span className="text-[10px] font-bold" style={{ color: '#fca5a5' }}>
+                    <span className="text-[11px] font-bold" style={{ color: '#fca5a5' }}>
                         {lastError}
                     </span>
                 )}
@@ -528,7 +528,7 @@ export default function RoomPanel({
                 {e?.deskCover && (
                     <div className="rounded-2xl border border-white/[0.08] bg-white/[0.04] p-3">
                         <div className="flex items-baseline justify-between mb-2.5">
-                            <span className="text-[10px] font-bold tracking-wide opacity-40">책상 높이</span>
+                            <span className="text-[12px] text-white/45">책상 높이</span>
                             <span className="text-[17px] font-bold text-display" style={{ color: 'rgba(255,255,255,0.92)' }}>
                                 {deskHeight != null ? deskHeight.toFixed(1) : '—'}
                                 <span className="text-[11px] font-medium opacity-50 ml-0.5">cm</span>
@@ -537,7 +537,7 @@ export default function RoomPanel({
                         <div className="flex gap-1.5">
                             <Pressable
                                 onClick={() => void actions.moveDesk(config?.desk.sit ?? 12)}
-                                pressScale={0.95}
+                                pressScale={0.97}
                                 className="flex-1 py-2 rounded-xl text-[12px] font-bold border"
                                 style={{ background: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.7)' }}
                             >
@@ -545,7 +545,7 @@ export default function RoomPanel({
                             </Pressable>
                             <Pressable
                                 onClick={() => void actions.moveDesk(config?.desk.stand ?? 68)}
-                                pressScale={0.95}
+                                pressScale={0.97}
                                 className="flex-1 py-2 rounded-xl text-[12px] font-bold border"
                                 style={{ background: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.7)' }}
                             >
@@ -558,7 +558,7 @@ export default function RoomPanel({
                 {e?.climate && (
                     <div className="rounded-2xl border border-white/[0.08] bg-white/[0.04] p-3">
                         <div className="flex items-baseline justify-between mb-2.5">
-                            <span className="text-[10px] font-bold tracking-wide opacity-40">
+                            <span className="text-[12px] text-white/45">
                                 에어컨 {climateOn ? `· ${climateMode}` : ''}
                             </span>
                             <span className="text-[17px] font-bold text-display" style={{ color: 'rgba(255,255,255,0.92)' }}>
@@ -569,7 +569,7 @@ export default function RoomPanel({
                         <div className="flex gap-1.5">
                             <Pressable
                                 onClick={() => climateTarget != null && void actions.setClimateTemperature(climateTarget - 0.5)}
-                                pressScale={0.95}
+                                pressScale={0.97}
                                 aria-label="설정 온도 낮추기"
                                 className="w-10 py-2 rounded-xl border flex items-center justify-center"
                                 style={{ background: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.7)' }}
@@ -578,7 +578,7 @@ export default function RoomPanel({
                             </Pressable>
                             <Pressable
                                 onClick={() => climateTarget != null && void actions.setClimateTemperature(climateTarget + 0.5)}
-                                pressScale={0.95}
+                                pressScale={0.97}
                                 aria-label="설정 온도 높이기"
                                 className="w-10 py-2 rounded-xl border flex items-center justify-center"
                                 style={{ background: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.7)' }}
@@ -587,12 +587,12 @@ export default function RoomPanel({
                             </Pressable>
                             <Pressable
                                 onClick={() => void actions.setClimateMode(climateOn ? 'off' : 'cool')}
-                                pressScale={0.95}
+                                pressScale={0.97}
                                 className="flex-1 py-2 rounded-xl text-[12px] font-bold border"
                                 style={{
-                                    background: climateOn ? 'rgba(255,255,255,0.05)' : 'rgba(99,102,241,0.18)',
-                                    borderColor: climateOn ? 'rgba(255,255,255,0.1)' : 'rgba(99,102,241,0.35)',
-                                    color: climateOn ? 'rgba(255,255,255,0.7)' : '#c7d2fe',
+                                    background: climateOn ? 'rgba(255,255,255,0.05)' : 'rgba(91,148,255,0.144)',
+                                    borderColor: climateOn ? 'rgba(255,255,255,0.1)' : 'rgba(91,148,255,0.28)',
+                                    color: climateOn ? 'rgba(255,255,255,0.7)' : '#f4d199',
                                 }}
                             >
                                 {climateOn ? '끄기' : '켜기'}
@@ -611,10 +611,10 @@ export default function RoomPanel({
                                         <Pressable
                                             key={m}
                                             onClick={() => void actions.setFanMode(m)}
-                                            pressScale={0.95}
+                                            pressScale={0.97}
                                             aria-pressed={active}
                                             className="relative flex-1 min-w-0 py-1.5 rounded-lg text-[11px] font-bold truncate"
-                                            style={{ color: active ? '#c7d2fe' : 'rgba(255,255,255,0.5)' }}
+                                            style={{ color: active ? '#f4d199' : 'rgba(255,255,255,0.5)' }}
                                         >
                                             {/* 선택 표시는 칸 사이를 미끄러져 이동한다 — 어디서 어디로 갔는지 보이게 */}
                                             {active && (
@@ -622,8 +622,8 @@ export default function RoomPanel({
                                                     layoutId="ha-fan-mode-active"
                                                     className="absolute inset-0 rounded-lg border"
                                                     style={{
-                                                        background: 'rgba(99,102,241,0.22)',
-                                                        borderColor: 'rgba(99,102,241,0.38)',
+                                                        background: 'rgba(91,148,255,0.176)',
+                                                        borderColor: 'rgba(91,148,255,0.304)',
                                                     }}
                                                     transition={spring.snappy}
                                                 />
@@ -642,7 +642,7 @@ export default function RoomPanel({
             {!!tempTargets.length && (
                 <div>
                     <div className="flex items-baseline justify-between mb-1.5">
-                        <span className="text-[10px] font-bold tracking-wide opacity-40">색온도</span>
+                        <span className="text-[12px] text-white/45">색온도</span>
                         <span className="text-[12px] font-bold" style={{ color: 'rgba(255,255,255,0.8)' }}>
                             {kelvin}K
                         </span>
@@ -669,17 +669,17 @@ export default function RoomPanel({
                                         setKelvin(chip.preset.colorTempK);
                                         void actions.applyLightPreset(chip.preset, tempTargets);
                                     }}
-                                    pressScale={0.95}
+                                    pressScale={0.97}
                                     aria-label={`${chip.name} 조명 프리셋 적용`}
                                     className="px-3 py-1.5 rounded-xl text-[12px] font-bold border flex items-baseline gap-1"
                                     style={{
-                                        background: active ? 'rgba(99,102,241,0.18)' : 'rgba(255,255,255,0.05)',
-                                        borderColor: active ? 'rgba(99,102,241,0.35)' : 'rgba(255,255,255,0.1)',
-                                        color: active ? '#c7d2fe' : 'rgba(255,255,255,0.6)',
+                                        background: active ? 'rgba(233,162,60,0.144)' : 'rgba(255,255,255,0.05)',
+                                        borderColor: active ? 'rgba(233,162,60,0.28)' : 'rgba(255,255,255,0.1)',
+                                        color: active ? '#f4d199' : 'rgba(255,255,255,0.6)',
                                     }}
                                 >
                                     {chip.name}
-                                    <span className="text-[10px] font-medium opacity-60">
+                                    <span className="text-[11px] font-medium opacity-60">
                                         {chip.preset.colorTempK}K
                                         {chip.preset.brightnessPct != null && `·${chip.preset.brightnessPct}%`}
                                     </span>
@@ -689,7 +689,7 @@ export default function RoomPanel({
                         {!!currentSubject && (
                             <Pressable
                                 onClick={() => onSaveSubjectPreset(currentSubject, kelvin)}
-                                pressScale={0.95}
+                                pressScale={0.97}
                                 aria-label={`현재 색온도를 ${currentSubject} 프리셋으로 저장`}
                                 className="px-3 py-1.5 rounded-xl text-[12px] font-bold border flex items-center gap-1"
                                 style={{ background: 'rgba(255,255,255,0.04)', borderColor: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.4)' }}

@@ -15,32 +15,32 @@ const SPONSORS_URL = 'https://github.com/sponsors/hyeok-yoo'
 const DEVTOOLS_MODE_KEY = 'sm_devtools_mode' // 'local' | 'server'
 
 const SKILLS = [
-    { icon: 'mdi:react', label: 'React / TypeScript', color: '#61dafb' },
-    { icon: 'mdi:android', label: 'Android / Capacitor', color: '#3ddc84' },
-    { icon: 'mdi:brain', label: 'ML · rPPG · Eye Tracking', color: '#a855f7' },
-    { icon: 'mdi:robot-outline', label: 'Gemini AI 연동', color: '#f59e0b' },
-    { icon: 'mdi:database-outline', label: 'IndexedDB / PWA', color: '#06b6d4' },
-    { icon: 'mdi:chart-line', label: 'Data Visualization', color: '#10b981' },
+    { icon: 'mdi:react', label: 'React / TypeScript', color: 'var(--color-text-muted)' },
+    { icon: 'mdi:android', label: 'Android / Capacitor', color: 'var(--color-text-muted)' },
+    { icon: 'mdi:brain', label: 'ML · rPPG · Eye Tracking', color: 'var(--color-text-muted)' },
+    { icon: 'mdi:robot-outline', label: 'Gemini AI 연동', color: 'var(--color-text-muted)' },
+    { icon: 'mdi:database-outline', label: 'IndexedDB / PWA', color: 'var(--color-text-muted)' },
+    { icon: 'mdi:chart-line', label: 'Data Visualization', color: 'var(--color-text-muted)' },
 ]
 
 const HIGHLIGHTS = [
     {
-        emoji: '🧠',
+        icon: 'mdi:eye-outline',
         title: '집중도 측정 엔진',
         desc: 'rPPG·MediaPipe·ONNX를 조합해 카메라 하나로 심박수·시선·집중 점수를 비접촉 측정하는 ML 파이프라인을 직접 구축했습니다.',
     },
     {
-        emoji: '📱',
+        icon: 'mdi:cellphone',
         title: '크로스플랫폼 완성도',
         desc: 'React PWA와 Android 네이티브(Capacitor)를 동시에 지원하면서, 절대시각 기반 타이머로 앱 종료·재시작에도 1ms 오차 없는 정밀 계측을 구현했습니다.',
     },
     {
-        emoji: '🎨',
+        icon: 'mdi:palette-outline',
         title: '디자인 감각',
         desc: 'Liquid Glass 모피즘 UI, Framer Motion 애니메이션, 반응형 레이아웃까지 — 기능과 미감을 함께 잡는 드문 개발자입니다.',
     },
     {
-        emoji: '⚡',
+        icon: 'mdi:account-hard-hat-outline',
         title: '혼자 다 만들었습니다',
         desc: '기획·디자인·프론트엔드·Android·ML 모델 학습·서버 프로토콜 설계까지 전부 1인 개발. StudyMeter는 그 결과물입니다.',
     },
@@ -48,7 +48,7 @@ const HIGHLIGHTS = [
 
 /** 개발자 도구의 결과/상태 박스 — 성공·실패·중립 세 가지만 쓴다. */
 const BOX_TONE = {
-    neutral: 'bg-white/5 border-white/10',
+    neutral: 'bg-[var(--surface-raised)] border-[var(--color-border)]',
     ok: 'bg-emerald-500/12 border-emerald-400/25',
     error: 'bg-red-500/12 border-red-400/25',
 } as const
@@ -83,21 +83,19 @@ export default function DeveloperPage() {
             {/* 히어로 */}
             <motion.div
                 variants={staggerItem}
-                className="glass-card p-8 md:p-12 relative overflow-hidden border-none dark:bg-white/5 bg-white/40"
+                className="glass-card p-8 md:p-10 relative overflow-hidden"
             >
-                <div className="absolute -top-20 -right-20 w-64 h-64 bg-indigo-500/15 blur-[80px] rounded-full pointer-events-none" />
-                <div className="absolute -bottom-16 -left-16 w-48 h-48 bg-purple-500/15 blur-[80px] rounded-full pointer-events-none" />
 
                 <div className="relative z-10 text-center">
                     {/* 아바타 */}
-                    <div className="w-24 h-24 mx-auto mb-6 rounded-full bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center shadow-2xl ring-4 ring-indigo-400/30">
-                        <span className="text-4xl font-black text-white">Y</span>
+                    <div className="w-20 h-20 mx-auto mb-5 rounded-full bg-[var(--surface-raised)] border border-[var(--hairline-strong)] flex items-center justify-center">
+                        <span className="text-[28px] font-light text-[var(--color-text-secondary)]">Y</span>
                     </div>
 
-                    <h1 className="text-3xl md:text-4xl font-black tracking-tight text-display text-[var(--color-text)] mb-1">
+                    <h1 className="text-[28px] md:text-[34px] font-medium text-display text-[var(--color-text)] mb-1">
                         Yoo Seung Hyeok
                     </h1>
-                    <p className="text-lg font-bold gradient-text mb-2">유승혁</p>
+                    <p className="text-[16px] text-[var(--color-text-secondary)] mb-2">유승혁</p>
                     <p className="text-sm text-[var(--color-text-secondary)] opacity-70">
                         Full-Stack Developer · ML Engineer · Designer
                     </p>
@@ -107,9 +105,9 @@ export default function DeveloperPage() {
             {/* 찬양 글 */}
             <motion.div
                 variants={staggerItem}
-                className="glass-card p-6 md:p-8 border-none dark:bg-white/5 bg-white/40 space-y-4"
+                className="glass-card p-5 md:p-6 border-none dark:bg-white/5 bg-white/40 space-y-4"
             >
-                <h2 className="text-xl font-black gradient-text">StudyMeter를 만든 사람</h2>
+                <h2 className="text-xl font-semibold">StudyMeter를 만든 사람</h2>
 
                 <p className="text-[var(--color-text-secondary)] leading-relaxed">
                     유승혁은 <span className="font-bold text-[var(--color-text)]">기술로 공부를 더 잘할 수 있게 만들겠다</span>는 단순하지만 진지한 목표 하나로 StudyMeter를 처음 코드 한 줄부터 지금의 완성도까지 끌어올린 개발자입니다.
@@ -143,7 +141,7 @@ export default function DeveloperPage() {
                         variants={staggerItem}
                         className="glass-card p-5 border-none dark:bg-white/5 bg-white/40"
                     >
-                        <div className="text-2xl mb-2">{h.emoji}</div>
+                        <Icon icon={h.icon} className="text-[20px] text-[var(--color-text-muted)] mb-3" />
                         <h3 className="font-black text-[var(--color-text)] mb-1">{h.title}</h3>
                         <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed opacity-80">{h.desc}</p>
                     </motion.div>
@@ -155,7 +153,7 @@ export default function DeveloperPage() {
                 variants={staggerItem}
                 className="glass-card p-6 border-none dark:bg-white/5 bg-white/40"
             >
-                <h2 className="text-lg font-black text-[var(--color-text)] mb-4">기술 스택</h2>
+                <h2 className="text-[16px] font-medium text-[var(--color-text)] mb-4">기술 스택</h2>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                     {SKILLS.map((s) => (
                         <div key={s.label} className="glass-card-elevated flex items-center gap-2.5 p-3">
@@ -180,7 +178,7 @@ export default function DeveloperPage() {
                     transition={spring.snappy}
                     className="flex-1 flex items-center justify-center gap-3 py-4 px-6 rounded-2xl bg-[var(--color-surface)] hover:bg-[var(--color-surface-elevated)] border border-[var(--color-border)] font-black text-[var(--color-text)] group"
                 >
-                    <Icon icon="mdi:github" className="text-2xl group-hover:scale-110 transition-transform" />
+                    <Icon icon="mdi:github" className="text-2xl transition-transform" />
                     <div className="text-left">
                         <p className="text-sm">GitHub</p>
                         <p className="text-xs font-medium text-[var(--color-text-secondary)] opacity-60">@hyeok-yoo</p>
@@ -194,12 +192,12 @@ export default function DeveloperPage() {
                     whileTap={{ scale: 0.96 }}
                     whileHover={{ y: -2 }}
                     transition={spring.snappy}
-                    className="flex-1 flex items-center justify-center gap-3 py-4 px-6 rounded-2xl bg-gradient-to-r from-pink-500/15 to-rose-500/15 hover:from-pink-500/25 hover:to-rose-500/25 border border-pink-400/25 font-black group"
+                    className="flex-1 flex items-center justify-center gap-3 py-4 px-6 rounded-2xl bg-[var(--surface-raised)] border border-[var(--color-border)] font-medium group"
                 >
-                    <Icon icon="mdi:heart" className="text-2xl text-pink-400 group-hover:scale-110 transition-transform" />
+                    <Icon icon="mdi:heart" className="text-2xl text-[var(--color-text-muted)] transition-transform" />
                     <div className="text-left">
                         <p className="text-sm text-[var(--color-text)]">GitHub Sponsors</p>
-                        <p className="text-xs font-medium text-pink-400/70">개발을 응원해주세요 ☕</p>
+                        <p className="text-[12px] text-[var(--color-text-muted)]">개발을 응원해주세요</p>
                     </div>
                 </motion.a>
             </motion.div>
@@ -212,7 +210,7 @@ export default function DeveloperPage() {
             {/* 앱 링크 */}
             <motion.div variants={staggerItem} className="text-center">
                 <p className="text-xs text-[var(--color-text-secondary)] opacity-40">
-                    StudyMeter v{__APP_VERSION__} · made with ♥ in Korea
+                    StudyMeter v{__APP_VERSION__} · made in Korea
                 </p>
             </motion.div>
         </motion.div>
@@ -231,10 +229,10 @@ function DeveloperTools() {
     }
 
     return (
-        <div className="glass-card p-6 md:p-8 border-none dark:bg-white/5 bg-white/40 space-y-6">
+        <div className="glass-card p-5 md:p-6 border-none dark:bg-white/5 bg-white/40 space-y-6">
             <div className="flex items-center gap-2.5">
-                <Icon icon="mdi:tools" className="text-2xl text-indigo-400" />
-                <h2 className="text-xl font-black gradient-text">개발자 도구</h2>
+                <Icon icon="mdi:tools" className="text-2xl text-[var(--color-text-muted)]" />
+                <h2 className="text-xl font-semibold">개발자 도구</h2>
             </div>
 
             {/* 모드 전환: 온디바이스(기본) ↔ PC 서버 — segmented control */}
@@ -300,7 +298,7 @@ function ServerTools() {
                     <p className="flex-1 text-sm font-bold text-red-400 leading-snug break-all">{devError}</p>
                     <Pressable
                         onClick={clearDevError}
-                        pressScale={0.85}
+                        pressScale={0.97}
                         className="text-red-400/60 hover:text-red-400 text-lg leading-none flex-shrink-0"
                         aria-label="닫기"
                     >
@@ -350,7 +348,7 @@ function LocalLabTools() {
                     <p className="flex-1 text-sm font-bold text-red-400 leading-snug break-all">{lab.labError}</p>
                     <Pressable
                         onClick={lab.clearLabError}
-                        pressScale={0.85}
+                        pressScale={0.97}
                         className="text-red-400/60 hover:text-red-400 text-lg leading-none flex-shrink-0"
                         aria-label="닫기"
                     >
@@ -360,7 +358,7 @@ function LocalLabTools() {
             )}
 
             {/* 측정 상태 카드 */}
-            <div className="flex items-center justify-between px-4 py-3 rounded-2xl bg-white/5 border border-white/10">
+            <div className="flex items-center justify-between px-4 py-3 rounded-2xl bg-[var(--surface-raised)] border border-[var(--color-border)]">
                 <div className="flex items-center gap-2.5">
                     <motion.div
                         className="w-2.5 h-2.5 rounded-full"
@@ -376,7 +374,7 @@ function LocalLabTools() {
                             : lab.status === 'starting' ? '카메라 시작 중...' : '측정 꺼짐'}
                     </span>
                     {measuring && lab.scoreSource && (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/10 text-[var(--color-text-secondary)]">
+                        <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-[var(--surface-raised)] text-[var(--color-text-secondary)]">
                             {lab.scoreSource}
                         </span>
                     )}
@@ -384,8 +382,8 @@ function LocalLabTools() {
                 <Pressable
                     onClick={measuring ? lab.stopMeasure : lab.startMeasure}
                     disabled={lab.status === 'starting'}
-                    pressScale={0.95}
-                    className="text-xs font-black px-3.5 py-2 rounded-xl disabled:opacity-40 bg-white/5 hover:bg-white/10 border border-white/10 text-[var(--color-text-secondary)]"
+                    pressScale={0.97}
+                    className="text-xs font-black px-3.5 py-2 rounded-xl disabled:opacity-40 bg-[var(--surface-raised)] hover:bg-[var(--surface-raised)] border border-[var(--color-border)] text-[var(--color-text-secondary)]"
                 >
                     {measuring ? '측정 끄기' : '측정 켜기'}
                 </Pressable>
@@ -393,7 +391,7 @@ function LocalLabTools() {
 
             {/* 데이터 수집 */}
             <section className="space-y-3">
-                <h3 className="text-sm font-black text-[var(--color-text)] uppercase tracking-wider opacity-70">
+                <h3 className="text-sm font-black text-[var(--color-text)] tracking-wider opacity-70">
                     데이터 수집 (기기 저장)
                 </h3>
                 <div className="flex flex-col sm:flex-row gap-2">
@@ -441,16 +439,16 @@ function LocalLabTools() {
                     <Pressable
                         onClick={lab.exportCsv}
                         disabled={lab.rowCount === 0}
-                        pressScale={0.94}
-                        className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-[var(--color-text-secondary)] disabled:opacity-40"
+                        pressScale={0.97}
+                        className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl bg-[var(--surface-raised)] hover:bg-[var(--surface-raised)] border border-[var(--color-border)] text-[var(--color-text-secondary)] disabled:opacity-40"
                     >
                         <Icon icon="mdi:export" className="text-sm" />
                         CSV 내보내기
                     </Pressable>
                     <Pressable
                         onClick={() => fileInputRef.current?.click()}
-                        pressScale={0.94}
-                        className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-[var(--color-text-secondary)]"
+                        pressScale={0.97}
+                        className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl bg-[var(--surface-raised)] hover:bg-[var(--surface-raised)] border border-[var(--color-border)] text-[var(--color-text-secondary)]"
                     >
                         <Icon icon="mdi:import" className="text-sm" />
                         CSV 가져오기
@@ -462,7 +460,7 @@ function LocalLabTools() {
                             }
                         }}
                         disabled={lab.rowCount === 0}
-                        pressScale={0.94}
+                        pressScale={0.97}
                         className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 border border-red-400/20 text-red-400 disabled:opacity-40"
                     >
                         <Icon icon="mdi:delete-outline" className="text-sm" />
@@ -490,14 +488,14 @@ function LocalLabTools() {
 
             {/* 온디바이스 학습 */}
             <section className="space-y-3">
-                <h3 className="text-sm font-black text-[var(--color-text)] uppercase tracking-wider opacity-70">
+                <h3 className="text-sm font-black text-[var(--color-text)] tracking-wider opacity-70">
                     온디바이스 학습
                 </h3>
                 <Pressable
                     onClick={lab.train}
                     disabled={lab.training || lab.rowCount < 40}
                     pressScale={0.97}
-                    className="w-full py-3 px-4 rounded-2xl font-black text-sm disabled:opacity-50 disabled:cursor-not-allowed bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-400/30 text-indigo-300 flex items-center justify-center gap-2"
+                    className="w-full py-3 px-4 rounded-2xl font-black text-sm disabled:opacity-50 disabled:cursor-not-allowed bg-[var(--surface-raised)] hover:bg-[var(--surface-raised)] border border-[var(--hairline-strong)] text-[var(--color-text-secondary)] flex items-center justify-center gap-2"
                 >
                     {lab.training ? (
                         <>
@@ -537,7 +535,7 @@ function LocalLabTools() {
 
             {/* 로컬 모델 관리 */}
             <section className="space-y-3">
-                <h3 className="text-sm font-black text-[var(--color-text)] uppercase tracking-wider opacity-70">
+                <h3 className="text-sm font-black text-[var(--color-text)] tracking-wider opacity-70">
                     로컬 모델 관리
                 </h3>
                 {lab.models.length === 0 ? (
@@ -550,14 +548,14 @@ function LocalLabTools() {
                                 <div
                                     key={m.id}
                                     className={`flex items-center gap-3 px-4 py-3 rounded-2xl border transition-colors ${
-                                        active ? 'bg-indigo-500/12 border-indigo-400/40' : 'bg-white/5 border-white/10'
+                                        active ? 'bg-[var(--surface-raised)] border-[var(--hairline-strong)]' : 'bg-[var(--surface-raised)] border-[var(--color-border)]'
                                     }`}
                                 >
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2">
                                             <p className="text-sm font-bold text-[var(--color-text)] truncate">{m.name}</p>
                                             {active && (
-                                                <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-indigo-500/30 text-indigo-300 border border-indigo-400/30 flex-shrink-0">
+                                                <span className="text-[11px] font-black px-2 py-0.5 rounded-full bg-[var(--surface-raised)] text-[var(--color-text-secondary)] border border-[var(--hairline-strong)] flex-shrink-0">
                                                     현재
                                                 </span>
                                             )}
@@ -568,8 +566,8 @@ function LocalLabTools() {
                                     </div>
                                     <Pressable
                                         onClick={() => lab.applyModel(active ? null : m.id!)}
-                                        pressScale={0.94}
-                                        className="flex-shrink-0 text-xs font-black px-3.5 py-2 rounded-xl bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-400/30 text-indigo-300"
+                                        pressScale={0.97}
+                                        className="flex-shrink-0 text-xs font-black px-3.5 py-2 rounded-xl bg-[var(--surface-raised)] hover:bg-[var(--surface-raised)] border border-[var(--hairline-strong)] text-[var(--color-text-secondary)]"
                                     >
                                         {active ? '해제' : '적용'}
                                     </Pressable>
@@ -577,7 +575,7 @@ function LocalLabTools() {
                                         onClick={async () => {
                                             if (window.confirm(`모델 "${m.name}"을 삭제할까요?`)) await lab.deleteModel(m.id!)
                                         }}
-                                        pressScale={0.9}
+                                        pressScale={0.97}
                                         className="flex-shrink-0 text-xs font-black px-2.5 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 border border-red-400/20 text-red-400"
                                         aria-label="모델 삭제"
                                     >
@@ -598,7 +596,7 @@ function LocalLabTools() {
 
 function ConnectionStatusCard({ connected }: { connected: boolean }) {
     return (
-        <div className="flex items-center justify-between px-4 py-3 rounded-2xl bg-white/5 border border-white/10">
+        <div className="flex items-center justify-between px-4 py-3 rounded-2xl bg-[var(--surface-raised)] border border-[var(--color-border)]">
             <div className="flex items-center gap-2.5">
                 <div
                     className="w-2.5 h-2.5 rounded-full"
@@ -639,7 +637,7 @@ function CollectSection({
 
     return (
         <section className="space-y-3">
-            <h3 className="text-sm font-black text-[var(--color-text)] uppercase tracking-wider opacity-70">데이터 수집</h3>
+            <h3 className="text-sm font-black text-[var(--color-text)] tracking-wider opacity-70">데이터 수집</h3>
             <div className="flex flex-col sm:flex-row gap-2">
                 <Pressable
                     onClick={() => onStart(0)}
@@ -698,12 +696,12 @@ function TrainSection({
 }) {
     return (
         <section className="space-y-3">
-            <h3 className="text-sm font-black text-[var(--color-text)] uppercase tracking-wider opacity-70">모델 학습</h3>
+            <h3 className="text-sm font-black text-[var(--color-text)] tracking-wider opacity-70">모델 학습</h3>
             <Pressable
                 onClick={onStart}
                 disabled={running}
                 pressScale={0.97}
-                className="w-full py-3 px-4 rounded-2xl font-black text-sm disabled:opacity-50 disabled:cursor-not-allowed bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-400/30 text-indigo-300 flex items-center justify-center gap-2"
+                className="w-full py-3 px-4 rounded-2xl font-black text-sm disabled:opacity-50 disabled:cursor-not-allowed bg-[var(--surface-raised)] hover:bg-[var(--surface-raised)] border border-[var(--hairline-strong)] text-[var(--color-text-secondary)] flex items-center justify-center gap-2"
             >
                 {running ? (
                     <>
@@ -758,11 +756,11 @@ function ModelSection({
     return (
         <section className="space-y-3">
             <div className="flex items-center justify-between">
-                <h3 className="text-sm font-black text-[var(--color-text)] uppercase tracking-wider opacity-70">모델 관리</h3>
+                <h3 className="text-sm font-black text-[var(--color-text)] tracking-wider opacity-70">모델 관리</h3>
                 <Pressable
                     onClick={onRefresh}
-                    pressScale={0.94}
-                    className="text-xs font-bold px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-[var(--color-text-secondary)] flex items-center gap-1.5"
+                    pressScale={0.97}
+                    className="text-xs font-bold px-3 py-1.5 rounded-xl bg-[var(--surface-raised)] hover:bg-[var(--surface-raised)] border border-[var(--color-border)] text-[var(--color-text-secondary)] flex items-center gap-1.5"
                 >
                     <Icon icon="mdi:refresh" className="text-sm" />
                     목록 새로고침
@@ -779,15 +777,15 @@ function ModelSection({
                             key={m.name}
                             className={`flex items-center gap-3 px-4 py-3 rounded-2xl border transition-colors ${
                                 m.active
-                                    ? 'bg-indigo-500/12 border-indigo-400/40'
-                                    : 'bg-white/5 border-white/10'
+                                    ? 'bg-[var(--surface-raised)] border-[var(--hairline-strong)]'
+                                    : 'bg-[var(--surface-raised)] border-[var(--color-border)]'
                             }`}
                         >
                             <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2">
                                     <p className="text-sm font-bold text-[var(--color-text)] truncate">{m.name}</p>
                                     {m.active && (
-                                        <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-indigo-500/30 text-indigo-300 border border-indigo-400/30 flex-shrink-0">
+                                        <span className="text-[11px] font-black px-2 py-0.5 rounded-full bg-[var(--surface-raised)] text-[var(--color-text-secondary)] border border-[var(--hairline-strong)] flex-shrink-0">
                                             현재
                                         </span>
                                     )}
@@ -799,8 +797,8 @@ function ModelSection({
                             <Pressable
                                 onClick={() => onApply(m.name)}
                                 disabled={m.active}
-                                pressScale={0.94}
-                                className="flex-shrink-0 text-xs font-black px-3.5 py-2 rounded-xl disabled:opacity-40 disabled:cursor-not-allowed bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-400/30 text-indigo-300"
+                                pressScale={0.97}
+                                className="flex-shrink-0 text-xs font-black px-3.5 py-2 rounded-xl disabled:opacity-40 disabled:cursor-not-allowed bg-[var(--surface-raised)] hover:bg-[var(--surface-raised)] border border-[var(--hairline-strong)] text-[var(--color-text-secondary)]"
                             >
                                 {m.active ? '적용됨' : '적용'}
                             </Pressable>

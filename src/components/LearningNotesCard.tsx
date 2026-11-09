@@ -76,13 +76,11 @@ export default function LearningNotesCard({ settings, bare = false }: LearningNo
         <>
             {!bare && (
                 <div className="flex items-center gap-2 mb-1.5">
-                    <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-500 to-orange-600 flex items-center justify-center shadow-lg shadow-amber-500/20 flex-shrink-0">
-                        <Icon icon="mdi:lightbulb-on-outline" className="text-lg text-white" />
-                    </div>
-                    <h2 className="text-lg font-black text-[var(--color-text)]">학습 복기</h2>
+                    <Icon icon="mdi:lightbulb-on-outline" className="text-[18px] text-[var(--color-text-muted)] flex-shrink-0" />
+                    <h2 className="text-[16px] font-medium text-[var(--color-text)]">학습 복기</h2>
                 </div>
             )}
-            <p className="text-[11px] text-[var(--color-text-secondary)] opacity-50 mb-4 italic">
+            <p className="text-[11px] text-[var(--color-text-secondary)] opacity-50 mb-4 not-italic">
                 세션을 마칠 때 남긴 "배운 것"을 검색하고 다시 떠올려 보세요. AI 채팅에서도 같은 기록을 찾아 활용할 수 있어요.
             </p>
 
@@ -93,22 +91,22 @@ export default function LearningNotesCard({ settings, bare = false }: LearningNo
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     placeholder="배운 내용 검색 (예: 이차함수 그래프)"
-                    className="w-full pl-10 pr-4 py-3 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-amber-400/60 text-[var(--color-text)] text-sm"
+                    className="w-full pl-10 pr-4 py-3 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none  text-[var(--color-text)] text-sm"
                 />
                 {searching && (
-                    <Icon icon="mdi:loading" className="absolute right-3.5 top-1/2 -translate-y-1/2 text-base text-amber-400 animate-spin" />
+                    <Icon icon="mdi:loading" className="absolute right-3.5 top-1/2 -translate-y-1/2 text-base text-[var(--color-text-muted)] animate-spin" />
                 )}
             </div>
 
             <div className="space-y-2">
                 {!query.trim() && !loading && notes.length > 0 && (
-                    <p className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider opacity-50 px-1">최근 기록</p>
+                    <p className="text-[11px] font-bold text-[var(--color-text-secondary)] tracking-wider opacity-50 px-1">최근 기록</p>
                 )}
 
                 <AnimatePresence initial={false}>
                     {loading ? (
                         <div className="space-y-2 animate-pulse">
-                            {[0, 1, 2].map(i => <div key={i} className="h-14 rounded-xl bg-black/[0.04] dark:bg-white/5" />)}
+                            {[0, 1, 2].map(i => <div key={i} className="h-14 rounded-xl bg-[var(--surface-raised)]" />)}
                         </div>
                     ) : notes.length === 0 ? (
                         <motion.p
@@ -116,7 +114,7 @@ export default function LearningNotesCard({ settings, bare = false }: LearningNo
                             initial="initial"
                             animate="animate"
                             exit="exit"
-                            className="text-center text-xs text-[var(--color-text-secondary)] opacity-50 py-6 italic"
+                            className="text-center text-xs text-[var(--color-text-secondary)] opacity-50 py-6 not-italic"
                         >
                             {query.trim() ? '검색 결과가 없습니다.' : '세션 종료 시 "배운 것"을 남기면 여기에 쌓여요.'}
                         </motion.p>
@@ -129,16 +127,16 @@ export default function LearningNotesCard({ settings, bare = false }: LearningNo
                                 animate="animate"
                                 exit="exit"
                                 layout
-                                className="flex items-start gap-3 px-3.5 py-3 rounded-xl bg-black/[0.03] dark:bg-white/5 border border-white/10"
+                                className="flex items-start gap-3 px-3.5 py-3 rounded-xl bg-[var(--surface-raised)] border border-[var(--color-border)]"
                             >
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-1.5 mb-1 flex-wrap">
-                                        <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400">
+                                        <span className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-[var(--surface-raised)] text-[var(--color-text-secondary)] border border-[var(--color-border)]">
                                             {formatDateShort(note.date)}
                                         </span>
-                                        <span className="text-[10px] font-bold text-indigo-400">{note.subject}</span>
+                                        <span className="text-[11px] font-bold text-[var(--color-primary)]">{note.subject}</span>
                                         {note.subItem && (
-                                            <span className="text-[10px] text-[var(--color-text-secondary)] opacity-60">› {note.subItem}</span>
+                                            <span className="text-[11px] text-[var(--color-text-secondary)] opacity-60">› {note.subItem}</span>
                                         )}
                                     </div>
                                     <p className="text-sm text-[var(--color-text)]/90 leading-relaxed line-clamp-3">{note.content}</p>
@@ -146,7 +144,7 @@ export default function LearningNotesCard({ settings, bare = false }: LearningNo
                                 <Pressable
                                     type="button"
                                     onClick={() => handleDelete(note.id)}
-                                    pressScale={0.85}
+                                    pressScale={0.97}
                                     className="opacity-40 hover:opacity-100 flex items-center justify-center p-1 flex-shrink-0"
                                     aria-label="삭제"
                                 >
@@ -163,7 +161,7 @@ export default function LearningNotesCard({ settings, bare = false }: LearningNo
     if (bare) return content
 
     return (
-        <motion.section variants={staggerItem} className="glass-card p-6 md:p-8">
+        <motion.section variants={staggerItem} className="glass-card p-5 md:p-6">
             {content}
         </motion.section>
     )

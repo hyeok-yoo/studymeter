@@ -26,55 +26,44 @@ export function HelpButton({ title, items, className = '', dark = false }: HelpB
         <>
             <Pressable
                 type="button"
-                pressScale={0.9}
+                pressScale={0.96}
                 onClick={(e) => {
                     e.stopPropagation()
                     setOpen(true)
                 }}
-                className={`w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-black flex-shrink-0
+                className={`w-6 h-6 -m-0.5 rounded-full inline-flex items-center justify-center flex-shrink-0 transition-colors duration-150
                     ${dark
-                        ? 'bg-white/10 hover:bg-white/25 text-white/50 hover:text-white/80'
-                        : 'bg-[var(--color-primary)]/15 hover:bg-[var(--color-primary)]/30 text-[var(--color-primary)]'
+                        ? 'text-white/35 hover:text-white/70'
+                        : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
                     } ${className}`}
                 aria-label="도움말"
             >
-                ?
+                <Icon icon="mdi:help-circle-outline" className="text-[16px]" />
             </Pressable>
 
             <Modal
                 open={open}
                 onClose={() => setOpen(false)}
-                width="max-w-lg"
-                scrim="bg-black/40 backdrop-blur-xl"
-                className="p-10 max-h-[90vh] overflow-y-auto no-scrollbar"
+                width="max-w-md"
+                className="p-6 max-h-[90vh] overflow-y-auto no-scrollbar"
                 ariaLabel={title}
             >
-                <div className="absolute -top-20 -right-20 w-40 h-40 bg-[var(--color-primary)] opacity-10 blur-[60px] rounded-full pointer-events-none" />
+                <h3 className="text-xl font-semibold leading-tight text-[var(--color-text)] mb-4">{title}</h3>
 
-                <div className="flex items-center gap-3 mb-6 relative z-10">
-                    <div className="w-10 h-10 rounded-xl bg-[var(--color-primary)]/15 flex items-center justify-center flex-shrink-0">
-                        <Icon
-                            icon="mdi:help-circle-outline"
-                            className="text-[var(--color-primary)] text-2xl"
-                        />
-                    </div>
-                    <h3 className="text-2xl font-black gradient-text leading-tight">{title}</h3>
-                </div>
-
-                <div className="relative z-10 space-y-4">
+                <div className="divide-y divide-[var(--color-border)]">
                     {typeof items === 'string' ? (
-                        <p className="text-[var(--color-text-secondary)] text-base leading-relaxed">
+                        <p className="text-[var(--color-text-secondary)] text-[15px] leading-relaxed">
                             {items}
                         </p>
                     ) : (
                         items.map((item, i) => (
-                            <div key={i} className="p-4 rounded-2xl bg-[var(--color-primary)]/5">
+                            <div key={i} className="py-3 first:pt-0 last:pb-0">
                                 {item.title && (
-                                    <p className="text-xs font-black uppercase tracking-wider text-[var(--color-primary)] mb-2">
+                                    <p className="text-[14px] font-medium text-[var(--color-text)] mb-1">
                                         {item.title}
                                     </p>
                                 )}
-                                <p className="text-[var(--color-text-secondary)] text-sm leading-relaxed">
+                                <p className="text-[var(--color-text-secondary)] text-[14px] leading-relaxed">
                                     {item.description}
                                 </p>
                             </div>
@@ -84,7 +73,7 @@ export function HelpButton({ title, items, className = '', dark = false }: HelpB
 
                 <Pressable
                     onClick={() => setOpen(false)}
-                    className="mt-8 w-full py-4 rounded-2xl bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-secondary)] text-white font-black text-base relative z-10"
+                    className="btn btn-primary mt-6 w-full h-11 text-[15px]"
                 >
                     확인
                 </Pressable>

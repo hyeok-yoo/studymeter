@@ -69,7 +69,7 @@ export default function Modal({
                         initial="initial"
                         animate="animate"
                         exit="exit"
-                        className={`relative w-full ${width} liquid-modal shadow-2xl ${className}`}
+                        className={`relative w-full ${width} liquid-modal ${className}`}
                     >
                         {children}
                     </motion.div>

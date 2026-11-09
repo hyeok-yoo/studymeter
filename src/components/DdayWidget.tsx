@@ -5,7 +5,6 @@
  * 지난 D-day는 흐리게 처리하고 뒤로 보낸다. 항상 보이는 컴팩트 카드 형태.
  */
 import { motion } from 'framer-motion'
-import { Icon } from '@iconify/react'
 import type { Settings, Dday } from '../lib/db'
 import { getDefaultDdays, getDdayDiff, formatDday } from '../lib/db'
 import { toDate } from '../lib/format'
@@ -15,12 +14,11 @@ interface DdayWidgetProps {
     settings: Settings
 }
 
-// 카드 하나의 강조 색 — 당일/임박/일반/지남 순으로 구분
-function accentFor(diff: number): { text: string; bg: string; border: string } {
-    if (diff === 0) return { text: 'text-white', bg: 'bg-gradient-to-br from-rose-500 to-orange-500', border: 'border-transparent' }
-    if (diff > 0 && diff <= 7) return { text: 'text-rose-400', bg: 'bg-rose-500/10', border: 'border-rose-400/25' }
-    if (diff > 0) return { text: 'text-indigo-400', bg: 'bg-indigo-500/10', border: 'border-indigo-400/20' }
-    return { text: 'text-[var(--color-text-secondary)]', bg: 'bg-black/[0.03] dark:bg-white/5', border: 'border-white/10' }
+// 수치 색 — 당일·임박만 액센트, 나머지는 본문색, 지난 것은 흐리게
+function toneFor(diff: number): string {
+    if (diff >= 0 && diff <= 7) return 'text-[var(--color-primary)]'
+    if (diff > 0) return 'text-[var(--color-text)]'
+    return 'text-[var(--color-text-muted)]'
 }
 
 // 목표일은 "2026.08.02" 점 구분 표기 — lib/format 의 ymd 는 하이픈이라 대체 불가.
@@ -47,35 +45,31 @@ export default function DdayWidget({ settings }: DdayWidgetProps) {
     if (sorted.length === 0) return null
 
     return (
-        <motion.section variants={staggerItem} className="space-y-2.5">
-            <div className="flex items-center gap-2 px-1.5">
-                <Icon icon="mdi:calendar-star" className="text-base text-[var(--color-primary)]" />
-                <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-[var(--color-text-secondary)] opacity-70">D-day</h2>
-            </div>
+        <motion.section variants={staggerItem} className="flex flex-col gap-2">
+            <h2 className="px-0.5 text-[14px] font-medium text-[var(--color-text-secondary)]">D-day</h2>
             <motion.div
                 variants={staggerContainer}
                 initial="initial"
                 animate="animate"
-                className="flex gap-3 overflow-x-auto no-scrollbar pb-1 -mx-1 px-1"
+                className="flex gap-3 overflow-x-auto no-scrollbar pb-1 -mx-4 px-4 md:mx-0 md:px-0 xl:grid xl:grid-cols-2 xl:overflow-visible"
             >
                 {sorted.map((d) => {
                     const diff = getDdayDiff(d.date)
                     const isPast = diff < 0
-                    const accent = accentFor(diff)
                     return (
                         <motion.div
                             key={d.id}
                             variants={staggerItem}
-                            className={`glass-card-elevated flex-shrink-0 min-w-[9.5rem] px-4 py-3.5 rounded-2xl border ${accent.border} ${isPast ? 'opacity-50' : ''}`}
+                            className={`glass-card flex-shrink-0 min-w-[152px] px-5 py-4 rounded-[22px] ${isPast ? 'opacity-60' : ''}`}
                         >
-                            <div className="flex items-center gap-1.5 mb-2">
-                                <span className="text-base leading-none">{d.emoji || '📌'}</span>
-                                <span className="text-xs font-bold text-[var(--color-text)] truncate">{d.label}</span>
+                            <div className="flex items-center gap-1.5 h-5">
+                                {d.emoji && <span className="text-[13px] leading-none grayscale opacity-70">{d.emoji}</span>}
+                                <span className="text-[13px] text-[var(--color-text-secondary)] truncate">{d.label}</span>
                             </div>
-                            <div className={`inline-flex items-center px-2.5 py-1 rounded-full text-sm font-black tabular-nums ${accent.bg} ${accent.text}`}>
+                            <div className={`mt-1.5 text-[24px] leading-none font-medium tabular-nums ${toneFor(diff)}`}>
                                 {formatDday(diff)}
                             </div>
-                            <p className="text-[10px] text-[var(--color-text-secondary)] opacity-60 mt-1.5 font-medium">
+                            <p className="meta mt-2">
                                 {formatTargetDate(d.date)}
                             </p>
                         </motion.div>

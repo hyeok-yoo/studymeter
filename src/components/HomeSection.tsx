@@ -20,8 +20,6 @@ interface HomeSectionProps {
     /** 저장된 값이 없을 때 기본 열림 여부 (기본값: false) */
     defaultOpen?: boolean
     children: ReactNode
-    /** 아이콘 배지 색상용 tailwind 그라디언트 클래스 (기본: indigo→purple) */
-    accent?: string
 }
 
 function readInitialOpen(storageKey: string, defaultOpen: boolean): boolean {
@@ -40,7 +38,6 @@ export default function HomeSection({
     storageKey,
     defaultOpen = false,
     children,
-    accent = 'from-indigo-500 to-purple-600',
 }: HomeSectionProps) {
     const [open, setOpen] = useState(() => readInitialOpen(storageKey, defaultOpen))
 
@@ -57,24 +54,22 @@ export default function HomeSection({
     }
 
     return (
-        <motion.section variants={staggerItem} className="glass-card p-6 md:p-8">
+        <motion.section variants={staggerItem} className="glass-card px-5 md:px-6">
             <Pressable
                 type="button"
                 onClick={toggle}
                 pressScale={0.99}
                 aria-expanded={open}
-                className="w-full flex items-center gap-2 text-left"
+                className="w-full h-14 flex items-center gap-2.5 text-left"
             >
-                <div className={`w-9 h-9 rounded-xl bg-gradient-to-tr ${accent} flex items-center justify-center shadow-lg flex-shrink-0`}>
-                    <Icon icon={icon} className="text-lg text-white" />
-                </div>
-                <h2 className="text-lg font-black text-[var(--color-text)]">{title}</h2>
+                <Icon icon={icon} className="text-[18px] text-[var(--color-text-muted)] flex-shrink-0" />
+                <h2 className="text-[16px] font-medium text-[var(--color-text)]">{title}</h2>
                 <motion.span
                     animate={{ rotate: open ? 180 : 0 }}
                     transition={spring.snappy}
                     className="ml-auto flex-shrink-0"
                 >
-                    <Icon icon="mdi:chevron-down" className="text-xl text-[var(--color-text-secondary)] opacity-60" />
+                    <Icon icon="mdi:chevron-down" className="text-[18px] text-[var(--color-text-muted)]" />
                 </motion.span>
             </Pressable>
 
@@ -87,7 +82,7 @@ export default function HomeSection({
                         transition={spring.default}
                         className="overflow-hidden"
                     >
-                        <div className="pt-5 mt-5 border-t border-[var(--color-border)]">
+                        <div className="pt-5 pb-5 border-t border-[var(--color-border)]">
                             {children}
                         </div>
                     </motion.div>

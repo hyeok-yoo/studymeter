@@ -29,26 +29,36 @@ import { incrementSessionDrowsyCount } from '../../lib/drowsyCounter';
 
 /** 점수 구간 색 — 게이지·숫자·차트 기준선이 모두 이 규칙 하나를 따른다. */
 const scoreColor = (score: number | null): string =>
-    score === null ? 'rgba(255,255,255,0.2)' : score >= 70 ? '#22c55e' : score >= 40 ? '#f59e0b' : '#ef4444';
+    score === null ? 'rgba(255,255,255,0.2)' : score >= 70 ? '#4cc38a' : score >= 40 ? '#e9a23c' : '#ec6a6e';
 
 function CircleGauge({ score }: { score: number }) {
-    const r = 44;
+    const r = 46;
     const circ = 2 * Math.PI * r;
     const color = scoreColor(score);
+    // 계측 눈금 — 5점마다 짧게, 25점마다 길게 (StudyMeter 시그니처)
+    const ticks = Array.from({ length: 20 }, (_, i) => {
+        const a = (i / 20) * Math.PI * 2 - Math.PI / 2;
+        const major = i % 5 === 0;
+        const r1 = 55, r2 = major ? 50 : 52.5;
+        return { x1: 60 + r1 * Math.cos(a), y1: 60 + r1 * Math.sin(a), x2: 60 + r2 * Math.cos(a), y2: 60 + r2 * Math.sin(a), major };
+    });
     return (
         <svg width="120" height="120" viewBox="0 0 120 120">
-            <circle cx="60" cy="60" r={r} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="8" />
+            {ticks.map((t, i) => (
+                <line key={i} x1={t.x1} y1={t.y1} x2={t.x2} y2={t.y2} stroke={t.major ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.2)'} strokeWidth="1" />
+            ))}
+            <circle cx="60" cy="60" r={r} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="4" />
             <circle
                 cx="60" cy="60" r={r}
                 fill="none"
                 stroke={color}
-                strokeWidth="8"
-                strokeLinecap="round"
+                strokeWidth="4"
+                strokeLinecap="butt"
                 strokeDasharray={`${(score / 100) * circ} ${circ}`}
                 strokeDashoffset={circ * 0.25}
-                style={{ transition: 'stroke-dasharray 0.6s ease, stroke 0.6s ease', filter: `drop-shadow(0 0 6px ${color}88)` }}
+                style={{ transition: 'stroke-dasharray 0.6s cubic-bezier(0.22, 1, 0.36, 1), stroke 0.6s cubic-bezier(0.22, 1, 0.36, 1)' }}
             />
-            <text x="60" y="65" textAnchor="middle" fill="white" fontSize="22" fontWeight="800" fontFamily="inherit">
+            <text x="60" y="68" textAnchor="middle" fill="#ededed" fontSize="26" fontWeight="300" fontFamily="inherit" style={{ fontVariantNumeric: 'tabular-nums' }}>
                 {Math.round(score)}
             </text>
         </svg>
@@ -103,21 +113,21 @@ function FocusTab({ score, etaS, scoreHistory }: { score: number | null; etaS: n
                 <div style={{ flexShrink: 0 }}>
                     {score !== null ? <CircleGauge score={score} /> : (
                         <div style={{ width: '120px', height: '120px', borderRadius: '50%', border: '8px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <span className="text-[10px] font-bold opacity-30">--</span>
+                            <span className="text-[12px] text-white/45">--</span>
                         </div>
                     )}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
                     <div>
-                        <span className="text-[10px] font-black uppercase tracking-widest opacity-40 block mb-0.5">집중 점수</span>
-                        <span className="text-4xl font-black tabular-nums" style={{ color: scoreColor(score) }}>
+                        <span className="text-[12px] text-white/45 block mb-0.5">집중 점수</span>
+                        <span className="text-[40px] font-light tabular-nums leading-none" style={{ color: scoreColor(score) }}>
                             {score !== null ? score.toFixed(1) : '--'}
-                            <span className="text-lg font-bold opacity-40"> / 100</span>
+                            <span className="text-[15px] text-white/40"> / 100</span>
                         </span>
                     </div>
                     <div>
-                        <span className="text-[10px] font-black uppercase tracking-widest opacity-40 block mb-0.5">집중 유지 ETA</span>
-                        <span className="text-xl font-bold tabular-nums" style={{ color: 'rgba(255,255,255,0.7)' }}>
+                        <span className="text-[12px] text-white/45 block mb-0.5">집중 유지 ETA</span>
+                        <span className="text-[20px] font-light tabular-nums" style={{ color: 'rgba(237,237,237,0.8)' }}>
                             {etaS !== null ? mmss(etaS) : '측정 중...'}
                         </span>
                     </div>
@@ -126,21 +136,21 @@ function FocusTab({ score, etaS, scoreHistory }: { score: number | null; etaS: n
 
             {chartData.length > 1 && (
                 <div>
-                    <span className="text-[9px] font-black uppercase tracking-widest opacity-40 block mb-2">집중도 추이 + 예측 곡선</span>
+                    <span className="text-[12px] text-white/45 block mb-2">집중도 추이 + 예측 곡선</span>
                     <div style={{ width: '100%', height: '120px' }}>
                         <ResponsiveContainer width="100%" height="100%">
                             <LineChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: -28 }}>
                                 <XAxis dataKey="t" hide />
-                                <YAxis domain={[0, 100]} tick={{ fontSize: 9, fill: 'rgba(255,255,255,0.3)' }} />
+                                <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: 'rgba(255,255,255,0.35)', fontFamily: 'var(--font-mono)' }} axisLine={false} tickLine={false} />
                                 <Tooltip
-                                    contentStyle={{ background: 'rgba(0,0,0,0.7)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', fontSize: '10px' }}
+                                    contentStyle={{ background: 'rgba(0,0,0,0.7)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', fontSize: '11px' }}
                                     labelFormatter={() => ''}
                                     formatter={(val) => [typeof val === 'number' ? val.toFixed(1) : '--', '']}
                                 />
-                                <ReferenceLine y={70} stroke="rgba(34,197,94,0.3)" strokeDasharray="3 3" />
-                                <ReferenceLine y={40} stroke="rgba(245,158,11,0.3)" strokeDasharray="3 3" />
-                                <Line type="monotone" dataKey="score" stroke="#818cf8" strokeWidth={2} dot={false} connectNulls={false} />
-                                <Line type="monotone" dataKey="proj" stroke="#818cf8" strokeWidth={1.5} strokeDasharray="4 3" dot={false} connectNulls={false} />
+                                <ReferenceLine y={70} stroke="rgba(76,195,138,0.35)" strokeDasharray="2 4" />
+                                <ReferenceLine y={40} stroke="rgba(233,162,60,0.35)" strokeDasharray="2 4" />
+                                <Line type="monotone" dataKey="score" stroke="#ededed" strokeWidth={1.5} dot={false} connectNulls={false} isAnimationActive={false} />
+                                <Line type="monotone" dataKey="proj" stroke="rgba(237,237,237,0.4)" strokeWidth={1.5} strokeDasharray="4 3" dot={false} connectNulls={false} isAnimationActive={false} />
                             </LineChart>
                         </ResponsiveContainer>
                     </div>
@@ -157,7 +167,7 @@ const GAZE_METRICS = [
     { key: 'saccade_rate', label: '새카드율 (시선 점프)', unit: '/s', decimals: 2, color: '#f472b6' },
     { key: 'fixation_ratio', label: '고정 비율 (응시 유지)', unit: '', decimals: 2, color: '#22c55e' },
     { key: 'mean_fix_duration', label: '평균 고정 시간', unit: 's', decimals: 3, color: '#60a5fa' },
-    { key: 'mean_velocity', label: '평균 시선 속도', unit: 'px/s', decimals: 0, color: '#a78bfa' },
+    { key: 'mean_velocity', label: '평균 시선 속도', unit: 'px/s', decimals: 0, color: '#c9c9cd' },
     { key: 'std_velocity', label: '속도 분산', unit: 'px/s', decimals: 0, color: '#fb923c' },
     { key: 'mean_ear', label: 'EAR (눈 감은 정도)', unit: '', decimals: 3, color: '#facc15' },
     { key: 'min_ear', label: 'EAR 최솟값 (순간 졸음)', unit: '', decimals: 3, color: '#f97316' },
@@ -170,12 +180,12 @@ const ADVANCED_METRICS = [
     { key: 'blink_rate_hz', label: '깜빡임 빈도', unit: '/s', decimals: 2, color: '#facc15' },
     { key: 'mean_blink_dur_s', label: '평균 깜빡임 시간', unit: 's', decimals: 2, color: '#fb923c' },
     { key: 'ear_norm', label: 'EAR 정규화', unit: '', decimals: 3, color: '#fbbf24' },
-    { key: 'disp_norm', label: '시선 분산 정규화', unit: '', decimals: 3, color: '#a78bfa' },
+    { key: 'disp_norm', label: '시선 분산 정규화', unit: '', decimals: 3, color: '#c9c9cd' },
     { key: 'head_pitch_deg', label: '고개 상하 각도', unit: '°', decimals: 1, color: '#60a5fa' },
     { key: 'head_yaw_deg', label: '고개 좌우 각도', unit: '°', decimals: 1, color: '#22d3ee' },
     { key: 'head_move_std_deg', label: '고개 움직임 표준편차', unit: '°', decimals: 2, color: '#34d399' },
     { key: 'ear_slope_60s', label: 'EAR 추세 (60초)', unit: '', decimals: 3, color: '#f472b6' },
-    { key: 'fix_ratio_slope_60s', label: '고정비율 추세 (60초)', unit: '', decimals: 3, color: '#818cf8' },
+    { key: 'fix_ratio_slope_60s', label: '고정비율 추세 (60초)', unit: '', decimals: 3, color: '#e09a35' },
 ] as const satisfies readonly MetricSpec[];
 
 /** 생체신호 지표 */
@@ -184,7 +194,7 @@ const BIO_METRICS = [
     { key: 'rmssd', label: 'RMSSD (심박 변동)', unit: 'ms', decimals: 1, color: '#fb923c' },
     { key: 'sdnn', label: 'SDNN (전체 변동성)', unit: 'ms', decimals: 1, color: '#facc15' },
     { key: 'lf_hf', label: 'LF/HF (교감/부교감)', unit: '', decimals: 2, color: '#60a5fa' },
-    { key: 'dispersion_x', label: 'X 분산 (좌우 시선)', unit: 'px', decimals: 0, color: '#a78bfa' },
+    { key: 'dispersion_x', label: 'X 분산 (좌우 시선)', unit: 'px', decimals: 0, color: '#c9c9cd' },
     { key: 'dispersion_y', label: 'Y 분산 (상하 시선)', unit: 'px', decimals: 0, color: '#34d399' },
 ] as const satisfies readonly MetricSpec[];
 
@@ -213,7 +223,7 @@ function MetricGrid({ specs, features, placeholder }: {
                     unit={m.unit}
                     decimals={m.decimals}
                     scale={m.scale}
-                    color={m.color}
+                    color="rgba(237,237,237,0.88)"
                     placeholder={placeholder}
                 />
             ))}
@@ -245,7 +255,7 @@ function GazeTab({ features, gazeX, gazeY }: {
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <div>
-                <span className="text-[9px] font-black uppercase tracking-widest opacity-40 block mb-2">
+                <span className="text-[12px] text-white/45 block mb-2">
                     {hasGaze ? '캘리브레이션 기반 실시간 시선 위치' : '시선 위치 (캘리브레이션 후 정확도 향상)'}
                 </span>
                 <div style={{ position: 'relative', width: '100%', paddingTop: '50%', background: 'rgba(255,255,255,0.03)', borderRadius: '16px', border: `1px solid ${hasGaze ? 'rgba(34,197,94,0.2)' : 'rgba(255,255,255,0.08)'}`, overflow: 'hidden' }}>
@@ -259,11 +269,11 @@ function GazeTab({ features, gazeX, gazeY }: {
                         <motion.div
                             animate={{ left: `${dot.x * 100}%`, top: `${dot.y * 100}%` }}
                             transition={{ type: 'spring', stiffness: 120, damping: 20 }}
-                            style={{ position: 'absolute', width: '18px', height: '18px', borderRadius: '50%', background: dotColor, boxShadow: `0 0 14px 5px ${dotColor}66`, transform: 'translate(-50%, -50%)', pointerEvents: 'none' }}
+                            style={{ position: 'absolute', width: '18px', height: '18px', borderRadius: '50%', background: dotColor, transform: 'translate(-50%, -50%)', pointerEvents: 'none' }}
                         />
                     ) : (
                         <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <span className="text-[10px] opacity-30">캘리브레이션 필요</span>
+                            <span className="text-[11px] opacity-30">캘리브레이션 필요</span>
                         </div>
                     )}
                     <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', opacity: 0.12, pointerEvents: 'none' }}>
@@ -277,7 +287,7 @@ function GazeTab({ features, gazeX, gazeY }: {
 
             {advanced && (
                 <div>
-                    <span className="text-[9px] font-black uppercase tracking-widest opacity-40 block mb-2 mt-2">졸음·자세 (고급 모드)</span>
+                    <span className="text-[12px] text-white/45 block mb-2 mt-2">졸음·자세 (고급 모드)</span>
                     <MetricGrid specs={ADVANCED_METRICS} features={features} placeholder="—" />
                 </div>
             )}
@@ -314,7 +324,7 @@ function BioTab({ features, roiColors }: {
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <div>
-                <span className="text-[9px] font-black uppercase tracking-widest opacity-40 block mb-2">
+                <span className="text-[12px] text-white/45 block mb-2">
                     rPPG 얼굴 ROI 색상 {hasActualColors ? '(실시간 측정값)' : '(추정값)'}
                 </span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '20px', padding: '16px', background: 'rgba(255,255,255,0.03)', borderRadius: '16px', border: `1px solid ${hasActualColors ? 'rgba(34,197,94,0.2)' : 'rgba(255,255,255,0.08)'}` }}>
@@ -322,7 +332,7 @@ function BioTab({ features, roiColors }: {
                         <motion.div
                             animate={{ scale: pulse ? 1.06 : 1.0, background: pulseBright }}
                             transition={{ duration: 0.2, ease: 'easeInOut' }}
-                            style={{ width: '44px', height: '22px', borderRadius: '8px 8px 4px 4px', boxShadow: `0 0 12px 3px ${forehead}88` }}
+                            style={{ width: '44px', height: '22px', borderRadius: '8px 8px 4px 4px' }}
                         />
                         <div style={{ display: 'flex', gap: '6px' }}>
                             <div style={{ width: '14px', height: '8px', borderRadius: '50%', background: 'rgba(255,255,255,0.15)' }} />
@@ -330,15 +340,15 @@ function BioTab({ features, roiColors }: {
                         </div>
                         <div style={{ display: 'flex', gap: '4px', marginTop: '2px' }}>
                             <motion.div animate={{ background: rCheek }} transition={{ duration: 0.3 }}
-                                style={{ width: '16px', height: '12px', borderRadius: '50%', boxShadow: `0 0 6px ${rCheek}88` }} />
+                                style={{ width: '16px', height: '12px', borderRadius: '50%' }} />
                             <div style={{ width: '12px', height: '22px', borderRadius: '4px', background: 'rgba(255,255,255,0.08)' }} />
                             <motion.div animate={{ background: lCheek }} transition={{ duration: 0.3 }}
-                                style={{ width: '16px', height: '12px', borderRadius: '50%', boxShadow: `0 0 6px ${lCheek}88` }} />
+                                style={{ width: '16px', height: '12px', borderRadius: '50%' }} />
                         </div>
                     </div>
 
                     <div style={{ flex: 1 }}>
-                        <p className="text-[10px] opacity-50 leading-relaxed">
+                        <p className="text-[11px] opacity-50 leading-relaxed">
                             <span style={{ color: '#00dcff' }}>이마</span> + <span style={{ color: '#ffa040' }}>양쪽 볼</span> 3곳 ROI의<br />
                             평균 RGB 색상을 실시간으로 추출합니다.<br />
                             미세한 <span style={{ color: '#f472b6' }}>혈류 변화</span>로 심박수를 계산합니다.
@@ -349,11 +359,11 @@ function BioTab({ features, roiColors }: {
                                     {([['이마', forehead], ['오른볼', rCheek], ['왼볼', lCheek]] as const).map(([label, color]) => (
                                         <span key={label} style={{ display: 'contents' }}>
                                             <div style={{ width: '16px', height: '16px', borderRadius: '4px', background: color, border: '1px solid rgba(255,255,255,0.2)' }} />
-                                            <span className="text-[9px] opacity-40">{label}</span>
+                                            <span className="text-[11px] opacity-40">{label}</span>
                                         </span>
                                     ))}
                                 </div>
-                                <p className="text-[9px] opacity-25 mt-1 font-mono">{roiColors?.forehead} · {roiColors?.rightCheek} · {roiColors?.leftCheek}</p>
+                                <p className="text-[11px] opacity-25 mt-1 font-mono">{roiColors?.forehead} · {roiColors?.rightCheek} · {roiColors?.leftCheek}</p>
                             </>
                         )}
                     </div>
@@ -402,7 +412,7 @@ function FocusTabs({ score, etaS, features, scoreHistory, gazeX, gazeY, roiColor
 
 function PanelShell({ children }: { children: React.ReactNode }) {
     return (
-        <div className="mt-6 w-full max-w-3xl mx-auto rounded-3xl border border-white/10 bg-white/[0.06] p-5"
+        <div className="mt-4 w-full max-w-3xl mx-auto rounded-[24px] border border-white/10 bg-white/[0.04] p-5"
             style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
             {children}
         </div>
@@ -412,12 +422,12 @@ function PanelShell({ children }: { children: React.ReactNode }) {
 function PanelHeader({ label, dot, dotColor, dotLabel, onSwitchMode, switchLabel }: {
     label: string; dot: boolean; dotColor?: string; dotLabel: string; onSwitchMode: () => void; switchLabel: string;
 }) {
-    const color = dotColor ?? (dot ? '#22c55e' : '#ef4444');
+    const color = dotColor ?? (dot ? '#4cc38a' : '#ec6a6e');
     return (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span className="text-[10px] font-black uppercase tracking-widest opacity-40">집중도 모니터</span>
-                <span className="text-[9px] font-bold px-2 py-0.5 rounded-full" style={{ background: 'rgba(129,140,248,0.15)', color: '#a5b4fc', border: '1px solid rgba(129,140,248,0.2)' }}>{label}</span>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                <span className="text-[13px] text-white/70 whitespace-nowrap">집중도 모니터</span>
+                <span className="text-[12px] px-1.5 py-0.5 rounded whitespace-nowrap" style={{ background: 'rgba(255,255,255,0.06)', color: 'rgba(237,237,237,0.6)', border: '1px solid rgba(255,255,255,0.08)' }}>{label}</span>
                 <HelpButton dark title="집중도 모니터란?" items={[
                     { description: '카메라로 얼굴을 분석해 집중 점수(0–100)를 실시간으로 측정합니다.' },
                     { title: '집중도 탭', description: '전체 집중 점수와 트렌드 그래프, 집중 유지 예상 시간(ETA)을 보여줍니다.' },
@@ -428,13 +438,13 @@ function PanelHeader({ label, dot, dotColor, dotLabel, onSwitchMode, switchLabel
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                    <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: color, boxShadow: dot ? `0 0 5px ${color}` : 'none', transition: 'all 0.4s ease' }} />
-                    <span className="text-[10px] font-bold opacity-40">{dotLabel}</span>
+                    <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: color, transition: 'background-color 0.3s ease' }} />
+                    <span className="text-[12px] text-white/45 whitespace-nowrap">{dotLabel}</span>
                 </div>
                 <button onClick={onSwitchMode} style={{
-                    fontSize: '9px', fontWeight: 700, padding: '3px 8px', borderRadius: '6px',
-                    background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.4)',
-                    border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer', transition: 'all 0.2s ease',
+                    fontSize: '12px', fontWeight: 500, padding: '4px 8px', borderRadius: '6px',
+                    background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.55)',
+                    border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer', transition: 'background-color 0.15s ease', whiteSpace: 'nowrap',
                 }}>
                     {switchLabel} ↕
                 </button>
@@ -599,8 +609,8 @@ function LocalPanel({ engine, available, label, calibration = false, onSwitchMod
                     value={lightMode ? 'light' : 'full'}
                     onChange={(v) => setLightMode(v === 'light')}
                     options={[
-                        { value: 'full', label: <span style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}><span>집중도 + 졸음</span><span style={{ fontSize: '8px', opacity: 0.6 }}>전체 측정</span></span> },
-                        { value: 'light', label: <span style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}><span>졸음만 (라이트)</span><span style={{ fontSize: '8px', opacity: 0.6 }}>저전력</span></span> },
+                        { value: 'full', label: <span style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}><span>집중도 + 졸음</span><span style={{ fontSize: '11px', opacity: 0.6 }}>전체 측정</span></span> },
+                        { value: 'light', label: <span style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}><span>졸음만 (라이트)</span><span style={{ fontSize: '11px', opacity: 0.6 }}>저전력</span></span> },
                     ]}
                 />
             )}
@@ -611,11 +621,11 @@ function LocalPanel({ engine, available, label, calibration = false, onSwitchMod
                         onClick={running ? stop : () => start({ lightMode })}
                         disabled={busy}
                         style={{
-                            flex: 1, padding: '10px 0', borderRadius: '10px', fontSize: '12px', fontWeight: 800,
+                            flex: 1, padding: '10px 0', borderRadius: '10px', fontSize: '12px', fontWeight: 600,
                             background: running ? 'rgba(239,68,68,0.15)' : 'rgba(34,197,94,0.15)',
                             color: running ? '#f87171' : '#4ade80',
                             border: `1px solid ${running ? 'rgba(239,68,68,0.3)' : 'rgba(34,197,94,0.3)'}`,
-                            cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.5 : 1, transition: 'all 0.2s ease',
+                            cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.5 : 1, transition: 'background-color 0.15s ease',
                         }}
                     >
                         {status === 'starting' ? '시작 중...' : running ? '측정 중지' : lightMode ? '졸음 감지 시작' : '측정 시작'}
@@ -624,9 +634,9 @@ function LocalPanel({ engine, available, label, calibration = false, onSwitchMod
                         <button
                             onClick={() => startCalibration('monitor')}
                             style={{
-                                padding: '10px 16px', borderRadius: '10px', fontSize: '12px', fontWeight: 700,
-                                background: 'rgba(129,140,248,0.12)', color: '#a5b4fc',
-                                border: '1px solid rgba(129,140,248,0.25)', cursor: 'pointer',
+                                padding: '10px 16px', borderRadius: '10px', fontSize: '12px', fontWeight: 500,
+                                background: 'rgba(255,255,255,0.06)', color: 'rgba(237,237,237,0.8)',
+                                border: '1px solid rgba(255,255,255,0.12)', cursor: 'pointer',
                             }}
                         >
                             캘리브레이션
@@ -644,15 +654,15 @@ function LocalPanel({ engine, available, label, calibration = false, onSwitchMod
                             setDebugMode(!cameraOpen);
                         }}
                         style={{
-                            width: '100%', padding: '7px 12px', borderRadius: '10px', fontSize: '11px', fontWeight: 700,
-                            background: cameraOpen ? 'rgba(99,102,241,0.12)' : 'rgba(255,255,255,0.04)',
-                            color: cameraOpen ? '#a5b4fc' : 'rgba(255,255,255,0.35)',
-                            border: `1px solid ${cameraOpen ? 'rgba(99,102,241,0.25)' : 'rgba(255,255,255,0.08)'}`,
+                            width: '100%', padding: '7px 12px', borderRadius: '10px', fontSize: '11px', fontWeight: 500,
+                            background: cameraOpen ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.04)',
+                            color: cameraOpen ? 'rgba(237,237,237,0.8)' : 'rgba(255,255,255,0.35)',
+                            border: `1px solid ${cameraOpen ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.08)'}`,
                             cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '6px',
-                            transition: 'all 0.2s ease',
+                            transition: 'background-color 0.15s ease',
                         }}
                     >
-                        <span style={{ fontSize: '9px' }}>{cameraOpen ? '▼' : '▶'}</span>
+                        <span style={{ fontSize: '11px' }}>{cameraOpen ? '▼' : '▶'}</span>
                         카메라 미리보기 {cameraOpen ? '' : '(성능 영향 없음)'}
                     </button>
                     {cameraOpen && (
@@ -661,7 +671,7 @@ function LocalPanel({ engine, available, label, calibration = false, onSwitchMod
                                 ? <img src={cameraJpeg} alt="카메라 미리보기" style={{ width: '100%', display: 'block', objectFit: 'contain', maxHeight: '240px' }} />
                                 : <div style={{ height: '120px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', color: 'rgba(255,255,255,0.3)' }}>프레임 대기 중...</div>}
                             {cameraJpeg && (
-                                <div style={{ position: 'absolute', bottom: '6px', left: '8px', fontSize: '9px', fontWeight: 700, color: 'rgba(255,255,255,0.5)', background: 'rgba(0,0,0,0.5)', padding: '2px 6px', borderRadius: '4px' }}>
+                                <div style={{ position: 'absolute', bottom: '6px', left: '8px', fontSize: '11px', fontWeight: 500, color: 'rgba(255,255,255,0.5)', background: 'rgba(0,0,0,0.5)', padding: '2px 6px', borderRadius: '4px' }}>
                                     LIVE · ROI 오버레이
                                 </div>
                             )}
@@ -671,8 +681,8 @@ function LocalPanel({ engine, available, label, calibration = false, onSwitchMod
             )}
 
             {available && showRating && (
-                <div style={{ padding: '14px', borderRadius: '12px', background: 'rgba(129,140,248,0.08)', border: '1px solid rgba(129,140,248,0.2)' }}>
-                    <p style={{ fontSize: '11px', fontWeight: 700, color: '#a5b4fc', marginBottom: '10px', textAlign: 'center' }}>
+                <div style={{ padding: '14px', borderRadius: '12px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)' }}>
+                    <p style={{ fontSize: '11px', fontWeight: 500, color: 'rgba(237,237,237,0.8)', marginBottom: '10px', textAlign: 'center' }}>
                         세션 집중도를 평가해주세요 (점수 개인화에 사용됩니다)
                     </p>
                     <div style={{ display: 'flex', justifyContent: 'center', gap: '10px' }}>
@@ -694,13 +704,13 @@ function LocalPanel({ engine, available, label, calibration = false, onSwitchMod
                         ))}
                     </div>
                     {trainingState && (
-                        <p style={{ fontSize: '9px', color: 'rgba(255,255,255,0.3)', textAlign: 'center', marginTop: '6px' }}>
+                        <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.3)', textAlign: 'center', marginTop: '6px' }}>
                             누적 {trainingState.session_count}회 · {trainingState.is_calibrated ? '✓ 개인화 적용 중' : `${3 - trainingState.session_count}회 더 필요`}
                         </p>
                     )}
                     <button
                         onClick={() => setShowRating(false)}
-                        style={{ display: 'block', margin: '8px auto 0', fontSize: '9px', color: 'rgba(255,255,255,0.25)', background: 'none', border: 'none', cursor: 'pointer' }}
+                        style={{ display: 'block', margin: '8px auto 0', fontSize: '11px', color: 'rgba(255,255,255,0.25)', background: 'none', border: 'none', cursor: 'pointer' }}
                     >
                         건너뛰기
                     </button>
@@ -769,21 +779,21 @@ function DrowsinessAlert({ features, running, thresholdSec }: {
     return createPortal(
         <div className="fixed inset-0 z-[10000] flex items-center justify-center p-6">
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.22 }}
-                className="absolute inset-0 bg-red-950/60 backdrop-blur-md" />
+                className="absolute inset-0 bg-red-950/70" />
             <motion.div variants={materialize} initial="initial" animate="animate"
-                className="relative liquid-modal p-10 flex flex-col items-center gap-5 max-w-sm w-full text-center shadow-2xl border border-red-500/40">
-                <Icon icon="mdi:sleep" className="text-7xl text-red-400" />
-                <h3 className="text-3xl font-black tracking-tight text-display">졸음이 감지됐어요!</h3>
-                <p className="font-bold opacity-70 leading-relaxed">
+                className="relative liquid-modal p-8 flex flex-col items-center gap-4 max-w-sm w-full text-center">
+                <Icon icon="mdi:sleep" className="text-[40px] text-red-400" />
+                <h3 className="text-[24px] font-medium">졸음이 감지됐어요</h3>
+                <p className="text-[15px] text-[var(--color-text-secondary)] leading-relaxed">
                     눈이 {thresholdSec}초 넘게 감겨 있었어요.<br />눈을 크게 뜨고 잠을 깨워주세요.
                 </p>
-                <p className="text-[11px] font-bold uppercase tracking-widest text-red-300/80">{modeLabel}</p>
+                <p className="text-[11px] font-bold tracking-widest text-red-300/80">{modeLabel}</p>
                 {/* "확인"은 현재 알람만 끈다 — 팝업은 눈을 다시 뜰 때까지 유지된다 */}
                 <Pressable onClick={silence} pressScale={0.97}
-                    className="w-full py-4 bg-red-500 text-white rounded-2xl font-black text-lg shadow-xl">
+                    className="w-full h-12 bg-red-500 text-white rounded-xl font-medium text-[16px]">
                     확인 (소리·진동 끄기)
                 </Pressable>
-                <p className="text-[10px] opacity-40">눈을 다시 뜨면 자동으로 닫힙니다</p>
+                <p className="text-[11px] opacity-40">눈을 다시 뜨면 자동으로 닫힙니다</p>
             </motion.div>
         </div>,
         document.body,
@@ -796,9 +806,9 @@ function LightModeStatus({ features, running, thresholdSec }: {
 }) {
     const eyesDetected = features != null && Number.isFinite(features.mean_ear);
     return (
-        <div style={{ padding: '18px', borderRadius: '14px', background: 'rgba(129,140,248,0.08)', border: '1px solid rgba(129,140,248,0.2)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', textAlign: 'center' }}>
-            <Icon icon="mdi:eye-check-outline" style={{ fontSize: '34px', color: running ? '#a5b4fc' : 'rgba(255,255,255,0.3)' }} />
-            <p style={{ fontSize: '14px', fontWeight: 800, color: running ? '#c7d2fe' : 'rgba(255,255,255,0.5)' }}>
+        <div style={{ padding: '18px', borderRadius: '14px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', textAlign: 'center' }}>
+            <Icon icon="mdi:eye-check-outline" style={{ fontSize: '34px', color: running ? 'rgba(237,237,237,0.8)' : 'rgba(255,255,255,0.3)' }} />
+            <p style={{ fontSize: '14px', fontWeight: 600, color: running ? '#ededed' : 'rgba(255,255,255,0.5)' }}>
                 {running ? (eyesDetected ? '눈 상태 감시 중' : '얼굴을 찾는 중…') : '졸음 감지 라이트 모드'}
             </p>
             <p style={{ fontSize: '11px', fontWeight: 600, color: 'rgba(255,255,255,0.4)', lineHeight: 1.5 }}>

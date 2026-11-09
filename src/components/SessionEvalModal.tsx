@@ -13,11 +13,12 @@ import { spring, fadeRise } from '../lib/motion'
 
 // 선택되지 않은 태그·버튼의 공통 표면. 같은 조합이 네 번 복사돼 있었다.
 const IDLE =
-    'bg-black/[0.04] dark:bg-white/5 text-[var(--color-text-secondary)] hover:bg-black/[0.08] dark:hover:bg-white/10'
+    'bg-[var(--surface-raised)] text-[var(--color-text-secondary)] border border-[var(--color-border)] hover:text-[var(--color-text)] transition-colors'
+const CHIP = 'h-8 px-3 rounded-lg text-[13px] font-medium inline-flex items-center'
 
 // 메모·복기 노트 입력란. 포커스 테두리 색만 다르고 나머지는 동일하다.
 const NOTE_AREA =
-    'w-full px-5 py-4 rounded-[1.5rem] bg-black/[0.03] dark:bg-white/5 border border-white/10 text-[var(--color-text)] placeholder:text-[var(--color-text-secondary)]/30 resize-none outline-none focus:bg-black/[0.05] dark:focus:bg-white/[0.08] transition-all font-medium'
+    'w-full px-4 py-3 rounded-xl bg-[var(--surface-raised)] border border-[var(--color-border)] text-[var(--color-text)] resize-none outline-none transition-colors text-[15px]'
 
 interface SessionEvalModalProps {
     isOpen: boolean
@@ -178,13 +179,13 @@ export default function SessionEvalModal({
 
                 {/* Header */}
                 <header className="text-center space-y-2 pt-1">
-                    <div className="flex items-center justify-center gap-2 text-[var(--color-text-secondary)] font-bold text-sm">
-                        <span className="text-indigo-400">{subject}</span>
+                    <div className="flex items-center justify-center gap-2 text-[var(--color-text-secondary)] text-[14px]">
+                        <span className="text-[var(--color-text)]">{subject}</span>
                         {subItem && <span>› {subItem}</span>}
                         <span className="w-1 h-1 rounded-full bg-[var(--color-text-secondary)]/40" />
                         <span>{formatDuration(sessionDuration)}</span>
                     </div>
-                    <h2 className="text-2xl font-black tracking-tight text-[var(--color-text)]">이번 세션 어땠어?</h2>
+                    <h2 className="text-[22px] font-medium text-[var(--color-text)]">이번 세션 어땠어?</h2>
                 </header>
 
                 {/* Score 1-10 (기본 선택 없음) */}
@@ -192,17 +193,19 @@ export default function SessionEvalModal({
                     <div className="flex gap-1.5 h-12">
                         {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => {
                             const active = score !== null && n <= score
+                            const chosen = score === n
                             return (
                                 <motion.button
                                     key={n}
                                     type="button"
                                     onClick={() => setScore(n)}
-                                    whileTap={{ scale: 0.9 }}
-                                    animate={{ scale: active ? 1.05 : 1 }}
+                                    whileTap={{ scale: 0.97 }}
                                     transition={spring.snappy}
-                                    className={`flex-1 rounded-xl text-xs font-black relative overflow-hidden ${active
-                                        ? 'bg-indigo-500 shadow-[0_4px_16px_rgba(99,102,241,0.4)] z-10 text-white'
-                                        : 'bg-black/[0.04] dark:bg-white/5 text-[var(--color-text-secondary)]/70 hover:bg-black/[0.08] dark:hover:bg-white/10 hover:text-[var(--color-text-secondary)]'
+                                    className={`flex-1 rounded-md text-[14px] font-medium tabular-nums relative overflow-hidden transition-colors ${chosen
+                                        ? 'fill-accent'
+                                        : active
+                                            ? 'bg-[var(--hairline-strong)] text-[var(--color-text)]'
+                                            : 'bg-[var(--surface-raised)] text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'
                                         }`}
                                 >
                                     {n}
@@ -210,9 +213,9 @@ export default function SessionEvalModal({
                             )
                         })}
                     </div>
-                    <p className="text-center text-xs font-bold text-[var(--color-text-secondary)]/70">
+                    <p className="text-center text-[13px] text-[var(--color-text-muted)]">
                         {score === null ? '점수를 탭해 주세요 (건너뛰면 7점)' : (
-                            <span className="text-indigo-400 text-base font-black">{score}<span className="opacity-40"> / 10</span></span>
+                            <span className="font-mono text-[14px] text-[var(--color-text)] tabular-nums">{score}<span className="text-[var(--color-text-muted)]"> / 10</span></span>
                         )}
                     </p>
                 </div>
@@ -227,11 +230,10 @@ export default function SessionEvalModal({
                                     key={tag.name}
                                     type="button"
                                     onClick={() => toggleTag(tag.name)}
-                                    whileTap={{ scale: 0.9 }}
-                                    animate={{ scale: selected ? 1.04 : 1 }}
+                                    whileTap={{ scale: 0.97 }}
                                     transition={spring.snappy}
-                                    className={`px-3.5 py-2 rounded-full text-xs font-bold ${selected
-                                        ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/25'
+                                    className={`${CHIP} ${selected
+                                        ? 'fill-ink'
                                         : IDLE
                                         }`}
                                 >
@@ -242,7 +244,7 @@ export default function SessionEvalModal({
                         <Pressable
                             type="button"
                             onClick={() => setShowAllTags(v => !v)}
-                            className={`px-3.5 py-2 rounded-full text-xs font-bold ${IDLE}`}
+                            className={`${CHIP} ${IDLE}`}
                         >
                             {showAllTags ? '접기' : '더보기'}
                         </Pressable>
@@ -258,7 +260,7 @@ export default function SessionEvalModal({
                             >
                                 {allTagsByCategory.map(([cat, tags]) => (
                                     <div key={cat} className="space-y-1.5">
-                                        <p className="text-[10px] font-black uppercase tracking-widest text-[var(--color-text-secondary)]/70">{TAG_CATEGORY_LABELS[cat]}</p>
+                                        <p className="text-[13px] font-medium text-[var(--color-text-secondary)]/70">{TAG_CATEGORY_LABELS[cat]}</p>
                                         <div className="flex flex-wrap gap-2">
                                             {tags.map(tag => {
                                                 const selected = selectedTags.includes(tag.name)
@@ -267,11 +269,10 @@ export default function SessionEvalModal({
                                                         key={tag.name}
                                                         type="button"
                                                         onClick={() => toggleTag(tag.name)}
-                                                        whileTap={{ scale: 0.9 }}
-                                                        animate={{ scale: selected ? 1.04 : 1 }}
+                                                        whileTap={{ scale: 0.97 }}
                                                         transition={spring.snappy}
-                                                        className={`px-3 py-1.5 rounded-full text-xs font-bold ${selected
-                                                            ? 'bg-indigo-500 text-white'
+                                                        className={`${CHIP} ${selected
+                                                            ? 'fill-ink'
                                                             : IDLE
                                                             }`}
                                                     >
@@ -289,31 +290,31 @@ export default function SessionEvalModal({
 
                 {/* Parked Thoughts */}
                 {parkedNotes.length > 0 && (
-                    <div className="pt-1 border-t border-white/10">
+                    <div className="pt-1 border-t border-[var(--color-border)]">
                         <div className="flex items-center gap-2 mb-3 mt-4">
-                            <span className="text-lg font-black text-blue-400">🅿</span>
-                            <span className="text-xs font-black uppercase tracking-widest text-[var(--color-text-secondary)]">주차된 생각 {parkedNotes.length}개</span>
+                            <span className="w-5 h-5 rounded-[4px] border border-[var(--hairline-strong)] text-[12px] font-medium text-[var(--color-text-secondary)] flex items-center justify-center">P</span>
+                            <span className="text-[13px] font-medium text-[var(--color-text-secondary)]">주차된 생각 {parkedNotes.length}개</span>
                         </div>
                         <div className="space-y-2 max-h-36 overflow-y-auto no-scrollbar">
                             {parkedNotes.map((note, i) => (
-                                <div key={i} className="flex items-start gap-2 px-3 py-2 rounded-xl bg-blue-500/10 border border-blue-500/20">
-                                    <span className="text-blue-400 text-xs mt-0.5 font-black flex-shrink-0">P</span>
-                                    <p className="text-xs text-[var(--color-text)]/80 leading-relaxed">{note.content}</p>
+                                <div key={i} className="flex items-start gap-2 px-3 py-2 rounded-lg bg-[var(--surface-raised)] border border-[var(--color-border)]">
+                                    <span className="text-[var(--color-text-muted)] text-[12px] mt-0.5 flex-shrink-0">P</span>
+                                    <p className="text-[14px] text-[var(--color-text)] leading-relaxed">{note.content}</p>
                                 </div>
                             ))}
                         </div>
-                        <p className="text-[10px] text-[var(--color-text-secondary)]/70 mt-2 text-center">저장 시 검토 완료로 표시됩니다</p>
+                        <p className="text-[11px] text-[var(--color-text-secondary)]/70 mt-2 text-center">저장 시 검토 완료로 표시됩니다</p>
                     </div>
                 )}
 
                 {/* 더 기록하기 (접힘) */}
-                <div className="pt-1 border-t border-white/10">
+                <div className="pt-1 border-t border-[var(--color-border)]">
                     <Pressable
                         type="button"
                         onClick={() => setShowMore(v => !v)}
                         className="flex items-center justify-between w-full group pt-4"
                     >
-                        <span className="font-bold text-[var(--color-text-secondary)] group-hover:text-[var(--color-text)] transition-colors text-sm">더 기록하기</span>
+                        <span className="font-medium text-[var(--color-text-secondary)] group-hover:text-[var(--color-text)] transition-colors text-[14px]">더 기록하기</span>
                         <Icon icon={showMore ? 'mdi:chevron-up' : 'mdi:chevron-down'} className="text-xl text-[var(--color-text-secondary)]" />
                     </Pressable>
 
@@ -327,14 +328,14 @@ export default function SessionEvalModal({
                             >
                                 {/* 문제 풀이 */}
                                 <div className="flex items-center gap-4">
-                                    <span className="text-xs font-black text-[var(--color-text-secondary)] uppercase tracking-widest w-16 flex-shrink-0">문제</span>
-                                    <div className="flex-1 flex items-center gap-3 bg-black/[0.03] dark:bg-white/5 p-2 rounded-2xl border border-white/10 focus-within:border-amber-500/40 transition-all">
+                                    <span className="text-[13px] font-medium text-[var(--color-text-secondary)] w-16 flex-shrink-0">문제</span>
+                                    <div className="flex-1 flex items-center gap-3 bg-[var(--surface-raised)] p-2 rounded-2xl border border-[var(--color-border)] focus-within:border-[var(--color-primary)] transition-[color,background-color,border-color,opacity,transform]">
                                         <input
                                             type="number"
                                             value={correct}
                                             onChange={(e) => setCorrect(e.target.value)}
                                             placeholder="맞힌 수"
-                                            className="w-full bg-transparent text-center font-black text-[var(--color-text)] placeholder:text-[var(--color-text-secondary)]/30 outline-none"
+                                            className="w-full bg-transparent text-center font-medium tabular-nums text-[var(--color-text)] outline-none"
                                         />
                                         <span className="text-[var(--color-text-secondary)]/40 font-black">/</span>
                                         <input
@@ -342,7 +343,7 @@ export default function SessionEvalModal({
                                             value={total}
                                             onChange={(e) => setTotal(e.target.value)}
                                             placeholder="전체"
-                                            className="w-full bg-transparent text-center font-black text-[var(--color-text)] placeholder:text-[var(--color-text-secondary)]/30 outline-none"
+                                            className="w-full bg-transparent text-center font-medium tabular-nums text-[var(--color-text)] outline-none"
                                         />
                                     </div>
                                 </div>
@@ -353,12 +354,12 @@ export default function SessionEvalModal({
                                     onChange={(e) => setMemo(e.target.value)}
                                     placeholder="한 줄 메모 (선택)"
                                     rows={2}
-                                    className={`${NOTE_AREA} focus:border-indigo-400/40`}
+                                    className={`${NOTE_AREA} focus:border-[var(--color-primary)]`}
                                 />
 
                                 {/* 학습 복기용 노트 — 나중에 검색·복기하거나 AI가 참고할 수 있음 */}
                                 <div className="space-y-1.5">
-                                    <p className="text-[10px] font-black text-[var(--color-text-secondary)] uppercase tracking-widest px-1">
+                                    <p className="text-[13px] font-medium text-[var(--color-text-secondary)] px-1">
                                         이 세션에서 배운 것 (복기용, 선택)
                                     </p>
                                     <textarea
@@ -366,7 +367,7 @@ export default function SessionEvalModal({
                                         onChange={(e) => setLearned(e.target.value)}
                                         placeholder="예: 이차함수 최댓값 구하는 법을 완전꼴로 정리했다"
                                         rows={2}
-                                        className={`${NOTE_AREA} focus:border-amber-400/40`}
+                                        className={`${NOTE_AREA} focus:border-[var(--color-primary)]`}
                                     />
                                 </div>
                             </motion.div>
@@ -383,11 +384,11 @@ export default function SessionEvalModal({
                             animate="animate"
                             exit="exit"
                             onClick={() => dismissRef.current?.()}
-                            className="p-4 rounded-2xl bg-gradient-to-br from-indigo-500/15 to-purple-500/10 border border-indigo-500/20 cursor-pointer"
+                            className="p-4 rounded-xl bg-[var(--surface-raised)] border border-[var(--color-border)] cursor-pointer"
                         >
                             <div className="flex items-center gap-2 mb-1.5">
-                                <Icon icon="mdi:sparkles" className="text-sm text-amber-400" />
-                                <span className="text-[10px] font-black uppercase tracking-widest text-[var(--color-text-secondary)]">AI 코멘트</span>
+                                <Icon icon="mdi:message-reply-text-outline" className="text-[14px] text-[var(--color-text-muted)]" />
+                                <span className="text-[13px] font-medium text-[var(--color-text-secondary)]">AI 코멘트</span>
                             </div>
                             <div className="text-sm text-[var(--color-text)]/90 leading-relaxed">
                                 <AiMarkdown>{aiComment}</AiMarkdown>
@@ -398,12 +399,12 @@ export default function SessionEvalModal({
 
                 {/* Actions */}
                 {!aiComment && (
-                    <footer className="flex gap-4 pt-2">
+                    <footer className="flex gap-3 pt-2">
                         <Pressable
                             type="button"
                             onClick={onClose}
                             disabled={saving}
-                            className={`flex-1 py-5 rounded-[2rem] font-black uppercase tracking-widest text-xs disabled:opacity-40 ${IDLE}`}
+                            className={`flex-1 h-12 rounded-xl font-medium text-[15px] disabled:opacity-40 ${IDLE}`}
                         >
                             건너뛰기
                         </Pressable>
@@ -411,7 +412,7 @@ export default function SessionEvalModal({
                             type="button"
                             onClick={handleSave}
                             disabled={saving}
-                            className="flex-[1.5] py-5 rounded-[2rem] bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-black uppercase tracking-widest text-xs shadow-2xl shadow-indigo-500/30 flex items-center justify-center gap-2 disabled:opacity-70"
+                            className="flex-[1.5] h-12 rounded-xl fill-ink font-medium text-[15px] flex items-center justify-center gap-2 disabled:opacity-70"
                         >
                             {saving ? (
                                 <><Icon icon="mdi:loading" className="text-lg animate-spin" /> 저장 중</>

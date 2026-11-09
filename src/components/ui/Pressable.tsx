@@ -17,8 +17,9 @@ const Pressable = forwardRef<HTMLButtonElement, PressableProps>(
     ({ pressScale = 0.97, hoverLift = false, children, ...props }, ref) => (
         <motion.button
             ref={ref}
-            whileTap={{ scale: pressScale }}
-            whileHover={hoverLift ? { y: -2 } : undefined}
+            // 눌림은 작게(최소 0.96), 호버 리프트는 쓰지 않는다 — hoverLift 는 하위 호환용으로만 받는다.
+            whileTap={{ scale: Math.max(pressScale, 0.96) }}
+            data-hover-lift={hoverLift || undefined}
             transition={spring.snappy}
             {...props}
         >

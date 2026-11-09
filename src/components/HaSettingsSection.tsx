@@ -121,7 +121,7 @@ export default function HaSettingsSection({ settings, onSettingsChange }: Props)
 
     return (
         <motion.div variants={staggerItem}>
-            <p className="px-1.5 mb-2 text-[11px] font-bold uppercase tracking-wider text-[var(--color-text-secondary)] opacity-60">
+            <p className="px-1.5 mb-2 text-[13px] font-medium text-[var(--color-text-secondary)] opacity-60">
                 홈 어시스턴트
             </p>
 
@@ -136,14 +136,14 @@ export default function HaSettingsSection({ settings, onSettingsChange }: Props)
                     </div>
                     <motion.button
                         onClick={() => patch({ enabled: !draft.enabled })}
-                        whileTap={{ scale: 0.92 }}
+                        whileTap={{ scale: 0.97 }}
                         transition={spring.snappy}
                         aria-label="홈 어시스턴트 연동 사용"
                         className="relative flex-shrink-0 w-12 h-7 rounded-full transition-colors duration-300"
                         style={{ background: draft.enabled ? 'var(--color-primary)' : 'rgba(120,120,128,0.24)' }}
                     >
                         <motion.div
-                            className="absolute top-1 left-1 w-5 h-5 rounded-full bg-white shadow-md"
+                            className="absolute top-1 left-1 w-5 h-5 rounded-full bg-white"
                             animate={{ x: draft.enabled ? 20 : 0 }}
                             transition={spring.snappy}
                         />
@@ -206,8 +206,7 @@ export default function HaSettingsSection({ settings, onSettingsChange }: Props)
                             onClick={runTest}
                             disabled={test.kind === 'testing' || !draft.localUrl || !draft.token}
                             pressScale={0.97}
-                            className="w-full py-3 rounded-xl font-bold text-white disabled:opacity-40"
-                            style={{ background: 'var(--color-primary)' }}
+                            className="w-full py-3 rounded-xl font-bold fill-accent disabled:opacity-40"
                         >
                             {test.kind === 'testing' ? '연결 확인 중…' : '연결 테스트'}
                         </Pressable>
@@ -240,7 +239,7 @@ export default function HaSettingsSection({ settings, onSettingsChange }: Props)
                                                 <label
                                                     key={o.entityId}
                                                     className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg cursor-pointer"
-                                                    style={{ background: checked ? 'rgba(99,102,241,0.12)' : 'transparent' }}
+                                                    style={{ background: checked ? 'rgba(47,111,237,0.096)' : 'transparent' }}
                                                 >
                                                     <input
                                                         type="checkbox"

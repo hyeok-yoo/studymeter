@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { db, formatDuration, formatDateYYYYMMDD, formatDurationHourMinute, formatTimeHHMM, getMonday, getSunday, getStudyToday, getTodayDate, getDiaryRange, computeDiaryStats, collectSessionTags, getEvalScore } from '../lib/db'
 import type { StudySession, DailyRecord, DiaryEntry, Settings } from '../lib/db'
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LabelList } from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LabelList } from 'recharts'
 import { Icon } from '@iconify/react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { HelpButton } from '../components/HelpButton'
@@ -13,14 +13,16 @@ import Modal from '../components/ui/Modal'
 import { hm, koDate } from '../lib/format'
 import { groupTotals, sumTotals } from '../lib/sessions'
 
-const COLORS = ['#6366f1', '#a855f7', '#06b6d4', '#10b981', '#f59e0b', '#ef4444']
+/** 과목 비율 목록의 블루 단계 — 많이 한 과목일수록 진하게 */
+const SHARE_TONES = [100, 72, 52, 38, 28, 20]
 
 // 막대·파이 차트가 같은 유리 표면을 써야 하므로 툴팁 스타일은 한 곳에만 둔다.
 const TOOLTIP_STYLE = {
-    backgroundColor: 'var(--color-surface-elevated)',
-    border: 'none',
-    borderRadius: '12px',
-    color: 'var(--color-text)'
+    backgroundColor: 'var(--surface)',
+    border: '1px solid var(--hairline-strong)',
+    borderRadius: '10px',
+    color: 'var(--color-text)',
+    fontSize: '13px',
 }
 
 export default function Records() {
@@ -160,9 +162,9 @@ export default function Records() {
     const handleToday = () => setOffset(0)
 
     return (
-        <div className="animate-fade-in max-w-6xl mx-auto">
+        <div className="animate-fade-in">
             {/* 통계 / 일기 전환 — Segmented control */}
-            <div className="relative inline-flex gap-1 p-1 rounded-2xl glass-card-elevated mb-6">
+            <div className="relative inline-flex gap-0.5 p-1 rounded-xl glass-card-elevated mb-6">
                 {([
                     { key: 'stats' as const, icon: 'mdi:chart-bar', label: '통계' },
                     { key: 'diary' as const, icon: 'mdi:notebook-heart-outline', label: '일기' },
@@ -172,17 +174,17 @@ export default function Records() {
                         <button
                             key={t.key}
                             onClick={() => setMainTab(t.key)}
-                            className={`relative px-5 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-colors ${active ? 'text-white' : 'text-[var(--color-text-secondary)]'}`}
+                            className={`relative px-4 h-9 rounded-lg text-[14px] font-medium flex items-center gap-2 transition-colors ${active ? 'text-[var(--color-text)]' : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text)]'}`}
                         >
                             {active && (
                                 <motion.div
                                     layoutId="mainTabIndicator"
                                     transition={spring.default}
-                                    className="absolute inset-0 z-0 rounded-xl bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-secondary)] shadow-lg shadow-indigo-500/20"
+                                    className="absolute inset-0 z-0 rounded-lg seg-active"
                                 />
                             )}
                             <span className="relative z-10 flex items-center gap-2">
-                                <Icon icon={t.icon} className="text-lg" /> {t.label}
+                                <Icon icon={t.icon} className="text-[16px]" /> {t.label}
                             </span>
                         </button>
                     )
@@ -199,7 +201,7 @@ export default function Records() {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
                 <div className="flex flex-col gap-1">
                     <div className="flex items-center gap-2">
-                        <h1 className="text-3xl font-bold gradient-text">기록</h1>
+                        <h1 className="text-[28px] md:text-[34px] leading-tight font-medium text-[var(--color-text)]">기록</h1>
                         <HelpButton title="학습 기록 안내" items={[
                             { description: '공부 세션 데이터를 일·주·월·연간 단위로 분석합니다.' },
                             { title: '총합 vs 순공', description: '총합은 강의·자습·테스트 모든 타입의 합계이고, 순공은 자습+테스트 타입만 집계한 실질 자기주도 학습 시간입니다.' },
@@ -209,24 +211,24 @@ export default function Records() {
                     </div>
                     {viewMode !== 'year' && (
                         <div className="flex items-center gap-2">
-                            <Pressable onClick={handlePrev} pressScale={0.9} className="p-2 rounded-xl glass-card-elevated flex items-center justify-center">
-                                <Icon icon="mdi:chevron-left" className="text-xl" />
+                            <Pressable onClick={handlePrev} pressScale={0.97} className="w-9 h-9 rounded-lg glass-card-elevated flex items-center justify-center text-[var(--color-text-secondary)]">
+                                <Icon icon="mdi:chevron-left" className="text-[18px]" />
                             </Pressable>
-                            <p className="text-sm text-[var(--color-text-secondary)] min-w-[150px] text-center flex items-center justify-center gap-1 tabular-nums">
-                                <Icon icon="mdi:calendar" className="text-lg" /> {dateRange.label}
+                            <p className="text-[14px] text-[var(--color-text-secondary)] min-w-[150px] text-center tabular-nums">
+                                {dateRange.label}
                             </p>
-                            <Pressable onClick={handleNext} pressScale={0.9} className="p-2 rounded-xl glass-card-elevated flex items-center justify-center">
-                                <Icon icon="mdi:chevron-right" className="text-xl" />
+                            <Pressable onClick={handleNext} pressScale={0.97} className="w-9 h-9 rounded-lg glass-card-elevated flex items-center justify-center text-[var(--color-text-secondary)]">
+                                <Icon icon="mdi:chevron-right" className="text-[18px]" />
                             </Pressable>
                             <AnimatePresence>
                                 {offset !== 0 && (
                                     <Pressable
                                         onClick={handleToday}
-                                        pressScale={0.94}
+                                        pressScale={0.97}
                                         initial={{ opacity: 0, scale: 0.9 }}
                                         animate={{ opacity: 1, scale: 1 }}
                                         exit={{ opacity: 0, scale: 0.9 }}
-                                        className="px-3 py-1.5 rounded-xl bg-[var(--color-primary)] text-white text-xs font-bold"
+                                        className="h-9 px-3 rounded-lg btn-glass text-[13px] font-medium"
                                     >
                                         오늘
                                     </Pressable>
@@ -237,7 +239,7 @@ export default function Records() {
                 </div>
 
                 {/* View Mode Toggle — Segmented control */}
-                <div className="relative inline-flex gap-1 p-1 rounded-2xl glass-card-elevated self-start">
+                <div className="relative inline-flex gap-0.5 p-1 rounded-xl glass-card-elevated self-start">
                     {([
                         { key: 'day' as const, label: '일별' },
                         { key: 'week' as const, label: '주별' },
@@ -249,13 +251,13 @@ export default function Records() {
                             <button
                                 key={v.key}
                                 onClick={() => { setViewMode(v.key); setOffset(0) }}
-                                className={`relative px-4 py-2 rounded-xl text-sm font-bold transition-colors ${active ? 'text-white' : 'text-[var(--color-text-secondary)]'}`}
+                                className={`relative px-4 h-8 rounded-lg text-[14px] font-medium transition-colors ${active ? 'text-[var(--color-text)]' : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text)]'}`}
                             >
                                 {active && (
                                     <motion.div
                                         layoutId="viewModeIndicator"
                                         transition={spring.default}
-                                        className="absolute inset-0 z-0 rounded-xl bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-secondary)] shadow-lg shadow-indigo-500/20"
+                                        className="absolute inset-0 z-0 rounded-lg seg-active"
                                     />
                                 )}
                                 <span className="relative z-10">{v.label}</span>
@@ -269,38 +271,38 @@ export default function Records() {
             {viewMode === 'year' && <AnnualContributionGraph />}
 
             {/* Summary Cards with Comparison */}
-            {viewMode !== 'year' && <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+            {viewMode !== 'year' && <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
                 <div className="glass-card p-5">
-                    <p className="text-[11px] uppercase tracking-widest font-bold text-[var(--color-text-secondary)] mb-2">총 공부 시간</p>
-                    <p className="text-display text-2xl font-black tabular-nums gradient-text">{formatDuration(totalTime)}</p>
+                    <p className="text-[13px] font-medium text-[var(--color-text-secondary)] mb-2">총 공부 시간</p>
+                    <p className="text-[26px] md:text-[30px] font-light tabular-nums leading-none text-[var(--color-text)]">{formatDuration(totalTime)}</p>
                     {prevTotalTime > 0 && (
-                        <p className={`text-xs mt-1.5 font-semibold tabular-nums ${totalChange >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                        <p className={`text-[12px] mt-2 tabular-nums ${totalChange >= 0 ? 'text-green-500' : 'text-red-500'}`}>
                             {hm(totalChange, { sign: true })} vs 이전
                         </p>
                     )}
                 </div>
                 <div className="glass-card p-5">
                     <div className="flex items-center gap-1.5 mb-2">
-                        <p className="text-[11px] uppercase tracking-widest font-bold text-[var(--color-text-secondary)]">순공 시간</p>
+                        <p className="text-[13px] font-medium text-[var(--color-text-secondary)]">순공 시간</p>
                         <HelpButton title="순공 시간이란?" items={[
                             { description: '자습·테스트 타입으로 공부한 시간만 합산한 값입니다.' },
                             { title: '총합과의 차이', description: '총합에는 강의 시청 시간도 포함되지만, 순공은 스스로 학습한 시간만 측정합니다. 수험생이 실질 학습 시간을 파악할 때 주로 활용합니다.' },
                         ]} />
                     </div>
-                    <p className="text-display text-2xl font-black tabular-nums text-[var(--color-text)]">{formatDuration(selfStudyTime)}</p>
+                    <p className="text-[26px] md:text-[30px] font-light tabular-nums leading-none text-[var(--color-text)]">{formatDuration(selfStudyTime)}</p>
                     {prevSelfStudyTime > 0 && (
-                        <p className={`text-xs mt-1.5 font-semibold tabular-nums ${selfStudyChange >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                        <p className={`text-[12px] mt-2 tabular-nums ${selfStudyChange >= 0 ? 'text-green-500' : 'text-red-500'}`}>
                             {hm(selfStudyChange, { sign: true })} vs 이전
                         </p>
                     )}
                 </div>
                 <div className="glass-card p-5">
-                    <p className="text-[11px] uppercase tracking-widest font-bold text-[var(--color-text-secondary)] mb-2">세션 수</p>
-                    <p className="text-display text-2xl font-black tabular-nums text-[var(--color-text)]">{sessions.length}회</p>
+                    <p className="text-[13px] font-medium text-[var(--color-text-secondary)] mb-2">세션 수</p>
+                    <p className="text-[26px] md:text-[30px] font-light tabular-nums leading-none text-[var(--color-text)]">{sessions.length}회</p>
                 </div>
                 <div className="glass-card p-5">
-                    <p className="text-[11px] uppercase tracking-widest font-bold text-[var(--color-text-secondary)] mb-2">순공 비율</p>
-                    <p className="text-display text-2xl font-black tabular-nums text-[var(--color-text)]">
+                    <p className="text-[13px] font-medium text-[var(--color-text-secondary)] mb-2">순공 비율</p>
+                    <p className="text-[26px] md:text-[30px] font-light tabular-nums leading-none text-[var(--color-text)]">
                         {totalTime > 0 ? Math.round((selfStudyTime / totalTime) * 100) : 0}%
                     </p>
                 </div>
@@ -309,17 +311,19 @@ export default function Records() {
             {/* Monthly Calendar View */}
             {viewMode === 'month' && (
                 <div className="glass-card p-6 mb-8">
-                    <h3 className="text-lg font-semibold mb-4">한 달 간벏 기록</h3>
+                    <h3 className="text-[16px] font-medium mb-4">한 달 기록</h3>
                     <div className="grid grid-cols-7 gap-2 text-center">
                         {/* Weekday headers */}
                         {['일', '월', '화', '수', '목', '금', '토'].map((day) => (
-                            <div key={day} className={`text-xs font-bold py-2 ${day === '일' ? 'text-red-400' : day === '토' ? 'text-blue-400' : 'opacity-60'}`}>
+                            <div key={day} className="text-[12px] py-2 text-[var(--color-text-muted)]">
                                 {day}
                             </div>
                         ))}
                         {/* Calendar cells */}
                         {(() => {
                             const cells = []
+                            // 칸마다 붙는 작은 계측 막대의 기준 — 이 달에서 가장 많이 공부한 날
+                            const maxDay = Math.max(1, ...Array.from(calendarData.values(), (d) => d.total))
                             const firstDay = new Date(dateRange.start)
                             const lastDay = new Date(dateRange.end)
 
@@ -334,7 +338,6 @@ export default function Records() {
                             while (currentDate <= lastDay) {
                                 const dateStr = formatDateYYYYMMDD(currentDate)
                                 const dayNum = currentDate.getDate()
-                                const dayOfWeek = currentDate.getDay()
                                 const data = calendarData.get(dateStr)
                                 const hasData = data && data.total > 0
 
@@ -348,16 +351,19 @@ export default function Records() {
                                             const diff = Math.floor((currentDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
                                             setOffset(diff)
                                         }}
-                                        className={`h-20 rounded-xl p-1 flex flex-col items-center justify-start cursor-pointer transition-all hover:scale-105 ${hasData
-                                            ? 'bg-gradient-to-br from-indigo-500/20 to-purple-500/20 hover:from-indigo-500/30 hover:to-purple-500/30'
-                                            : 'bg-white/5 hover:bg-white/10'
-                                            } ${dayOfWeek === 0 ? 'text-red-400' : dayOfWeek === 6 ? 'text-blue-400' : ''}`}
+                                        className={`h-20 rounded-2xl p-1 flex flex-col items-center justify-start cursor-pointer transition-[color,background-color,border-color,opacity,transform] ${hasData
+                                            ? 'bg-[var(--surface-raised)] border border-[var(--color-border)]'
+                                            : 'hover:bg-[var(--surface-raised)]'
+                                            }`}
                                     >
-                                        <span className={`text-sm font-bold ${hasData ? '' : 'opacity-40'}`}>{dayNum}</span>
+                                        <span className={`text-[13px] tabular-nums ${hasData ? 'text-[var(--color-text)]' : 'text-[var(--color-text-muted)]'}`}>{dayNum}</span>
                                         {hasData && (
                                             <div className="mt-1 text-center">
-                                                <p className="text-[10px] font-bold text-indigo-400">{hm(data.total, { compact: true })}</p>
-                                                <p className="text-[9px] opacity-60">{hm(data.selfStudy, { compact: true })}</p>
+                                                <p className="font-mono text-[11px] text-[var(--color-text-secondary)]">{hm(data.total, { compact: true })}</p>
+                                                <p className="font-mono text-[11px] text-[var(--color-primary)]">{hm(data.selfStudy, { compact: true })}</p>
+                                                <div className="mt-1.5 mx-auto w-3/4 h-1 rounded-full bg-[var(--track)] overflow-hidden">
+                                                    <div className="h-full rounded-full bg-[var(--lamp)]" style={{ width: `${Math.round((data.total / maxDay) * 100)}%` }} />
+                                                </div>
                                             </div>
                                         )}
                                     </div>
@@ -370,12 +376,12 @@ export default function Records() {
                     </div>
                     <div className="flex justify-center gap-6 mt-4 text-xs">
                         <div className="flex items-center gap-1">
-                            <div className="w-3 h-3 rounded bg-indigo-400"></div>
-                            <span>총 공부</span>
+                            <div className="w-2.5 h-2.5 rounded-full bg-[var(--lamp)] opacity-40"></div>
+                            <span className="text-[var(--color-text-secondary)]">총 공부</span>
                         </div>
                         <div className="flex items-center gap-1">
-                            <div className="w-3 h-3 rounded bg-white/40"></div>
-                            <span>순공</span>
+                            <div className="w-2.5 h-2.5 rounded-full bg-[var(--lamp)]"></div>
+                            <span className="text-[var(--color-text-secondary)]">순공</span>
                         </div>
                     </div>
                 </div>
@@ -384,104 +390,110 @@ export default function Records() {
             {/* Charts (hide for year view) */}
             {viewMode !== 'year' && <div className="grid md:grid-cols-2 gap-6 mb-8">
                 {/* Bar Chart */}
-                <div className="glass-card p-6">
-                    <div className="flex items-center gap-2 mb-4">
-                        <h3 className="text-lg font-semibold">과목별 공부 시간</h3>
+                <div className="glass-card p-5 md:p-6">
+                    <div className="flex items-center gap-1.5 mb-4">
+                        <h3 className="text-[16px] font-medium">과목별 공부 시간</h3>
                         <HelpButton title="과목별 공부 시간 차트" items={[
-                            { description: '선택한 기간 동안 각 과목별 총합(파란색)과 순공(분홍색) 시간을 막대그래프로 비교합니다.' },
-                            { title: '총합 (파란색)', description: '강의·자습·테스트 등 모든 학습 타입을 포함한 합계입니다.' },
-                            { title: '순공 (분홍색)', description: '자습·테스트 타입만 합산한 자기주도 학습 시간입니다.' },
+                            { description: '선택한 기간 동안 각 과목별 총합(회색)과 순공(주황색) 시간을 막대그래프로 비교합니다.' },
+                            { title: '총합 (회색)', description: '강의·자습·테스트 등 모든 학습 타입을 포함한 합계입니다.' },
+                            { title: '순공 (주황색)', description: '자습·테스트 타입만 합산한 자기주도 학습 시간입니다.' },
                         ]} />
                     </div>
-                    <div className="h-72">
+                    <div className="h-72 text-[var(--color-text)]">
                         <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={chartData} barGap={8}>
-                                <XAxis dataKey="name" tick={{ fill: 'var(--color-text-secondary)', fontSize: 12 }} />
-                                <YAxis tick={{ fill: 'var(--color-text-secondary)', fontSize: 12 }} tickFormatter={(v) => formatDurationHourMinute(v)} />
+                            <BarChart data={chartData} barGap={4} margin={{ top: 20, right: 0, bottom: 0, left: 0 }}>
+                                <XAxis dataKey="name" tick={{ fill: 'var(--color-text-secondary)', fontSize: 12 }} axisLine={{ stroke: 'var(--color-border)' }} tickLine={false} />
+                                <YAxis tick={{ fill: 'var(--color-text-muted)', fontSize: 11, fontFamily: 'var(--font-mono)' }} tickFormatter={(v) => formatDurationHourMinute(v)} axisLine={false} tickLine={false} width={56} />
                                 <Tooltip
                                     contentStyle={TOOLTIP_STYLE}
                                     formatter={(value: any, name: any) => [formatDurationHourMinute(value), name === '총합' ? '합계' : '순공'] as [string, string]}
                                 />
-                                <Bar dataKey="총합" fill="#3b82f6" radius={[6, 6, 0, 0]}>
-                                    <LabelList dataKey="총합Label" position="top" fill="#3b82f6" fontSize={10} />
+                                <Bar dataKey="총합" fill="var(--lamp)" fillOpacity={0.28} radius={[8, 8, 8, 8]} maxBarSize={28}>
+                                    <LabelList dataKey="총합Label" position="top" fill="var(--color-text-muted)" fontSize={11} />
                                 </Bar>
-                                <Bar dataKey="순공" fill="#ec4899" radius={[6, 6, 0, 0]}>
-                                    <LabelList dataKey="순공Label" position="top" fill="#ec4899" fontSize={10} />
+                                <Bar dataKey="순공" fill="var(--lamp)" radius={[8, 8, 8, 8]} maxBarSize={28}>
+                                    <LabelList dataKey="순공Label" position="top" fill="var(--color-primary)" fontSize={11} />
                                 </Bar>
                             </BarChart>
                         </ResponsiveContainer>
                     </div>
-                    <div className="flex justify-center gap-6 mt-4 text-sm">
+                    <div className="flex justify-center gap-6 mt-4 text-[13px] text-[var(--color-text-secondary)]">
                         <div className="flex items-center gap-2">
-                            <div className="w-4 h-4 rounded bg-blue-500"></div>
+                            <div className="w-2.5 h-2.5 rounded-full bg-[var(--lamp)] opacity-30"></div>
                             <span>총합</span>
                         </div>
                         <div className="flex items-center gap-2">
-                            <div className="w-4 h-4 rounded bg-pink-500"></div>
+                            <div className="w-2.5 h-2.5 rounded-full bg-[var(--lamp)]"></div>
                             <span>순공 (자습+테스트)</span>
                         </div>
                     </div>
                 </div>
 
-                {/* Pie Chart */}
-                <div className="glass-card p-6">
-                    <h3 className="text-lg font-semibold mb-4">과목별 비율</h3>
-                    <div className="h-72">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
-                                <Pie
-                                    data={pieData}
-                                    cx="50%"
-                                    cy="50%"
-                                    innerRadius={60}
-                                    outerRadius={100}
-                                    paddingAngle={2}
-                                    dataKey="value"
-                                    label={({ name }) => name}
-                                >
-                                    {pieData.map((_, index) => (
-                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                    ))}
-                                </Pie>
-                                <Tooltip
-                                    formatter={(value: any) => formatDuration(value)}
-                                    contentStyle={TOOLTIP_STYLE}
-                                />
-                            </PieChart>
-                        </ResponsiveContainer>
-                    </div>
+                {/* 과목별 비율 — 순위 목록 + 가는 막대 */}
+                <div className="glass-card p-5 md:p-6">
+                    <h3 className="text-[16px] font-medium mb-4">과목별 비율</h3>
+                    {(() => {
+                        const total = pieData.reduce((acc, d) => acc + d.value, 0)
+                        const ranked = [...pieData].sort((x, y) => y.value - x.value)
+                        if (!total) return <p className="text-[14px] text-[var(--color-text-muted)] py-8 text-center">이 기간에는 기록이 없습니다</p>
+                        return (
+                            <div className="flex flex-col">
+                                {ranked.map((d, i) => {
+                                    const pct = (d.value / total) * 100
+                                    return (
+                                        <div key={d.name} className="py-2.5 border-t border-[var(--color-border)] first:border-t-0">
+                                            <div className="flex items-baseline gap-2">
+                                                <span className="text-[14px] text-[var(--color-text)] truncate">{d.name}</span>
+                                                <span className="ml-auto font-mono text-[12px] tabular-nums text-[var(--color-text-muted)]">{formatDuration(d.value)}</span>
+                                                <span className="font-mono text-[13px] tabular-nums text-[var(--color-text)] w-12 text-right">{Math.round(pct)}%</span>
+                                            </div>
+                                            <div className="mt-2 h-1.5 rounded-full bg-[var(--track)] overflow-hidden">
+                                                <div
+                                                    className="h-full rounded-full"
+                                                    style={{
+                                                        width: `${pct}%`,
+                                                        background: `color-mix(in srgb, var(--lamp) ${SHARE_TONES[Math.min(i, SHARE_TONES.length - 1)]}%, transparent)`,
+                                                    }}
+                                                />
+                                            </div>
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        )
+                    })()}
                 </div>
             </div>}
 
             {/* Daily Schedule (Day View Only) */}
             {viewMode === 'day' && dailyRecord && (dailyRecord.wakeUpTime || dailyRecord.arrivalTime || dailyRecord.leaveTime || dailyRecord.bedTime) && (
                 <div className="glass-card p-4 mb-6">
-                    <h3 className="text-sm font-bold text-[var(--color-text-secondary)] mb-3">하루 일정</h3>
+                    <h3 className="text-[14px] font-medium text-[var(--color-text-secondary)] mb-3">하루 일정</h3>
                     <div className="flex flex-wrap gap-4 text-sm">
                         {dailyRecord.wakeUpTime && (
                             <div className="flex items-center gap-2">
-                                <Icon icon="mdi:weather-sunset-up" className="text-xl text-orange-400" />
+                                <Icon icon="mdi:weather-sunset-up" className="text-[18px] text-[var(--color-text-muted)]" />
                                 <span className="text-[var(--color-text-secondary)]">기상</span>
                                 <span className="font-bold">{dailyRecord.wakeUpTime}</span>
                             </div>
                         )}
                         {dailyRecord.arrivalTime && (
                             <div className="flex items-center gap-2">
-                                <Icon icon="mdi:school-outline" className="text-xl text-blue-400" />
+                                <Icon icon="mdi:school-outline" className="text-[18px] text-[var(--color-text-muted)]" />
                                 <span className="text-[var(--color-text-secondary)]">등원</span>
                                 <span className="font-bold">{dailyRecord.arrivalTime}</span>
                             </div>
                         )}
                         {dailyRecord.leaveTime && (
                             <div className="flex items-center gap-2">
-                                <Icon icon="mdi:home-outline" className="text-xl text-green-400" />
+                                <Icon icon="mdi:home-outline" className="text-[18px] text-[var(--color-text-muted)]" />
                                 <span className="text-[var(--color-text-secondary)]">하원</span>
                                 <span className="font-bold">{dailyRecord.leaveTime}</span>
                             </div>
                         )}
                         {dailyRecord.bedTime && (
                             <div className="flex items-center gap-2">
-                                <Icon icon="mdi:weather-night" className="text-xl text-indigo-400" />
+                                <Icon icon="mdi:weather-night" className="text-[18px] text-[var(--color-text-muted)]" />
                                 <span className="text-[var(--color-text-secondary)]">취침</span>
                                 <span className="font-bold">{dailyRecord.bedTime}</span>
                             </div>
@@ -492,7 +504,7 @@ export default function Records() {
 
             {/* Recent Sessions */}
             {viewMode !== 'year' && <div className="glass-card p-6">
-                <h3 className="text-lg font-semibold mb-4">최근 기록</h3>
+                <h3 className="text-[16px] font-medium mb-4">최근 기록</h3>
                 <div className="space-y-3 max-h-96 overflow-y-auto">
                     {[...sessions].sort((a, b) => b.startTime - a.startTime).slice(0, 20).map((session, i) => (
                         <motion.div
@@ -506,39 +518,39 @@ export default function Records() {
                                 <div className="flex items-center gap-2">
                                     <span className="font-medium">{session.subject}</span>
                                     {session.subItem && <span className="text-[var(--color-primary)] text-sm">› {session.subItem}</span>}
-                                    <span className="text-[var(--color-text-secondary)] text-xs px-2 py-0.5 rounded-full bg-white/5">{session.type}</span>
+                                    <span className="text-[var(--color-text-secondary)] text-xs px-2 py-0.5 rounded-full bg-[var(--surface-raised)]">{session.type}</span>
                                 </div>
                                 <div className="text-right">
                                     <p className="font-bold">{formatDuration(session.duration)}</p>
-                                    <p className="text-[10px] text-[var(--color-text-secondary)]">{session.date}</p>
+                                    <p className="text-[11px] text-[var(--color-text-secondary)]">{session.date}</p>
                                 </div>
                             </div>
                             {/* Evaluation Badges — 신형(단일 score+tags)·구형(focus/satisfaction) 모두 지원 */}
                             {session.evaluation && (
-                                <div className="flex items-center gap-3 pt-1 border-t border-white/5 flex-wrap">
+                                <div className="flex items-center gap-3 pt-1 border-t border-[var(--color-border)] flex-wrap">
                                     {getEvalScore(session.evaluation) !== null && (
                                         <div className="flex items-center gap-1.5">
-                                            <Icon icon="mdi:fire" className="text-md text-orange-400" />
-                                            <span className="text-[10px] text-[var(--color-text-secondary)]">점수</span>
-                                            <span className="text-xs font-bold text-indigo-400">{getEvalScore(session.evaluation)}/10</span>
+                                            <Icon icon="mdi:fire" className="text-md text-[var(--color-text-muted)]" />
+                                            <span className="text-[11px] text-[var(--color-text-secondary)]">점수</span>
+                                            <span className="text-xs font-bold text-[var(--color-primary)]">{getEvalScore(session.evaluation)}/10</span>
                                         </div>
                                     )}
                                     {(session.evaluation.tags?.length ?? 0) > 0 && (
                                         <div className="flex items-center gap-1 flex-wrap">
                                             {session.evaluation.tags!.map(tag => (
-                                                <span key={tag} className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-white/5 text-[var(--color-text-secondary)]">{tag}</span>
+                                                <span key={tag} className="text-[11px] font-bold px-1.5 py-0.5 rounded-full bg-[var(--surface-raised)] text-[var(--color-text-secondary)]">{tag}</span>
                                             ))}
                                         </div>
                                     )}
                                     {session.evaluation.problemSolving && (
                                         <div className="flex items-center gap-1.5">
                                             <Icon icon="mdi:check-circle-outline" className="text-md text-green-400" />
-                                            <span className="text-[10px] text-[var(--color-text-secondary)]">문제</span>
+                                            <span className="text-[11px] text-[var(--color-text-secondary)]">문제</span>
                                             <span className="text-xs font-bold text-amber-400">{session.evaluation.problemSolving.correct}/{session.evaluation.problemSolving.total}</span>
                                         </div>
                                     )}
                                     {session.evaluation.memo && (
-                                        <div className="flex-1 text-xs text-[var(--color-text-secondary)] italic truncate">
+                                        <div className="flex-1 text-xs text-[var(--color-text-secondary)] not-italic truncate">
                                             "{session.evaluation.memo}"
                                         </div>
                                     )}
@@ -548,7 +560,7 @@ export default function Records() {
                     ))}
                     {sessions.length === 0 && (
                         <p className="text-center text-[var(--color-text-secondary)] py-8 flex items-center justify-center gap-2">
-                            아직 기록이 없습니다. 공부를 시작해보세요! <Icon icon="mdi:bookshelf" className="text-xl text-indigo-400" />
+                            아직 기록이 없습니다. 공부를 시작해 보세요 <Icon icon="mdi:bookshelf" className="text-xl text-[var(--color-text-muted)]" />
                         </p>
                     )}
                 </div>
@@ -565,19 +577,13 @@ export default function Records() {
 function getContributionColor(ms: number): string {
     if (ms === 0) return 'rgba(128,128,140,0.12)'
     const h = ms / 3600000
-    if (h < 2) return 'rgba(79,70,229,0.35)'
-    if (h < 4) return '#312e81'
-    if (h < 6) return '#4338ca'
-    if (h < 9) return '#6d28d9'
-    return '#a855f7'
+    if (h < 2) return 'rgba(47,111,237,0.25)'
+    if (h < 4) return 'rgba(47,111,237,0.45)'
+    if (h < 6) return 'rgba(47,111,237,0.65)'
+    if (h < 9) return 'rgba(47,111,237,0.85)'
+    return '#5b94ff'
 }
 
-function getContributionGlow(ms: number): string {
-    const h = ms / 3600000
-    if (h >= 9) return '0 0 8px 1px rgba(168,85,247,0.5)'
-    if (h >= 6) return '0 0 5px 1px rgba(109,40,217,0.4)'
-    return 'none'
-}
 
 function AnnualContributionGraph() {
     const [studyData, setStudyData] = useState<Map<string, number>>(new Map())
@@ -662,30 +668,30 @@ function AnnualContributionGraph() {
             {/* Stats Row */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="glass-card p-4 text-center">
-                    <p className="text-xs text-[var(--color-text-secondary)] mb-1 uppercase tracking-widest font-bold">공부한 날</p>
-                    <p className="text-display text-3xl font-black tabular-nums gradient-text">{stats.totalDays}<span className="text-base font-bold opacity-60">일</span></p>
+                    <p className="text-[13px] text-[var(--color-text-secondary)] mb-1 font-medium">공부한 날</p>
+                    <p className="text-[30px] font-light tabular-nums leading-none text-[var(--color-text)]">{stats.totalDays}<span className="text-[15px] text-[var(--color-text-muted)] ml-0.5">일</span></p>
                 </div>
                 <div className="glass-card p-4 text-center">
-                    <p className="text-xs text-[var(--color-text-secondary)] mb-1 uppercase tracking-widest font-bold">최장 연속</p>
-                    <p className="text-display text-3xl font-black tabular-nums" style={{ color: '#a855f7' }}>{stats.bestStreak}<span className="text-base font-bold opacity-60">일</span></p>
+                    <p className="text-[13px] text-[var(--color-text-secondary)] mb-1 font-medium">최장 연속</p>
+                    <p className="text-[30px] font-light tabular-nums leading-none text-[var(--color-primary)]">{stats.bestStreak}<span className="text-[15px] text-[var(--color-text-muted)] ml-0.5">일</span></p>
                 </div>
                 <div className="glass-card p-4 text-center">
-                    <p className="text-xs text-[var(--color-text-secondary)] mb-1 uppercase tracking-widest font-bold">현재 연속</p>
-                    <p className="text-display text-3xl font-black tabular-nums" style={{ color: stats.currentStreak > 0 ? '#22c55e' : 'var(--color-text-secondary)' }}>{stats.currentStreak}<span className="text-base font-bold opacity-60">일</span></p>
+                    <p className="text-[13px] text-[var(--color-text-secondary)] mb-1 font-medium">현재 연속</p>
+                    <p className="text-[30px] font-light tabular-nums leading-none text-[var(--color-text)]">{stats.currentStreak}<span className="text-[15px] text-[var(--color-text-muted)] ml-0.5">일</span></p>
                 </div>
                 <div className="glass-card p-4 text-center">
-                    <p className="text-xs text-[var(--color-text-secondary)] mb-1 uppercase tracking-widest font-bold">연간 총합</p>
-                    <p className="text-display text-2xl font-black tabular-nums text-indigo-400">{Math.floor(stats.totalMs / 3600000)}<span className="text-base font-bold opacity-60">h</span></p>
+                    <p className="text-[13px] text-[var(--color-text-secondary)] mb-1 font-medium">연간 총합</p>
+                    <p className="text-[30px] font-light tabular-nums leading-none text-[var(--color-text)]">{Math.floor(stats.totalMs / 3600000)}<span className="text-[15px] text-[var(--color-text-muted)] ml-0.5">h</span></p>
                 </div>
             </div>
 
             {/* Contribution Grid */}
             <div className="glass-card p-6 relative overflow-hidden">
                 <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-bold">연간 공부 기록</h3>
+                    <h3 className="text-[16px] font-medium">연간 공부 기록</h3>
                     {stats.bestDay.date && (
                         <span className="text-xs text-[var(--color-text-secondary)]">
-                            최고 <span className="text-purple-400 font-bold">{koDate(stats.bestDay.date)}</span> · {hm(stats.bestDay.ms)}
+                            최고 <span className="text-[var(--color-text)] font-medium">{koDate(stats.bestDay.date)}</span> · {hm(stats.bestDay.ms)}
                         </span>
                     )}
                 </div>
@@ -697,7 +703,7 @@ function AnnualContributionGraph() {
                             {monthLabels.map(({ label, colIdx }) => (
                                 <span key={label + colIdx} style={{
                                     position: 'absolute', left: `${colIdx * STEP}px`,
-                                    fontSize: '10px', fontWeight: 700, color: 'var(--color-text-secondary)',
+                                    fontSize: '11px', fontWeight: 400, color: 'var(--color-text-secondary)',
                                     whiteSpace: 'nowrap'
                                 }}>{label}</span>
                             ))}
@@ -708,7 +714,7 @@ function AnnualContributionGraph() {
                             {/* Day labels */}
                             <div style={{ display: 'flex', flexDirection: 'column', gap: `${GAP}px`, marginTop: '1px' }}>
                                 {DAY_LABELS.map((label, i) => (
-                                    <div key={i} style={{ width: '16px', height: `${CELL}px`, fontSize: '9px', fontWeight: 700, color: 'var(--color-text-secondary)', opacity: 0.7, display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                                    <div key={i} style={{ width: '16px', height: `${CELL}px`, fontSize: '11px', fontWeight: 400, color: 'var(--color-text-secondary)', opacity: 0.7, display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
                                         {label}
                                     </div>
                                 ))}
@@ -727,12 +733,12 @@ function AnnualContributionGraph() {
                                                 width: `${CELL}px`, height: `${CELL}px`,
                                                 borderRadius: '3px',
                                                 background: cell.valid ? getContributionColor(cell.ms) : 'transparent',
-                                                boxShadow: cell.valid ? getContributionGlow(cell.ms) : 'none',
+                                                
                                                 cursor: cell.valid ? 'pointer' : 'default',
                                                 transition: 'transform 0.1s, box-shadow 0.1s',
                                             }}
-                                            onMouseOver={e => { if (cell.valid && cell.ms > 0) (e.currentTarget as HTMLDivElement).style.transform = 'scale(1.3)' }}
-                                            onMouseOut={e => { (e.currentTarget as HTMLDivElement).style.transform = 'scale(1)' }}
+                                            onMouseOver={e => { if (cell.valid && cell.ms > 0) (e.currentTarget as HTMLDivElement).style.outline = '1px solid var(--color-text-secondary)' }}
+                                            onMouseOut={e => { (e.currentTarget as HTMLDivElement).style.outline = 'none' }}
                                         />
                                     ))}
                                 </div>
@@ -760,7 +766,7 @@ function AnnualContributionGraph() {
                                 boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
                             }}>
                                 <div style={{ color: 'rgba(255,255,255,0.6)', marginBottom: '2px' }}>{koDate(tooltip.date)}</div>
-                                <div style={{ color: tooltip.ms > 0 ? '#a855f7' : 'rgba(255,255,255,0.3)', fontSize: '13px' }}>
+                                <div style={{ color: tooltip.ms > 0 ? '#b8741a' : 'rgba(255,255,255,0.3)', fontSize: '13px' }}>
                                     {tooltip.ms > 0 ? hm(tooltip.ms) : '공부 없음'}
                                 </div>
                             </div>
@@ -775,7 +781,7 @@ function AnnualContributionGraph() {
                         <div key={i} style={{
                             width: `${CELL}px`, height: `${CELL}px`, borderRadius: '3px',
                             background: getContributionColor(ms),
-                            boxShadow: getContributionGlow(ms)
+                            boxShadow: 'none'
                         }} />
                     ))}
                     <span style={{ fontSize: '10px', color: 'var(--color-text-secondary)', opacity: 0.7, marginLeft: '4px' }}>많음</span>
@@ -833,7 +839,7 @@ function DiaryTab() {
     if (loading) {
         return (
             <div className="space-y-3 animate-pulse">
-                {[0, 1, 2].map(i => <div key={i} className="h-20 rounded-2xl bg-white/5" />)}
+                {[0, 1, 2].map(i => <div key={i} className="h-20 rounded-2xl bg-[var(--surface-raised)]" />)}
             </div>
         )
     }
@@ -866,18 +872,27 @@ function DiaryTab() {
                               <Pressable
                                 onClick={() => setSelectedDate(entry.date)}
                                 pressScale={0.99}
-                                className="w-full text-left glass-card p-4 block"
+                                className="w-full text-left glass-card px-4 py-3.5 block hover:border-[var(--hairline-strong)] transition-colors"
                               >
                                 <div className="flex items-center gap-3">
-                                    <div className="flex flex-col items-center justify-center w-12 flex-shrink-0">
-                                        <span className="text-xl font-black gradient-text tabular-nums">{entry.score}</span>
-                                        <span className="text-[9px] font-bold text-[var(--color-text-secondary)]/70">/ 10</span>
+                                    <div className="flex flex-col items-start justify-center w-14 flex-shrink-0 gap-1.5">
+                                        <span className="text-[24px] font-light tabular-nums leading-none">{entry.score}</span>
+                                        {/* 점수 눈금 — 10칸 중 점수만큼 채움 */}
+                                        <span className="flex gap-[2px]" aria-hidden>
+                                            {Array.from({ length: 10 }, (_, i) => (
+                                                <span
+                                                    key={i}
+                                                    className="w-[3px] h-2 rounded-[1px]"
+                                                    style={{ background: i < entry.score ? (i === entry.score - 1 ? 'var(--lamp)' : 'var(--tick-major)') : 'var(--track)' }}
+                                                />
+                                            ))}
+                                        </span>
                                     </div>
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2 mb-1">
-                                            <span className="text-xs font-bold text-[var(--color-text-secondary)]">{entry.date}</span>
+                                            <span className="font-mono text-[12px] text-[var(--color-text-secondary)]">{entry.date}</span>
                                             {entry.auto && (
-                                                <span className="px-1.5 py-0.5 rounded-full bg-black/[0.05] dark:bg-white/10 text-[9px] font-bold text-[var(--color-text-secondary)]">자동</span>
+                                                <span className="px-1.5 py-0.5 rounded-full bg-[var(--surface-raised)] text-[11px] font-bold text-[var(--color-text-secondary)]">자동</span>
                                             )}
                                         </div>
                                         {entry.oneLiner && (
@@ -886,10 +901,10 @@ function DiaryTab() {
                                         {entry.dayTags.length > 0 && (
                                             <div className="flex flex-wrap gap-1 mt-1.5">
                                                 {entry.dayTags.slice(0, 4).map(t => (
-                                                    <span key={t} className="px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-400 text-[10px] font-bold">{t}</span>
+                                                    <span key={t} className="px-2 py-0.5 rounded-md bg-[var(--surface-raised)] text-[var(--color-text-secondary)] border border-[var(--color-border)] text-[11px] font-bold">{t}</span>
                                                 ))}
                                                 {entry.dayTags.length > 4 && (
-                                                    <span className="text-[10px] font-bold text-[var(--color-text-secondary)]/70">+{entry.dayTags.length - 4}</span>
+                                                    <span className="text-[11px] font-bold text-[var(--color-text-secondary)]/70">+{entry.dayTags.length - 4}</span>
                                                 )}
                                             </div>
                                         )}
@@ -903,7 +918,7 @@ function DiaryTab() {
                                                 loading="lazy"
                                             />
                                             {entry.photos.length > 1 && (
-                                                <span className="absolute -bottom-1 -right-1 px-1.5 py-0.5 rounded-full bg-black/70 text-white text-[9px] font-black leading-none">
+                                                <span className="absolute -bottom-1 -right-1 px-1.5 py-0.5 rounded-full bg-black/70 text-white text-[11px] font-black leading-none">
                                                     +{entry.photos.length - 1}
                                                 </span>
                                             )}
@@ -973,11 +988,10 @@ function DiaryDetailModal({ entry, settings, onClose, onEdited }: {
                 scrim="bg-black/70 backdrop-blur-xl"
                 ariaLabel={`${entry.date} 일기`}
             >
-                <div className="absolute inset-0 pointer-events-none bg-gradient-to-br from-indigo-500/5 via-transparent to-transparent" />
                 <div className="relative p-8 space-y-6 max-h-[85vh] overflow-y-auto no-scrollbar">
                     <div className="flex items-center justify-between">
-                        <h2 className="text-xl font-black text-[var(--color-text)]">{entry.date}</h2>
-                        <button onClick={onClose} className="p-1.5 rounded-full hover:bg-black/[0.06] dark:hover:bg-white/10 transition-all">
+                        <h2 className="text-[20px] font-medium text-[var(--color-text)]">{entry.date}</h2>
+                        <button onClick={onClose} className="p-1.5 rounded-full hover:bg-black/[0.06] dark:hover:bg-[var(--surface-raised)] transition-[color,background-color,border-color,opacity,transform]">
                             <Icon icon="mdi:close" className="text-xl text-[var(--color-text-secondary)]" />
                         </button>
                     </div>
@@ -990,31 +1004,31 @@ function DiaryDetailModal({ entry, settings, onClose, onEdited }: {
 
                     {/* 세션 타임라인 */}
                     {sessions.length > 0 && (
-                        <div className="space-y-2 pt-2 border-t border-white/10">
-                            <p className="text-xs font-black uppercase tracking-widest text-[var(--color-text-secondary)] pt-2">세션 타임라인</p>
+                        <div className="space-y-2 pt-2 border-t border-[var(--color-border)]">
+                            <p className="text-[13px] font-medium text-[var(--color-text-secondary)] pt-2">세션 타임라인</p>
                             {sessions.map(s => {
                                 const sc = getEvalScore(s.evaluation)
                                 return (
-                                    <div key={s.id} className="flex items-start gap-3 px-3 py-2.5 rounded-xl bg-black/[0.03] dark:bg-white/5">
+                                    <div key={s.id} className="flex items-start gap-3 px-3 py-2.5 rounded-xl bg-[var(--surface-raised)]">
                                         <span className="text-xs font-bold text-[var(--color-text-secondary)] tabular-nums mt-0.5 flex-shrink-0">{formatTimeHHMM(s.startTime)}</span>
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-2 flex-wrap">
                                                 <span className="text-sm font-bold text-[var(--color-text)]">{s.subject}</span>
                                                 {s.subItem && <span className="text-xs text-[var(--color-primary)]">› {s.subItem}</span>}
-                                                <span className="text-[10px] text-[var(--color-text-secondary)]">{formatDurationHourMinute(s.duration)}</span>
+                                                <span className="text-[11px] text-[var(--color-text-secondary)]">{formatDurationHourMinute(s.duration)}</span>
                                                 {sc !== null && (
-                                                    <span className="text-[10px] font-bold text-indigo-400">{sc}/10</span>
+                                                    <span className="text-[11px] font-bold text-[var(--color-primary)]">{sc}/10</span>
                                                 )}
                                             </div>
                                             {s.evaluation?.tags && s.evaluation.tags.length > 0 && (
                                                 <div className="flex flex-wrap gap-1 mt-1">
                                                     {s.evaluation.tags.map(t => (
-                                                        <span key={t} className="px-1.5 py-0.5 rounded-full bg-black/[0.05] dark:bg-white/10 text-[9px] font-bold text-[var(--color-text-secondary)]">{t}</span>
+                                                        <span key={t} className="px-1.5 py-0.5 rounded-full bg-[var(--surface-raised)] text-[11px] font-bold text-[var(--color-text-secondary)]">{t}</span>
                                                     ))}
                                                 </div>
                                             )}
                                             {s.evaluation?.memo && (
-                                                <p className="text-xs text-[var(--color-text-secondary)] italic mt-1 truncate">"{s.evaluation.memo}"</p>
+                                                <p className="text-xs text-[var(--color-text-secondary)] not-italic mt-1 truncate">"{s.evaluation.memo}"</p>
                                             )}
                                         </div>
                                     </div>

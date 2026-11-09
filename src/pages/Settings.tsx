@@ -50,8 +50,8 @@ function SectionHead({ label, help, action }: {
 
 // Tailwind 가 클래스명을 정적으로 스캔하므로 색 토큰은 조합하지 말고 통째로 적어 둔다.
 const PILL_TONE = {
-    indigo: 'bg-indigo-500/10 text-indigo-400',
-    purple: 'bg-purple-500/10 text-purple-400',
+    indigo: 'bg-[var(--surface-raised)] text-[var(--color-primary)]',
+    purple: 'bg-[var(--surface-raised)] text-[var(--color-primary)]',
     green: 'bg-green-500/10 text-green-400',
     red: 'bg-red-500/10 text-red-400',
 } as const
@@ -559,14 +559,15 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
 
     return (
         <motion.div
-            className="max-w-2xl mx-auto"
+            className="max-w-2xl mx-auto xl:max-w-none"
             initial="initial"
             animate="animate"
             variants={staggerContainer}
         >
-            <motion.h1 variants={staggerItem} className="text-3xl font-bold gradient-text text-display mb-8">설정</motion.h1>
+            <motion.h1 variants={staggerItem} className="text-[28px] md:text-[34px] leading-tight font-medium text-[var(--color-text)] mb-8">설정</motion.h1>
 
-            <div className="space-y-6">
+            {/* 넓은 화면(태블릿 가로·데스크톱)에서는 섹션을 두 단으로 흘린다 — 읽는 순서는 위→아래, 왼→오 그대로 */}
+            <div className="space-y-6 xl:space-y-0 xl:columns-2 xl:gap-8 xl:[&>*]:mb-6 [&>*]:break-inside-avoid">
                 {/* 프로필 */}
                 <motion.div variants={staggerItem}>
                     <SectionLabel>프로필</SectionLabel>
@@ -577,10 +578,10 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                                     <img
                                         src={profilePicture}
                                         alt="프로필"
-                                        className="w-16 h-16 rounded-full object-cover shadow-lg border-4 border-[var(--color-primary)]"
+                                        className="w-16 h-16 rounded-full object-cover border-4 border-[var(--color-primary)]"
                                     />
                                 ) : (
-                                    <div className="w-16 h-16 rounded-full bg-gradient-to-br from-indigo-400 to-purple-400 flex items-center justify-center text-2xl font-bold text-white shadow-lg">
+                                    <div className="w-16 h-16 rounded-full fill-ink flex items-center justify-center text-2xl font-bold text-white">
                                         {userName.charAt(0)}
                                     </div>
                                 )}
@@ -595,7 +596,7 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                                     <div className="flex gap-2">
                                         <Pressable
                                             onClick={() => fileInputRef.current?.click()}
-                                            className="px-3 py-1.5 rounded-lg bg-[var(--color-primary)] text-white font-medium text-xs flex items-center gap-1.5"
+                                            className="px-3 py-1.5 rounded-lg fill-accent font-medium text-xs flex items-center gap-1.5"
                                         >
                                             <Icon icon="mdi:camera-outline" className="text-sm" /> 사진 변경
                                         </Pressable>
@@ -608,7 +609,7 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                                             </Pressable>
                                         )}
                                     </div>
-                                    <p className="text-[10px] text-[var(--color-text-secondary)] opacity-70">최대 500KB</p>
+                                    <p className="text-[11px] text-[var(--color-text-secondary)] opacity-70">최대 500KB</p>
                                 </div>
                             </div>
                         </Row>
@@ -651,7 +652,7 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                                 />
                                 <span className="text-[var(--color-text-secondary)] font-medium">시간</span>
                                 {dailyGoalHours && (
-                                    <span className="text-xs text-purple-400 font-bold ml-2">
+                                    <span className="text-xs text-[var(--color-primary)] font-bold ml-2">
                                         = {parseFloat(dailyGoalHours) * 60}분 목표
                                     </span>
                                 )}
@@ -696,7 +697,7 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                         ]} />}
                         action={<Pressable
                             onClick={handleAddDday}
-                            className="text-xs px-3 py-1.5 rounded-lg bg-indigo-500/10 text-indigo-500 font-bold"
+                            className="text-xs px-3 py-1.5 rounded-lg bg-[var(--surface-raised)] text-[var(--color-primary)] font-bold"
                         >
                             + D-day 추가
                         </Pressable>}
@@ -704,7 +705,7 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
 
                     <div className="glass-card p-6 space-y-3">
                         {ddays.length === 0 && (
-                            <p className="text-xs text-[var(--color-text-secondary)] opacity-50 italic text-center py-2">
+                            <p className="text-xs text-[var(--color-text-secondary)] opacity-50 not-italic text-center py-2">
                                 등록된 D-day가 없습니다. 위 버튼으로 추가해 보세요.
                             </p>
                         )}
@@ -733,8 +734,8 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                                 />
                                 <Pressable
                                     onClick={() => handleRemoveDday(idx)}
-                                    pressScale={0.94}
-                                    className="text-[10px] px-2.5 py-2 rounded-md bg-red-500/10 text-red-500 hover:bg-red-500/20 flex items-center gap-1"
+                                    pressScale={0.97}
+                                    className="text-[11px] px-2.5 py-2 rounded-md bg-red-500/10 text-red-500 hover:bg-red-500/20 flex items-center gap-1"
                                 >
                                     <Icon icon="mdi:trash-can-outline" className="text-sm" /> 삭제
                                 </Pressable>
@@ -754,7 +755,7 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                         ]} />}
                         action={<Pressable
                             onClick={handleAddSubject}
-                            className="text-xs px-3 py-1.5 rounded-lg bg-indigo-500/10 text-indigo-500 font-bold"
+                            className="text-xs px-3 py-1.5 rounded-lg bg-[var(--surface-raised)] text-[var(--color-primary)] font-bold"
                         >
                             + 과목 추가
                         </Pressable>}
@@ -764,19 +765,19 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                         {localSubjects.map((subject, sIdx) => (
                             <div key={sIdx} className="glass-card-elevated p-4">
                                 <div className="flex items-center justify-between mb-3">
-                                    <span className="font-bold text-indigo-400">{subject.name}</span>
+                                    <span className="text-[15px] font-medium text-[var(--color-text)]">{subject.name}</span>
                                     <div className="flex items-center gap-2">
                                         <Pressable
                                             onClick={() => handleAddSubItem(sIdx)}
-                                            pressScale={0.94}
-                                            className="text-[10px] px-2 py-1 rounded-md bg-white/5 hover:bg-white/10"
+                                            pressScale={0.97}
+                                            className="text-[11px] px-2 py-1 rounded-md bg-[var(--surface-raised)] hover:bg-[var(--surface-raised)]"
                                         >
                                             + 하위 항목
                                         </Pressable>
                                         <Pressable
                                             onClick={() => handleRemoveSubject(sIdx)}
-                                            pressScale={0.94}
-                                            className="text-[10px] px-2 py-1 rounded-md bg-red-500/10 text-red-500 hover:bg-red-500/20"
+                                            pressScale={0.97}
+                                            className="text-[11px] px-2 py-1 rounded-md bg-red-500/10 text-red-500 hover:bg-red-500/20"
                                         >
                                             삭제
                                         </Pressable>
@@ -786,11 +787,11 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                                 {subject.children && subject.children.length > 0 ? (
                                     <div className="flex flex-wrap gap-2">
                                         {subject.children.map((child, cIdx) => (
-                                            <div key={cIdx} className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-indigo-500/10 text-indigo-300 text-xs font-medium border border-indigo-500/20">
+                                            <div key={cIdx} className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[var(--surface-raised)] text-[var(--color-text-secondary)] text-xs font-medium border border-[var(--hairline-strong)]">
                                                 <span>{child}</span>
                                                 <Pressable
                                                     onClick={() => handleRemoveSubItem(sIdx, cIdx)}
-                                                    pressScale={0.85}
+                                                    pressScale={0.97}
                                                     className="opacity-40 hover:opacity-100 flex items-center justify-center p-0.5"
                                                 >
                                                     <Icon icon="mdi:close" className="text-sm" />
@@ -799,7 +800,7 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                                         ))}
                                     </div>
                                 ) : (
-                                    <p className="text-[10px] text-[var(--color-text-secondary)] opacity-50 italic">하위 항목이 없습니다.</p>
+                                    <p className="text-[11px] text-[var(--color-text-secondary)] opacity-50 not-italic">하위 항목이 없습니다.</p>
                                 )}
                             </div>
                         ))}
@@ -907,7 +908,7 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                         <div className="px-5 py-4 border-t border-[var(--color-border)]">
                             <div className="flex items-center justify-between mb-3">
                                 <label className="text-sm font-medium text-[var(--color-text)]">모델 설정</label>
-                                {loadingModels && <span className="text-[10px] text-[var(--color-text-secondary)] animate-pulse">동기화 중...</span>}
+                                {loadingModels && <span className="text-[11px] text-[var(--color-text-secondary)] animate-pulse">동기화 중...</span>}
                             </div>
 
                             <select
@@ -932,7 +933,7 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                                 <p className="text-xs text-red-400 mt-2">{modelsError}</p>
                             )}
                             {geminiModels.length > 0 && (
-                                <p className="text-[10px] text-[var(--color-text-secondary)] opacity-50 mt-2">
+                                <p className="text-[11px] text-[var(--color-text-secondary)] opacity-50 mt-2">
                                     API 에서 불러온 {geminiModels.length}개 모델 · 키마다 사용 가능 목록이 다를 수 있습니다
                                 </p>
                             )}
@@ -945,22 +946,22 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                                     <div className="mt-3 pt-3 border-t border-[var(--color-border)] space-y-2">
                                         <div className="flex flex-wrap gap-1.5">
                                             {m.supportsThinking && (
-                                                <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-purple-500/15 text-purple-400 border border-purple-400/20 flex items-center gap-1">
+                                                <span className="text-[11px] font-bold px-2 py-1 rounded-md bg-[var(--surface-raised)] text-[var(--color-text-secondary)] border border-[var(--color-border)] flex items-center gap-1">
                                                     <Icon icon="mdi:brain" className="text-xs" /> 단계적 추론 (Thinking)
                                                 </span>
                                             )}
                                             {m.supportsGrounding && (
-                                                <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-cyan-500/15 text-cyan-400 border border-cyan-400/20 flex items-center gap-1">
+                                                <span className="text-[11px] font-bold px-2 py-1 rounded-md bg-[var(--surface-raised)] text-[var(--color-text-secondary)] border border-[var(--color-border)] flex items-center gap-1">
                                                     <Icon icon="mdi:google" className="text-xs" /> Google 검색 그라운딩
                                                 </span>
                                             )}
                                             {m.version && (
-                                                <span className="text-[10px] font-medium px-2 py-1 rounded-full bg-white/5 text-[var(--color-text-secondary)]">
+                                                <span className="text-[11px] font-medium px-2 py-1 rounded-full bg-[var(--surface-raised)] text-[var(--color-text-secondary)]">
                                                     v{m.version}
                                                 </span>
                                             )}
                                         </div>
-                                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-[var(--color-text-secondary)] opacity-70">
+                                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-[var(--color-text-secondary)] opacity-70">
                                             {m.inputTokenLimit != null && (
                                                 <span>입력 한도: {m.inputTokenLimit.toLocaleString()} 토큰</span>
                                             )}
@@ -972,7 +973,7 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                                             )}
                                         </div>
                                         {m.description && (
-                                            <p className="text-[10px] text-[var(--color-text-secondary)] opacity-60 leading-relaxed">
+                                            <p className="text-[11px] text-[var(--color-text-secondary)] opacity-60 leading-relaxed">
                                                 {m.description}
                                             </p>
                                         )}
@@ -1061,7 +1062,7 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                                 <div className="glass-card p-6 space-y-4">
                                     <div className="flex items-center justify-between">
                                         <label className="text-sm font-medium text-[var(--color-text)]">역할별 모델 오버라이드</label>
-                                        {loadingRoleModels && <span className="text-[10px] text-[var(--color-text-secondary)] animate-pulse">동기화 중...</span>}
+                                        {loadingRoleModels && <span className="text-[11px] text-[var(--color-text-secondary)] animate-pulse">동기화 중...</span>}
                                     </div>
                                     <p className="text-xs text-[var(--color-text-secondary)]">비워두면 역할에 맞는 모델이 자동으로 선택됩니다.</p>
 
@@ -1092,7 +1093,7 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                                             )}
                                             {/* 역할별 추론(thinking) 강도 — segmented control */}
                                             <div className="flex items-center gap-2">
-                                                <span className="text-[10px] text-[var(--color-text-secondary)] whitespace-nowrap">추론 강도</span>
+                                                <span className="text-[11px] text-[var(--color-text-secondary)] whitespace-nowrap">추론 강도</span>
                                                 <div className="flex-1">
                                                     <Segmented<ThinkingChoice>
                                                         layoutId={`thinking-${role}`}
@@ -1117,7 +1118,7 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                                             </div>
                                         </div>
                                     ))}
-                                    <p className="text-[10px] text-[var(--color-text-secondary)] opacity-70">추론 강도: 높을수록 답변 품질↑·속도↓. Gemini 3 계열은 낮음/중간/높음, 2.5 계열은 예산으로 자동 변환됩니다.</p>
+                                    <p className="text-[11px] text-[var(--color-text-secondary)] opacity-70">추론 강도: 높을수록 답변 품질↑·속도↓. Gemini 3 계열은 낮음/중간/높음, 2.5 계열은 예산으로 자동 변환됩니다.</p>
                                 </div>
                             </div>
 
@@ -1137,7 +1138,7 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                                                 <>
                                                     {kindEntries.length > 0 && (
                                                         <div>
-                                                            <p className="text-[10px] text-[var(--color-text-secondary)] mb-1.5 opacity-70">기능별</p>
+                                                            <p className="text-[11px] text-[var(--color-text-secondary)] mb-1.5 opacity-70">기능별</p>
                                                             <div className="flex flex-wrap gap-1.5">
                                                                 {kindEntries.map(([kind, count]) => (
                                                                     <span key={kind} className={badge}>
@@ -1149,10 +1150,10 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                                                     )}
                                                     {modelEntries.length > 0 && (
                                                         <div>
-                                                            <p className="text-[10px] text-[var(--color-text-secondary)] mb-1.5 opacity-70">모델별</p>
+                                                            <p className="text-[11px] text-[var(--color-text-secondary)] mb-1.5 opacity-70">모델별</p>
                                                             <div className="flex flex-wrap gap-1.5">
                                                                 {modelEntries.map(([model, count]) => (
-                                                                    <span key={model} className="text-[10px] font-medium px-2 py-1 rounded-full bg-purple-500/10 text-purple-400 border border-purple-400/20 font-mono">
+                                                                    <span key={model} className="text-[11px] font-medium px-2 py-1 rounded-md bg-[var(--surface-raised)] text-[var(--color-text-secondary)] border border-[var(--color-border)] font-mono">
                                                                         {model} × {count}
                                                                     </span>
                                                                 ))}
@@ -1195,8 +1196,8 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                                                 <div className="flex justify-end mt-2">
                                                     <Pressable
                                                         onClick={() => setAiSystemPromptsState(prev => ({ ...prev, [key]: DEFAULT_PROMPTS[key] }))}
-                                                        pressScale={0.94}
-                                                        className="text-[10px] px-2 py-1 rounded-md bg-white/5 hover:bg-white/10"
+                                                        pressScale={0.97}
+                                                        className="text-[11px] px-2 py-1 rounded-md bg-[var(--surface-raised)] hover:bg-[var(--surface-raised)]"
                                                     >
                                                         기본값 복원
                                                     </Pressable>
@@ -1221,7 +1222,7 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                         ]} />}
                         action={<Pressable
                             onClick={handleRestoreDefaultTags}
-                            className="text-xs px-3 py-1.5 rounded-lg bg-indigo-500/10 text-indigo-500 font-bold"
+                            className="text-xs px-3 py-1.5 rounded-lg bg-[var(--surface-raised)] text-[var(--color-primary)] font-bold"
                         >
                             기본 태그 복원
                         </Pressable>}
@@ -1236,23 +1237,23 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                                 if (rows.length === 0) return null
                                 return (
                                     <div key={cat}>
-                                        <p className="text-[10px] font-bold text-[var(--color-text-secondary)] opacity-70 mb-1.5">{TAG_CATEGORY_LABELS[cat]}</p>
+                                        <p className="text-[11px] font-bold text-[var(--color-text-secondary)] opacity-70 mb-1.5">{TAG_CATEGORY_LABELS[cat]}</p>
                                         <div className="flex flex-wrap gap-2">
                                             {rows.map(({ tag, idx }) => (
                                                 <div
                                                     key={`${tag.name}-${idx}`}
-                                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${tag.hidden
-                                                        ? 'bg-white/5 text-[var(--color-text-secondary)] border-white/5 opacity-50'
-                                                        : 'bg-indigo-500/10 text-indigo-300 border-indigo-500/20'
+                                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-[color,background-color,border-color,opacity,transform] ${tag.hidden
+                                                        ? 'bg-[var(--surface-raised)] text-[var(--color-text-secondary)] border-[var(--color-border)] opacity-50'
+                                                        : 'bg-[var(--surface-raised)] text-[var(--color-text-secondary)] border-[var(--hairline-strong)]'
                                                         }`}
                                                 >
                                                     <span>{tag.name}</span>
                                                     {tag.custom && (
-                                                        <span className="text-[9px] px-1 py-0.5 rounded bg-white/10 opacity-70">커스텀</span>
+                                                        <span className="text-[11px] px-1 py-0.5 rounded bg-[var(--surface-raised)] opacity-70">커스텀</span>
                                                     )}
                                                     <Pressable
                                                         onClick={() => handleToggleTagHidden(idx)}
-                                                        pressScale={0.85}
+                                                        pressScale={0.97}
                                                         className="opacity-60 hover:opacity-100 flex items-center justify-center p-0.5"
                                                         title={tag.hidden ? '보이기' : '숨기기'}
                                                     >
@@ -1261,7 +1262,7 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                                                     {tag.custom && (
                                                         <Pressable
                                                             onClick={() => handleRemoveCustomTag(idx)}
-                                                            pressScale={0.85}
+                                                            pressScale={0.97}
                                                             className="opacity-60 hover:opacity-100 flex items-center justify-center p-0.5"
                                                             title="삭제"
                                                         >
@@ -1307,7 +1308,7 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                                 <Pressable
                                     onClick={handleAddTag}
                                     disabled={!newTagName.trim()}
-                                    className="px-4 py-2 rounded-lg bg-indigo-500/10 text-indigo-400 font-medium text-sm disabled:opacity-40 disabled:cursor-not-allowed"
+                                    className="px-4 py-2 rounded-lg bg-[var(--surface-raised)] text-[var(--color-primary)] font-medium text-sm disabled:opacity-40 disabled:cursor-not-allowed"
                                 >
                                     + 추가
                                 </Pressable>
@@ -1348,7 +1349,7 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                             )}
                             {isNative && (
                                 <>
-                                    <p className="text-[10px] text-[var(--color-text-secondary)] opacity-70 mb-3">
+                                    <p className="text-[11px] text-[var(--color-text-secondary)] opacity-70 mb-3">
                                         캘리브레이션 화면이 열립니다. 빨간 점을 차례로 응시하고 버튼을 눌러 9개 지점을 캡처하세요.
                                     </p>
                                     <div className="flex gap-2">
@@ -1376,7 +1377,7 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                                         <p className="text-xs text-[var(--color-text)]">
                                             누적 세션: <span className="font-bold">{trainingState.session_count}회</span>
                                         </p>
-                                        <p className="text-[10px] text-[var(--color-text-secondary)] opacity-70 mt-0.5">
+                                        <p className="text-[11px] text-[var(--color-text-secondary)] opacity-70 mt-0.5">
                                             {trainingState.is_calibrated
                                                 ? '✓ 개인화 점수 적용 중'
                                                 : `${Math.max(0, 3 - trainingState.session_count)}회 더 평가 필요`}
@@ -1385,8 +1386,8 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                                     {isNative && (
                                         <Pressable
                                             onClick={resetScoreCalibration}
-                                            pressScale={0.94}
-                                            className="text-[10px] px-3 py-1.5 rounded-lg bg-red-500/10 text-red-400 font-bold"
+                                            pressScale={0.97}
+                                            className="text-[11px] px-3 py-1.5 rounded-lg bg-red-500/10 text-red-400 font-bold"
                                         >
                                             초기화
                                         </Pressable>
@@ -1433,13 +1434,13 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                             />
                             <Pressable
                                 onClick={handleSaveServerUrl}
-                                className="px-4 py-3 rounded-xl bg-[var(--color-primary)] text-white font-medium text-sm whitespace-nowrap"
+                                className="px-4 py-3 rounded-xl fill-accent font-medium text-sm whitespace-nowrap"
                             >
                                 저장
                             </Pressable>
                         </div>
                         {activeServerUrl && (
-                            <p className="text-[10px] text-[var(--color-text-secondary)] font-mono opacity-60">
+                            <p className="text-[11px] text-[var(--color-text-secondary)] font-mono opacity-60">
                                 현재 연결 시도: {activeServerUrl}
                             </p>
                         )}
@@ -1466,7 +1467,7 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                                 )}
                             </div>
 
-                            <p className="text-[10px] text-[var(--color-text-secondary)] font-mono opacity-60 mb-3">
+                            <p className="text-[11px] text-[var(--color-text-secondary)] font-mono opacity-60 mb-3">
                                 모델: {pipelineState?.model ?? '없음'} · 캘리: {pipelineState?.calibration ?? '없음'} · fps: {pipelineState ? pipelineState.fps.toFixed(1) : '-'}
                             </p>
 
@@ -1506,12 +1507,12 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                                         initial="initial"
                                         animate="animate"
                                         exit="exit"
-                                        className="bg-indigo-500/10 border border-indigo-500/20 rounded-xl px-4 py-3 mb-3"
+                                        className="bg-[var(--surface-raised)] border border-[var(--color-border)] rounded-xl px-4 py-3 mb-3"
                                     >
-                                        <p className="text-xs font-bold text-indigo-400 mb-1">
+                                        <p className="text-xs font-bold text-[var(--color-primary)] mb-1">
                                             {captureCount + 1}/9 — <span className="text-[var(--color-text)]">{CALIB_LABELS[captureCount]}</span>을(를) 바라보세요
                                         </p>
-                                        <p className="text-[10px] text-[var(--color-text-secondary)] opacity-70">
+                                        <p className="text-[11px] text-[var(--color-text-secondary)] opacity-70">
                                             {currentCalibMode === 'book' ? '책' : '모니터'}의 해당 위치를 응시한 뒤 캡처 버튼을 누르세요
                                         </p>
                                     </motion.div>
@@ -1525,7 +1526,7 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                                         exit="exit"
                                         className="bg-green-500/10 border border-green-500/20 rounded-xl px-4 py-3 mb-3"
                                     >
-                                        <p className="text-xs font-bold text-green-400">캘리브레이션 완료!</p>
+                                        <p className="text-xs font-bold text-green-400">캘리브레이션 완료</p>
                                     </motion.div>
                                 )}
                             </AnimatePresence>
@@ -1605,7 +1606,7 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                                 disabled={exporting || importing}
                             />
                         </div>
-                        <p className="text-[10px] text-[var(--color-text-secondary)] opacity-60 leading-relaxed">
+                        <p className="text-[11px] text-[var(--color-text-secondary)] opacity-60 leading-relaxed">
                             ⚠️ 가져오기를 하면 현재 기기의 데이터가 백업 파일 내용으로 모두 교체됩니다.
                         </p>
                         <input
@@ -1623,7 +1624,7 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                     <Pressable
                         onClick={() => navigate('/data')}
                         pressScale={0.98}
-                        className="w-full flex items-center justify-between px-5 py-3.5 rounded-2xl glass-card hover:bg-white/5 border border-[var(--color-border)]"
+                        className="w-full flex items-center justify-between px-5 py-3.5 rounded-2xl glass-card hover:bg-[var(--surface-raised)] border border-[var(--color-border)]"
                     >
                         <div className="flex items-center gap-3">
                             <Icon icon="mdi:database-cog-outline" className="text-xl text-[var(--color-primary)] flex-shrink-0" />
@@ -1643,7 +1644,7 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                         pressScale={0.98}
                         className="w-full btn btn-primary text-lg py-4 flex items-center justify-center gap-2"
                     >
-                        {saved ? <><Icon icon="mdi:check-bold" className="text-xl" /> 저장됨!</> : '저장하기'}
+                        {saved ? <><Icon icon="mdi:check-bold" className="text-xl" /> 저장됨</> : '저장하기'}
                     </Pressable>
                 </motion.div>
 
@@ -1652,28 +1653,28 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                     <Pressable
                         onClick={() => navigate('/developer')}
                         pressScale={0.98}
-                        className="w-full flex items-center justify-between px-5 py-3.5 rounded-2xl bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-pink-500/10 hover:from-indigo-500/20 hover:via-purple-500/20 hover:to-pink-500/20 border border-indigo-400/25 hover:border-indigo-400/45"
+                        className="w-full flex items-center justify-between px-5 py-3.5 rounded-2xl bg-[var(--surface-raised)] border border-[var(--hairline-strong)] hover:border-[var(--hairline-strong)]"
                     >
                         <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-xs font-black flex-shrink-0 ring-2 ring-indigo-400/20">
+                            <div className="w-8 h-8 rounded-full fill-ink flex items-center justify-center text-white text-xs font-black flex-shrink-0 ring-2 ring-[var(--color-primary)]">
                                 Y
                             </div>
                             <div className="text-left">
                                 <p className="text-xs font-black text-[var(--color-text-secondary)] leading-tight">개발자 / Yoo Seung Hyeok</p>
-                                <p className="text-sm font-bold gradient-text leading-tight">개발자 이야기 &amp; 개발자 도구 →</p>
+                                <p className="text-sm font-bold leading-tight">개발자 이야기 &amp; 개발자 도구 →</p>
                             </div>
                         </div>
-                        <Icon icon="mdi:chevron-right" className="text-xl text-indigo-400 opacity-70 flex-shrink-0" />
+                        <Icon icon="mdi:chevron-right" className="text-xl text-[var(--color-text-muted)] opacity-70 flex-shrink-0" />
                     </Pressable>
 
                     {devAdmin && (
                         <Pressable
                             onClick={() => navigate('/admin')}
                             pressScale={0.98}
-                            className="w-full flex items-center justify-between px-5 py-3.5 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10"
+                            className="w-full flex items-center justify-between px-5 py-3.5 rounded-2xl bg-[var(--surface-raised)] hover:bg-[var(--surface-raised)] border border-[var(--color-border)]"
                         >
                             <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-white flex-shrink-0">
+                                <div className="w-8 h-8 rounded-full fill-ink flex items-center justify-center text-white flex-shrink-0">
                                     <Icon icon="mdi:shield-crown" className="text-base" />
                                 </div>
                                 <p className="text-sm font-bold text-left text-[var(--color-text)]">관리자 페이지</p>
@@ -1685,10 +1686,10 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                     <Pressable
                         onClick={() => setShowChangelog(true)}
                         pressScale={0.98}
-                        className="w-full flex items-center justify-between px-5 py-3.5 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10"
+                        className="w-full flex items-center justify-between px-5 py-3.5 rounded-2xl bg-[var(--surface-raised)] hover:bg-[var(--surface-raised)] border border-[var(--color-border)]"
                     >
                         <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white flex-shrink-0">
+                            <div className="w-8 h-8 rounded-full fill-ink flex items-center justify-center text-white flex-shrink-0">
                                 <Icon icon="mdi:history" className="text-base" />
                             </div>
                             <div className="text-left">
@@ -1704,11 +1705,11 @@ export default function SettingsPage({ settings, onSettingsChange }: SettingsPag
                     <div className="text-center flex flex-col items-center gap-0.5">
                         <p
                             onClick={handleVersionTap}
-                            className="text-[10px] text-[var(--color-text-secondary)] font-mono opacity-50 cursor-default select-none"
+                            className="text-[11px] text-[var(--color-text-secondary)] font-mono opacity-50 cursor-default select-none"
                         >
                             StudyMeter v{__APP_VERSION__}
                         </p>
-                        <p className="text-[10px] text-[var(--color-text-secondary)] font-mono opacity-30">
+                        <p className="text-[11px] text-[var(--color-text-secondary)] font-mono opacity-30">
                             Build: {new Date(__BUILD_DATE__).toLocaleString('ko-KR', {
                                 year: 'numeric', month: '2-digit', day: '2-digit',
                                 hour: '2-digit', minute: '2-digit',

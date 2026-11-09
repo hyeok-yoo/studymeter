@@ -1,71 +1,167 @@
 @import "tailwindcss";
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   StudyMeter Liquid Glass Design System v5.0
+   StudyMeter Instrument Design System v6.1 (2026-11 redesign, 2차)
    ───────────────────────────────────────────────────────────────────────────
-   원칙 (Apple 디자인 언어의 웹 번역):
-   · 모션은 transform/opacity 만 — 매 프레임 페인트를 유발하는 속성 금지
-   · 진짜 backdrop-filter 는 "떠 있는 크롬"(내비·모달)에만 — 카드 위 카드 금지
-   · 배경은 정적 — 상시 GPU 애니메이션 없음 (구버전의 체감 굼뜸 주범)
-   · 눌림 피드백은 pointer-down 즉시, 호버 효과는 hover 가능한 기기에만
-   · reduced-motion / reduced-transparency / more-contrast 3신호 모두 대응
+   방향: 책상 위 정밀 계측기 — 맑은 블루 한 색으로 산뜻하게.
+   · 표면은 살짝 푸른 기가 도는 밝은 램프(다크는 남색 잉크) — 회색으로 가라앉지 않게
+   · 주색은 맑은 블루 하나 — 주 버튼·선택·바늘·핵심 수치. 그라디언트·글로우 없음
+   · 시그니처는 계측 눈금(MeterScale) — 시간이 재어지는 곳에만
+   · 둥글게: 카드 24, 입력 14, 버튼·칩은 알약
+   · 모션은 transform/opacity 만, 곡선 하나(--ease-out-soft)
    ═══════════════════════════════════════════════════════════════════════════ */
 
+/* Tailwind 팔레트 재매핑 — 구 브랜드(indigo/purple)를 쓰던 수백 곳이
+   한 번에 새 블루로 수렴한다(보라 기 없는 단일 블루). 굵기·트래킹도 상한을 둔다. */
+@theme {
+  --font-sans: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Noto Sans KR', system-ui, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', 'Cascadia Mono', 'Roboto Mono', Menlo, Consolas, monospace;
+
+  /* meter blue — 500 은 흰 글자 4.5:1 을 맞춘 값 */
+  --color-indigo-50: #eef4ff;
+  --color-indigo-100: #dbe7ff;
+  --color-indigo-200: #bcd3ff;
+  --color-indigo-300: #8fb6ff;
+  --color-indigo-400: #5b94ff;
+  --color-indigo-500: #2f6fed;
+  --color-indigo-600: #2459cc;
+  --color-indigo-700: #1f48a3;
+  --color-indigo-800: #1c3c80;
+  --color-indigo-900: #182f5e;
+  --color-indigo-950: #0f1d3b;
+
+  --color-purple-50: #eef4ff;
+  --color-purple-100: #dbe7ff;
+  --color-purple-200: #bcd3ff;
+  --color-purple-300: #8fb6ff;
+  --color-purple-400: #5b94ff;
+  --color-purple-500: #2f6fed;
+  --color-purple-600: #2459cc;
+  --color-purple-700: #1f48a3;
+  --color-purple-800: #1c3c80;
+  --color-purple-900: #182f5e;
+  --color-purple-950: #0f1d3b;
+
+  /* 의미 색 — 팔레트 안에 앉도록 */
+  --color-green-400: #3ccf91;
+  --color-green-500: #1fa971;
+  --color-emerald-400: #3ccf91;
+  --color-emerald-500: #1fa971;
+  --color-red-400: #ff6b6f;
+  --color-red-500: #e5484d;
+
+  /* 굵기 상한 600 — 위계는 크기와 색으로 */
+  --font-weight-black: 600;
+  --font-weight-extrabold: 600;
+  --font-weight-bold: 600;
+
+  /* 넓은 대문자 트래킹 제거 */
+  --tracking-wide: 0.01em;
+  --tracking-wider: 0.01em;
+  --tracking-widest: 0.02em;
+
+  /* 반경 — 전체적으로 둥글게 */
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+  --radius-2xl: 22px;
+  --radius-3xl: 28px;
+
+  /* 배경 블러 제거 (스크림은 단색으로 충분) */
+  --blur-sm: 0px;
+  --blur-md: 0px;
+  --blur-lg: 0px;
+  --blur-xl: 0px;
+  --blur-2xl: 0px;
+  --blur-3xl: 0px;
+}
+
 :root {
-  /* Brand */
-  --color-primary: #6366f1;
-  --color-secondary: #a855f7;
-  --color-accent: #06b6d4;
+  /* Accent — 맑은 블루 */
+  --color-primary: #2f6fed;
+  --color-secondary: #2459cc;
+  --color-accent: #2f6fed;
+  /* 바늘·눈금 채움 등 글자가 아닌 곳의 블루 (이름은 하위 호환) */
+  --lamp: #2f6fed;
+  --accent-soft: rgba(47, 111, 237, 0.1);
+  --on-accent: #ffffff;
+  --positive: #1fa971;
 
-  /* Materials — Light */
-  --glass-bg: rgba(255, 255, 255, 0.62);
-  --glass-border: rgba(255, 255, 255, 0.45);
-  --glass-highlight: rgba(255, 255, 255, 0.75);
-  --glass-shadow:
-    0 1px 2px rgba(15, 23, 42, 0.04),
-    0 12px 32px -8px rgba(15, 23, 42, 0.1);
-  --chrome-bg: rgba(255, 255, 255, 0.6);
-  --chip-bg: rgba(255, 255, 255, 0.55);
-  --scrim: rgba(15, 23, 42, 0.35);
+  /* Surfaces — 살짝 푸른 밝은 램프 */
+  --color-bg: #f2f5fa;
+  --surface: #ffffff;
+  --surface-raised: #edf1f7;
+  --surface-sunken: #e6ebf3;
+  --color-surface: #ffffff;
+  --color-surface-elevated: #ffffff;
+  --color-border: rgba(20, 40, 80, 0.08);
+  --hairline-strong: rgba(20, 40, 80, 0.15);
 
-  --glass-blur: 20px;
-  --glass-saturate: 180%;
+  /* Text — 세 역할 */
+  --color-text: #111827;
+  --color-text-secondary: #4b5565;
+  --color-text-muted: #6b7487;
 
-  /* Text & Surface */
-  --color-text: #0f172a;
-  --color-text-secondary: #475569;
-  --color-bg: #eef2f7;
-  --color-surface-elevated: rgba(255, 255, 255, 0.85);
-  --color-border: rgba(15, 23, 42, 0.07);
+  /* Scale ticks */
+  --tick: rgba(20, 40, 80, 0.22);
+  --tick-major: rgba(20, 40, 80, 0.45);
+  --track: rgba(47, 111, 237, 0.1);
+
+  /* 하위 호환 (구 글래스 변수를 참조하던 곳) */
+  --glass-bg: #ffffff;
+  --glass-border: rgba(20, 40, 80, 0.08);
+  --glass-highlight: rgba(20, 40, 80, 0.08);
+  --glass-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 6px 20px rgba(16, 24, 40, 0.05);
+  --chrome-bg: #ffffff;
+  --chip-bg: #edf1f7;
+  --scrim: rgba(10, 16, 30, 0.42);
+  --glass-blur: 0px;
+  --glass-saturate: 100%;
 
   /* Geometry */
-  --radius-xl: 28px;
-  --radius-lg: 20px;
-  --radius-md: 14px;
+  --card-radius: 24px;
+  --control-radius: 14px;
 
-  /* Motion — 스프링에 근사한 easing (JS 스프링을 못 쓰는 CSS 전환용) */
+  /* Motion — 곡선 하나 */
   --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
-  --dur-fast: 120ms;
-  --dur-base: 260ms;
-  --transition: 260ms var(--ease-out-soft);
+  --dur-fast: 140ms;
+  --dur-base: 240ms;
+  --transition: 240ms var(--ease-out-soft);
 }
 
 .dark {
-  --glass-bg: rgba(17, 25, 46, 0.58);
-  --glass-border: rgba(255, 255, 255, 0.09);
-  --glass-highlight: rgba(255, 255, 255, 0.14);
-  --glass-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.3),
-    0 16px 40px -12px rgba(0, 0, 0, 0.55);
-  --chrome-bg: rgba(10, 15, 30, 0.62);
-  --chip-bg: rgba(255, 255, 255, 0.06);
-  --scrim: rgba(0, 0, 0, 0.55);
+  --color-primary: #6ea0ff;
+  --color-secondary: #5b94ff;
+  --color-accent: #6ea0ff;
+  --lamp: #5b94ff;
+  --accent-soft: rgba(91, 148, 255, 0.14);
+  --on-accent: #ffffff;
+  --positive: #3ccf91;
 
-  --color-text: #f8fafc;
-  --color-text-secondary: #94a3b8;
-  --color-bg: #04070f;
-  --color-surface-elevated: rgba(30, 41, 59, 0.72);
-  --color-border: rgba(255, 255, 255, 0.1);
+  --color-bg: #0c111a;
+  --surface: #141b27;
+  --surface-raised: #1c2535;
+  --surface-sunken: #0a0e15;
+  --color-surface: #141b27;
+  --color-surface-elevated: #141b27;
+  --color-border: rgba(200, 215, 255, 0.08);
+  --hairline-strong: rgba(200, 215, 255, 0.15);
+
+  --color-text: #eef2f8;
+  --color-text-secondary: #a5afc2;
+  --color-text-muted: #7d889d;
+
+  --tick: rgba(200, 215, 255, 0.2);
+  --tick-major: rgba(200, 215, 255, 0.42);
+  --track: rgba(91, 148, 255, 0.12);
+
+  --glass-bg: #141b27;
+  --glass-border: rgba(200, 215, 255, 0.08);
+  --glass-highlight: rgba(200, 215, 255, 0.08);
+  --glass-shadow: none;
+  --chrome-bg: #0f1520;
+  --chip-bg: #1c2535;
+  --scrim: rgba(0, 0, 0, 0.6);
 }
 
 /* ── Base ────────────────────────────────────────────────────────────────── */
@@ -77,7 +173,7 @@ body {
   min-height: 100vh;
   background-color: var(--color-bg);
   color: var(--color-text);
-  font-family: 'Pretendard Variable', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-family: var(--font-sans);
   line-height: 1.5;
   transition: background-color var(--transition), color var(--transition);
   -webkit-font-smoothing: antialiased;
@@ -120,7 +216,16 @@ a {
   padding-top: env(safe-area-inset-top);
 }
 
-/* 대형 숫자/타이틀 — 크기가 커질수록 트래킹은 음수로, 리딩은 타이트하게 */
+::selection {
+  background: color-mix(in srgb, var(--lamp) 32%, transparent);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* 대형 숫자/타이틀 — 큰 글자에만 음수 트래킹 */
 .text-display {
   letter-spacing: -0.02em;
   line-height: 1.05;
@@ -131,89 +236,63 @@ a {
   letter-spacing: 0.01em;
 }
 
-/* ── Ambient Background — 정적. 애니메이션 없음. ─────────────────────────────
-   구버전: 200% 크기 레이어 2장 + blur(80px) + 무한 transform 애니메이션
-   → 저사양 WebView 에서 상시 컴포지팅 부하. 지금은 소프트 그라디언트를
-   그대로 그려두기만 한다 (radial-gradient 자체가 이미 부드럽다). */
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background:
-    radial-gradient(90rem 60rem at 75% -10%, rgba(168, 85, 247, 0.16) 0%, transparent 60%),
-    radial-gradient(80rem 55rem at -10% 20%, rgba(99, 102, 241, 0.18) 0%, transparent 60%),
-    radial-gradient(70rem 50rem at 50% 110%, rgba(6, 182, 212, 0.13) 0%, transparent 55%);
+@layer components {
+/* 계측 수치 — 얇고 등폭. 시간이 표시되는 큰 숫자는 모두 이것 */
+.figure {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+  font-weight: 300;
+  letter-spacing: -0.03em;
+  line-height: 1;
 }
 
-.dark body::before {
-  background:
-    radial-gradient(90rem 60rem at 75% -10%, rgba(168, 85, 247, 0.12) 0%, transparent 60%),
-    radial-gradient(80rem 55rem at -10% 20%, rgba(99, 102, 241, 0.14) 0%, transparent 60%),
-    radial-gradient(70rem 50rem at 50% 110%, rgba(6, 182, 212, 0.09) 0%, transparent 55%);
+/* 메타·라벨 수치 — 작은 모노 */
+.meta {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  color: var(--color-text-muted);
+}
+
+.text-muted {
+  color: var(--color-text-muted);
+}
+
 }
 
 /* ── Materials ───────────────────────────────────────────────────────────────
-   3 티어:
-   · .material-chrome — 콘텐츠가 "아래로 지나가는" 떠 있는 UI(내비/툴바)만 진짜 블러
-   · .glass-card     — 일반 표면. 반투명 필 + 하이라이트 보더 (블러 없음 = 저비용)
-   · .glass-blur     — 모달/팝업처럼 실제 콘텐츠 위에 뜨는 표면에만 추가
+   글래스는 걷어냈다. 이름은 하위 호환을 위해 남기고 뜻만 바꾼다.
+   · .material-chrome — 떠 있는 크롬(사이드바·탭바): 가장 깊은 표면
+   · .glass-card     — 카드: 표면 + 헤어라인
+   · .glass-card-elevated — 카드 안의 칩/서브 표면: 한 단계 올라온 표면
    ────────────────────────────────────────────────────────────────────────── */
 
+@layer components {
 .material-chrome {
   background: var(--chrome-bg);
-  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-  border: 1px solid var(--glass-border);
-  border-top-color: var(--glass-highlight);
-  box-shadow: var(--glass-shadow);
-}
-
-.glass-card {
-  background: linear-gradient(160deg, var(--glass-bg) 0%, rgba(255, 255, 255, 0.12) 100%);
-  border: 1px solid var(--glass-border);
-  border-top-color: var(--glass-highlight);
-  box-shadow: var(--glass-shadow);
-  border-radius: var(--radius-xl);
-  transition: transform var(--transition), box-shadow var(--transition);
-}
-
-.dark .glass-card {
-  background: linear-gradient(160deg, var(--glass-bg) 0%, rgba(2, 6, 18, 0.28) 100%);
-}
-
-/* 실 콘텐츠 위에 떠 있는 표면(모달 등)에서만 블러를 켠다 */
-.glass-blur {
-  backdrop-filter: blur(24px) saturate(var(--glass-saturate));
-  -webkit-backdrop-filter: blur(24px) saturate(var(--glass-saturate));
-}
-
-.glass-card-solid {
-  background: #ffffff;
-  border: 1px solid var(--glass-border);
-  box-shadow: var(--glass-shadow);
-  border-radius: var(--radius-xl);
-  transition: transform var(--transition), box-shadow var(--transition);
-}
-
-.dark .glass-card-solid {
-  background: #0f172a;
-}
-
-/* 칩/서브 표면 — 카드 안의 작은 요소 */
-.glass-card-elevated {
-  background: var(--chip-bg);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
 }
 
-/* 호버 리프트 — hover 가 실제로 존재하는 기기에서만 (모바일 고스트 호버 방지) */
-@media (hover: hover) {
-  .glass-card:hover,
-  .glass-card-solid:hover {
-    transform: translateY(-2px);
-  }
+.glass-card,
+.glass-card-solid {
+  background: var(--surface);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--glass-shadow);
+  border-radius: var(--card-radius);
+}
+
+.glass-blur {
+  backdrop-filter: none;
+}
+
+.glass-card-elevated {
+  background: var(--surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--control-radius);
+}
+
 }
 
 /* ── Inputs ─────────────────────────────────────────────────────────────── */
@@ -221,77 +300,74 @@ body::before {
 input,
 select,
 textarea {
-  transition: background-color var(--dur-fast) ease, box-shadow var(--dur-fast) ease;
-  background: rgba(255, 255, 255, 0.55) !important;
-  border: 1px solid transparent !important;
-  box-shadow: inset 0 1px 3px rgba(15, 23, 42, 0.06);
-  border-radius: var(--radius-md);
+  transition: background-color var(--dur-fast) var(--ease-out-soft), border-color var(--dur-fast) var(--ease-out-soft);
+  background: var(--surface-raised) !important;
+  border: 1px solid var(--color-border) !important;
+  box-shadow: none;
+  border-radius: var(--control-radius);
   color: var(--color-text);
 }
 
-.dark input,
-.dark select,
-.dark textarea {
-  background: rgba(0, 0, 0, 0.3) !important;
-  color: white;
+input[type='checkbox'],
+input[type='radio'],
+input[type='range'] {
+  accent-color: var(--color-primary);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--color-text-muted);
 }
 
 input:focus,
 select:focus,
 textarea:focus {
   outline: none;
-  background: rgba(255, 255, 255, 0.92) !important;
-  box-shadow: 0 0 0 2px var(--color-primary) !important;
-}
-
-.dark input:focus,
-.dark select:focus,
-.dark textarea:focus {
-  background: rgba(0, 0, 0, 0.6) !important;
-  box-shadow: 0 0 0 2px var(--color-primary) !important;
+  border-color: var(--color-primary) !important;
+  box-shadow: 0 0 0 1px var(--color-primary) !important;
 }
 
 /* ── Buttons ─────────────────────────────────────────────────────────────
-   피드백은 누르는 "순간"에. 스케일(transform)만 쓰고, transition 은 짧게. */
+   주 버튼은 블루 알약. 보조 버튼은 올라온 표면 알약. */
 
+@layer components {
 .btn {
   position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
-  font-weight: 700;
-  padding: 1rem 2rem;
+  gap: 8px;
+  font-weight: 500;
+  padding: 12px 20px;
   user-select: none;
   overflow: hidden;
-  border-radius: var(--radius-lg);
-  transition: transform var(--dur-fast) ease-out, opacity var(--dur-fast) ease-out;
+  border-radius: 9999px;
+  transition: transform var(--dur-fast) var(--ease-out-soft), background-color var(--dur-fast) var(--ease-out-soft), opacity var(--dur-fast) var(--ease-out-soft);
   touch-action: manipulation;
 }
 
 .btn:active {
-  transform: scale(0.97);
+  transform: scale(0.98);
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
-  color: white !important;
-  box-shadow: 0 10px 20px -6px rgba(99, 102, 241, 0.5);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  background: #2f6fed;
+  color: #ffffff !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16);
 }
 
 .btn-glass {
-  background: var(--chip-bg);
-  border: 1px solid var(--glass-border);
+  background: var(--surface-raised);
+  border: 1px solid var(--color-border);
   color: var(--color-text);
 }
 
 @media (hover: hover) {
   .btn-primary:hover {
-    filter: brightness(1.08);
+    background: #2459cc;
   }
   .btn-glass:hover {
-    background: var(--color-surface-elevated);
+    background: var(--surface-sunken);
   }
 }
 
@@ -301,21 +377,21 @@ textarea:focus {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 14px 20px;
-  border-radius: 16px;
-  transition: color var(--dur-base) var(--ease-out-soft), opacity var(--dur-base) var(--ease-out-soft);
-  font-weight: 600;
+  gap: 12px;
+  height: 48px;
+  padding: 0 14px;
+  border-radius: 9999px;
+  transition: color var(--dur-fast) var(--ease-out-soft), background-color var(--dur-fast) var(--ease-out-soft);
+  font-size: 16px;
+  font-weight: 500;
   color: var(--color-text-secondary);
   -webkit-tap-highlight-color: transparent;
 }
 
 @media (hover: hover) {
   .sidebar-link:hover {
-    color: var(--color-primary);
-  }
-  .dark .sidebar-link:hover {
-    color: white;
+    color: var(--color-text);
+    background: var(--surface-raised);
   }
 }
 
@@ -323,28 +399,24 @@ textarea:focus {
   color: var(--color-primary);
 }
 
-.dark .sidebar-link.active {
-  color: white;
 }
 
 /* ── Utility ─────────────────────────────────────────────────────────────── */
 
+/* 구 그라디언트 텍스트 — 이제 단색 본문. (남은 사용처는 하위 호환) */
 .gradient-text {
-  background: linear-gradient(135deg, var(--color-primary), #d946ef);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  font-weight: 800;
+  color: var(--color-text);
+  font-weight: 500;
 }
 
 .animate-fade-in {
-  animation: fadeIn 0.45s var(--ease-out-soft) forwards;
+  animation: fadeIn 0.36s var(--ease-out-soft) both;
 }
 
 @keyframes fadeIn {
   from {
     opacity: 0;
-    transform: translateY(14px);
+    transform: translateY(8px);
   }
   to {
     opacity: 1;
@@ -352,61 +424,21 @@ textarea:focus {
   }
 }
 
-.logo-float {
-  animation: logoFloat 6s ease-in-out infinite;
-}
-
-@keyframes logoFloat {
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-6px);
-  }
-}
-
-/* 스크롤이 떠 있는 크롬 밑으로 지나갈 때의 가장자리 페이드 (1px 보더 대체) */
+/* 스크롤이 떠 있는 크롬 밑으로 지나갈 때의 가장자리 페이드 */
 .scroll-edge-top {
   mask-image: linear-gradient(to bottom, transparent 0, black 24px);
   -webkit-mask-image: linear-gradient(to bottom, transparent 0, black 24px);
 }
 
-/* FOUNDER 배지 — 정적 발광 + 데스크톱에서만 광택 스윕 */
+/* FOUNDER 표시 — 조용한 텍스트 배지 */
 .founder-badge {
-  position: relative;
-  overflow: hidden;
-  box-shadow: 0 0 14px rgba(56, 130, 246, 0.55), inset 0 0 6px rgba(255, 255, 255, 0.25);
-}
-
-@media (hover: hover) {
-  .founder-badge::after {
-    content: "";
-    position: absolute;
-    top: 0;
-    left: -60%;
-    width: 40%;
-    height: 100%;
-    background: linear-gradient(120deg, transparent, rgba(255, 255, 255, 0.65), transparent);
-    transform: skewX(-20deg);
-    animation: founderShine 3.5s ease-in-out infinite;
-  }
-}
-
-@keyframes founderShine {
-  0% {
-    left: -60%;
-  }
-  60%,
-  100% {
-    left: 130%;
-  }
+  color: var(--color-primary);
 }
 
 /* Stagger List Items */
 .stagger-children > * {
   opacity: 0;
-  animation: slideIn 0.4s var(--ease-out-soft) forwards;
+  animation: slideIn 0.36s var(--ease-out-soft) forwards;
 }
 
 .stagger-children > *:nth-child(1) { animation-delay: 0.04s; }
@@ -437,7 +469,7 @@ textarea:focus {
   background: var(--scrim);
   z-index: 99999;
   padding: 24px;
-  animation: backdropFadeIn 0.25s ease-out;
+  animation: backdropFadeIn 0.2s var(--ease-out-soft);
 }
 
 @keyframes backdropFadeIn {
@@ -446,51 +478,62 @@ textarea:focus {
 }
 
 .modal-content {
-  animation: modalScaleIn 0.35s var(--ease-out-soft);
+  animation: modalRise 0.32s var(--ease-out-soft);
 }
 
-@keyframes modalScaleIn {
+@keyframes modalRise {
   from {
     opacity: 0;
-    transform: scale(0.94) translateY(16px);
+    transform: translateY(8px) scale(0.98);
   }
   to {
     opacity: 1;
-    transform: scale(1) translateY(0);
+    transform: translateY(0) scale(1);
   }
 }
 
+@layer components {
 .liquid-modal,
 .solid-modal {
-  background: var(--glass-bg) !important;
-  backdrop-filter: blur(32px) saturate(180%) !important;
-  -webkit-backdrop-filter: blur(32px) saturate(180%) !important;
-  border: 1px solid var(--glass-border) !important;
-  border-top: 1px solid var(--glass-highlight) !important;
-  border-radius: 2.5rem !important;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.4), var(--glass-shadow) !important;
-  animation: modalScaleIn 0.35s var(--ease-out-soft);
+  background: var(--surface) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border: 1px solid var(--color-border) !important;
+  border-radius: 28px !important;
+  box-shadow: 0 24px 64px rgba(10, 20, 40, 0.18) !important;
+  animation: modalRise 0.32s var(--ease-out-soft);
   overflow: hidden;
   color: var(--color-text);
 }
 
 .dark .liquid-modal,
 .dark .solid-modal {
-  background: rgba(15, 23, 42, 0.85) !important;
-  border: 1px solid rgba(255, 255, 255, 0.2) !important;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6) !important;
+  background: var(--surface) !important;
+  border: 1px solid var(--hairline-strong) !important;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5) !important;
 }
 
-.solid-modal input {
-  background: #f1f5f9 !important;
-  border: 1px solid #e2e8f0 !important;
-  color: #1e293b !important;
 }
 
-.dark .solid-modal input {
-  background: #1e293b !important;
-  border: 1px solid #334155 !important;
-  color: white !important;
+/* ── Meter scale (시그니처) ───────────────────────────────────────────────
+   30분마다 짧은 눈금, 정시마다 긴 눈금. MeterScale 컴포넌트가 그린다. */
+
+.meter-track {
+  position: relative;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--track);
+  overflow: hidden;
+}
+
+.meter-needle {
+  position: absolute;
+  top: -5px;
+  bottom: -5px;
+  width: 4px;
+  margin-left: -2px;
+  border-radius: 9999px;
+  background: var(--lamp);
 }
 
 /* ── Scrollbar ───────────────────────────────────────────────────────────── */
@@ -505,12 +548,12 @@ textarea:focus {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(156, 163, 175, 0.5);
+  background: var(--hairline-strong);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(156, 163, 175, 0.8);
+  background: var(--color-text-muted);
 }
 
 /* ── 접근성 3신호 ─────────────────────────────────────────────────────────── */
@@ -528,28 +571,11 @@ textarea:focus {
   }
 }
 
-@media (prefers-reduced-transparency: reduce) {
-  .material-chrome,
-  .glass-blur,
-  .liquid-modal,
-  .solid-modal {
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
-  }
-  .material-chrome {
-    background: var(--color-bg);
-  }
-  .glass-card,
-  .liquid-modal,
-  .solid-modal {
-    background: var(--color-surface-elevated) !important;
-  }
-}
-
 @media (prefers-contrast: more) {
   .glass-card,
   .glass-card-solid,
-  .material-chrome {
+  .material-chrome,
+  .glass-card-elevated {
     border-color: var(--color-text-secondary);
   }
 }
@@ -568,9 +594,8 @@ textarea:focus {
 .md-content h2,
 .md-content h3,
 .md-content h4 {
-  font-weight: 800;
+  font-weight: 600;
   line-height: 1.3;
-  letter-spacing: -0.01em;
   margin: 1.1em 0 0.5em;
 }
 .md-content h1 { font-size: 1.35em; }
@@ -583,28 +608,28 @@ textarea:focus {
 .md-content ul { list-style: disc; }
 .md-content ol { list-style: decimal; }
 .md-content li { margin: 0.25em 0; }
-.md-content li::marker { color: var(--color-primary); }
-.md-content a { color: var(--color-accent); text-decoration: underline; text-underline-offset: 2px; }
-.md-content strong { font-weight: 800; color: var(--color-text); }
+.md-content li::marker { color: var(--color-text-muted); }
+.md-content a { color: var(--color-primary); text-decoration: underline; text-underline-offset: 2px; }
+.md-content strong { font-weight: 600; color: var(--color-text); }
 .md-content em { font-style: italic; }
 .md-content code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--font-mono);
   font-size: 0.88em;
-  background: rgba(127, 127, 127, 0.18);
+  background: var(--surface-raised);
   padding: 0.12em 0.4em;
-  border-radius: 6px;
+  border-radius: 4px;
 }
 .md-content pre {
-  background: rgba(127, 127, 127, 0.14);
+  background: var(--surface-sunken);
   border: 1px solid var(--color-border);
-  border-radius: 12px;
+  border-radius: 10px;
   padding: 0.9em 1em;
   overflow-x: auto;
   margin: 0.8em 0;
 }
 .md-content pre code { background: transparent; padding: 0; font-size: 0.85em; line-height: 1.5; }
 .md-content blockquote {
-  border-left: 3px solid var(--color-primary);
+  border-left: 2px solid var(--color-border);
   margin: 0.8em 0;
   padding: 0.2em 0 0.2em 0.9em;
   color: var(--color-text-secondary);
@@ -624,4 +649,50 @@ textarea:focus {
   padding: 0.45em 0.7em;
   text-align: left;
 }
-.md-content th { background: rgba(127, 127, 127, 0.14); font-weight: 700; }
+.md-content th { background: var(--surface-raised); font-weight: 600; }
+
+/* 가로 스크롤 선택줄의 스크롤바 숨김 */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+@layer components {
+/* 구 그라디언트 버튼·말풍선·아바타·선택 칩을 대신하는 블루 채움.
+   흰 글자(text-white)가 남아 있어도 대비가 맞도록 글자색까지 고정한다. */
+.fill-ink {
+  background: #2f6fed !important;
+  color: #ffffff !important;
+}
+.fill-ink * {
+  color: inherit;
+}
+
+/* 선택 상태(세그먼트·필) — 액센트 채움 */
+.fill-accent {
+  background: #2f6fed !important;
+  color: #ffffff !important;
+}
+}
+
+@layer components {
+  /* 세그먼트 컨트롤의 선택 — 떠오른 흰 알약(다크는 한 단계 밝은 남색) */
+  .seg-active {
+    background: var(--surface);
+    border: 1px solid var(--color-border);
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.06), 0 2px 8px rgba(16, 24, 40, 0.06);
+    border-radius: 9999px !important;
+  }
+  .dark .seg-active {
+    background: #2a3650;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  }
+
+  /* 은은한 블루 바탕 — 활성 내비·정보 상자 */
+  .tint-accent {
+    background: var(--accent-soft);
+    color: var(--color-primary);
+  }
+}

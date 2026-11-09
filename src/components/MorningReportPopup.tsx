@@ -64,14 +64,11 @@ export default function MorningReportPopup({ settings }: MorningReportPopupProps
             className="overflow-hidden"
             ariaLabel={title}
         >
-            <div className="absolute inset-0 pointer-events-none bg-gradient-to-br from-amber-400/10 to-transparent" />
             <div className="relative p-6 sm:p-8 flex flex-col gap-4 max-h-[80vh]">
                 <header className="flex items-center gap-3">
-                    <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-amber-400 to-orange-500 flex items-center justify-center shadow-lg shadow-amber-500/25 flex-shrink-0">
-                        <Icon icon={kind === 'weekly-report' ? 'mdi:chart-timeline-variant' : 'mdi:weather-sunset-up'} className="text-xl text-white" />
-                    </div>
+                    <Icon icon={kind === 'weekly-report' ? 'mdi:chart-timeline-variant' : 'mdi:weather-sunset-up'} className="text-[18px] text-[var(--color-text-muted)] flex-shrink-0" />
                     <div className="min-w-0">
-                        <h2 className="text-lg font-black text-[var(--color-text)] leading-tight">{title}</h2>
+                        <h2 className="text-[16px] font-medium text-[var(--color-text)] leading-tight">{title}</h2>
                         <p className="text-[11px] font-bold text-[var(--color-text-secondary)]">홈 화면에서 언제든 다시 볼 수 있어요</p>
                     </div>
                 </header>
@@ -82,7 +79,7 @@ export default function MorningReportPopup({ settings }: MorningReportPopupProps
 
                 <Pressable
                     onClick={() => setOpen(false)}
-                    className="w-full py-4 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white font-black text-sm uppercase tracking-widest shadow-xl shadow-amber-500/25"
+                    className="btn btn-primary w-full h-12 text-[15px]"
                 >
                     확인했어요
                 </Pressable>

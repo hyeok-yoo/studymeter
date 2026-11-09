@@ -22,7 +22,7 @@ interface EditRecordsProps {
  * 토큰은 `--color-surface` 를 참조하는데 그 변수가 아직 정의돼 있지 않아
  * 배경이 투명해져 버린다. 변수를 채우기 전까지는 이 상수가 단일 소스다.
  */
-const FIELD = 'px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm outline-none focus:ring-2 focus:ring-indigo-500'
+const FIELD = 'px-4 py-2.5 rounded-xl bg-[var(--surface-raised)] border border-[var(--color-border)] text-sm outline-none focus:ring-2 focus:ring-[var(--color-primary)]'
 
 export default function EditRecords({ settings }: EditRecordsProps) {
     const { showConfirm } = useModal()
@@ -336,7 +336,7 @@ export default function EditRecords({ settings }: EditRecordsProps) {
             transition={spring.default}
         >
             <header>
-                <h1 className="text-display text-3xl font-black gradient-text">학습 기록 편집</h1>
+                <h1 className="text-[28px] md:text-[34px] leading-tight font-medium">학습 기록 편집</h1>
                 <p className="text-[var(--color-text-secondary)]">일정과 공부 세션을 관리하세요.</p>
             </header>
 
@@ -344,17 +344,17 @@ export default function EditRecords({ settings }: EditRecordsProps) {
             <div className="flex items-center justify-center gap-4">
                 <Pressable
                     onClick={handlePrevDay}
-                    pressScale={0.9}
-                    className="w-10 h-10 rounded-full glass-card-elevated flex items-center justify-center font-bold"
+                    pressScale={0.97}
+                    className="w-10 h-10 rounded-lg glass-card-elevated flex items-center justify-center text-[var(--color-text-secondary)]"
                 >
-                    <Icon icon="mdi:chevron-left" className="text-2xl" />
+                    <Icon icon="mdi:chevron-left" className="text-[20px]" />
                 </Pressable>
                 <div className="flex flex-col items-center">
                     <span className="text-lg font-bold tabular-nums">{koDate(selectedDate, 'paren')}</span>
                     {!isToday && (
                         <button
                             onClick={handleToday}
-                            className="text-xs text-indigo-400 hover:underline mt-1"
+                            className="text-xs text-[var(--color-primary)] hover:underline mt-1"
                         >
                             오늘로 이동
                         </button>
@@ -363,11 +363,11 @@ export default function EditRecords({ settings }: EditRecordsProps) {
                 <Pressable
                     onClick={handleNextDay}
                     disabled={isToday}
-                    pressScale={0.9}
-                    className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${isToday ? 'bg-white/5 opacity-30 cursor-not-allowed' : 'glass-card-elevated'
+                    pressScale={0.97}
+                    className={`w-10 h-10 rounded-lg flex items-center justify-center text-[var(--color-text-secondary)] ${isToday ? 'bg-[var(--surface-raised)] opacity-30 cursor-not-allowed' : 'glass-card-elevated'
                         }`}
                 >
-                    <Icon icon="mdi:chevron-right" className="text-2xl" />
+                    <Icon icon="mdi:chevron-right" className="text-[20px]" />
                 </Pressable>
             </div>
 
@@ -377,14 +377,14 @@ export default function EditRecords({ settings }: EditRecordsProps) {
                     {/* Daily Schedule Stats */}
                     <section className="glass-card p-6 flex flex-col gap-6">
                         <div className="flex items-center gap-2">
-                            <Icon icon="mdi:calendar" className="text-xl text-indigo-400" />
+                            <Icon icon="mdi:calendar" className="text-xl text-[var(--color-text-muted)]" />
                             <h2 className="text-lg font-bold">{koDate(selectedDate, 'paren')} 일정</h2>
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
                             {([
                                 { label: '기상 시간', field: 'wakeUpTime', icon: 'mdi:weather-sunset-up', color: 'text-orange-400' },
-                                { label: '전날 취침 시간', field: 'bedTime', icon: 'mdi:weather-night', color: 'text-indigo-400' },
+                                { label: '전날 취침 시간', field: 'bedTime', icon: 'mdi:weather-night', color: 'text-[var(--color-primary)]' },
                                 ...(dailyRecord?.arrivalTime ? [{ label: '등원 시간', field: 'arrivalTime', icon: 'mdi:school-outline', color: 'text-blue-400' }] : []),
                                 ...(dailyRecord?.leaveTime ? [{ label: '하원 시간', field: 'leaveTime', icon: 'mdi:door-open', color: 'text-green-400' }] : []),
                             ] as { label: string; field: 'wakeUpTime' | 'bedTime' | 'arrivalTime' | 'leaveTime'; icon: string; color: string }[]).map((item) => (
@@ -396,7 +396,7 @@ export default function EditRecords({ settings }: EditRecordsProps) {
                                         type="time"
                                         value={dailyRecord?.[item.field] || ''}
                                         onChange={(e) => handleUpdateDaily(item.field, e.target.value)}
-                                        className={`${FIELD} transition-all`}
+                                        className={`${FIELD} transition-[color,background-color,border-color,opacity,transform]`}
                                     />
                                 </div>
                             ))}
@@ -404,14 +404,14 @@ export default function EditRecords({ settings }: EditRecordsProps) {
                     </section>
 
                     {/* Manual Session Entry */}
-                    <section className={`glass-card p-6 flex flex-col gap-6 border-indigo-500/20 transition-all ${editingSessionId ? 'bg-indigo-500/10 ring-2 ring-indigo-500/50 scale-[1.02]' : 'bg-gradient-to-br from-indigo-500/5 to-purple-500/5'}`}>
+                    <section className={`glass-card p-5 md:p-6 flex flex-col gap-6 transition-[color,background-color,border-color,opacity,transform] ${editingSessionId ? 'ring-1 ring-[var(--color-primary)] ring-[var(--color-primary)] scale-[1.02]' : 'bg-[var(--surface-raised)]'}`}>
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
                                 <Icon icon={editingSessionId ? "mdi:pencil-outline" : "mdi:pencil-plus-outline"} className="text-xl" />
                                 <h2 className="text-lg font-bold">{editingSessionId ? '기록 수정하기' : '공부 기록 추가'}</h2>
                             </div>
                             {editingSessionId && (
-                                <button onClick={handleResetForm} className="text-xs font-bold text-indigo-500 hover:underline">취소</button>
+                                <button onClick={handleResetForm} className="text-xs font-bold text-[var(--color-primary)] hover:underline">취소</button>
                             )}
                         </div>
 
@@ -451,7 +451,7 @@ export default function EditRecords({ settings }: EditRecordsProps) {
                             )}
 
                             {/* Input Mode Toggle — Segmented control */}
-                            <div className="relative flex gap-1 p-1 bg-black/[0.04] dark:bg-white/5 rounded-xl">
+                            <div className="relative flex gap-1 p-1 bg-[var(--surface-raised)] rounded-xl">
                                 {([
                                     { key: 'duration' as const, icon: 'mdi:timer-outline', label: '시간 입력' },
                                     { key: 'timeRange' as const, icon: 'mdi:clock-outline', label: '시작~끝 입력' },
@@ -462,13 +462,13 @@ export default function EditRecords({ settings }: EditRecordsProps) {
                                             key={m.key}
                                             type="button"
                                             onClick={() => setInputMode(m.key)}
-                                            className={`relative flex-1 py-2 rounded-lg text-xs font-bold transition-colors ${active ? 'text-white' : 'text-[var(--color-text-secondary)]'}`}
+                                            className={`relative flex-1 h-9 rounded-lg text-[13px] font-medium transition-colors ${active ? 'text-[var(--color-text)]' : 'text-[var(--color-text-secondary)]'}`}
                                         >
                                             {active && (
                                                 <motion.div
                                                     layoutId="inputModeIndicator"
                                                     transition={spring.default}
-                                                    className="absolute inset-0 z-0 rounded-lg bg-indigo-500 shadow-lg"
+                                                    className="absolute inset-0 z-0 rounded-lg seg-active"
                                                 />
                                             )}
                                             <span className="relative z-10 flex items-center justify-center gap-1"><Icon icon={m.icon} className="text-lg" /> {m.label}</span>
@@ -528,17 +528,17 @@ export default function EditRecords({ settings }: EditRecordsProps) {
                             )}
 
                             {/* Evaluation Section Toggle */}
-                            <div className="pt-2 border-t border-white/5 space-y-4">
+                            <div className="pt-2 border-t border-[var(--color-border)] space-y-4">
                                 <button
                                     type="button"
                                     onClick={() => setShowEvalFields(!showEvalFields)}
                                     className="flex items-center justify-between w-full group"
                                 >
                                     <div className="flex items-center gap-2">
-                                        <Icon icon="mdi:sparkles" className="text-lg text-amber-400" />
-                                        <span className="text-xs font-bold text-[var(--color-text-secondary)] uppercase tracking-widest group-hover:text-[var(--color-text)] transition-colors">평가 정보 {showEvalFields ? '숨기기' : '추가하기'}</span>
+                                        <Icon icon="mdi:message-reply-text-outline" className="text-[18px] text-[var(--color-text-muted)]" />
+                                        <span className="text-xs font-bold text-[var(--color-text-secondary)] tracking-widest group-hover:text-[var(--color-text)] transition-colors">평가 정보 {showEvalFields ? '숨기기' : '추가하기'}</span>
                                     </div>
-                                    <span className={`text-[10px] font-black text-[var(--color-text-secondary)] transition-transform ${showEvalFields ? 'rotate-180' : ''}`}>▼</span>
+                                    <Icon icon="mdi:chevron-down" className={`text-[16px] text-[var(--color-text-muted)] transition-transform ${showEvalFields ? 'rotate-180' : ''}`} />
                                 </button>
 
                                 <AnimatePresence>
@@ -552,7 +552,7 @@ export default function EditRecords({ settings }: EditRecordsProps) {
                                             {/* Score 1-10 (단일 점수) */}
                                             <div className="space-y-2">
                                                 <div className="flex justify-between items-center px-1">
-                                                    <span className="text-[10px] font-black text-indigo-400 uppercase tracking-tighter">세션 점수</span>
+                                                    <span className="text-[13px] font-medium text-[var(--color-text-secondary)]">세션 점수</span>
                                                     <span className="text-sm font-black text-[var(--color-text)]">
                                                         {score === null ? (
                                                             <span className="text-[var(--color-text-secondary)] font-bold">미선택 (건너뛰면 7)</span>
@@ -567,9 +567,9 @@ export default function EditRecords({ settings }: EditRecordsProps) {
                                                                 key={n}
                                                                 type="button"
                                                                 onClick={() => setScore(n)}
-                                                                className={`flex-1 rounded-lg text-xs font-black transition-all ${active
-                                                                    ? 'bg-indigo-500 text-white shadow-md scale-[1.04] z-10'
-                                                                    : 'bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-indigo-500/10'
+                                                                className={`flex-1 rounded-lg text-xs font-black transition-[color,background-color,border-color,opacity,transform] ${active
+                                                                    ? 'fill-accent scale-[1.04] z-10'
+                                                                    : 'bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--surface-raised)]'
                                                                     }`}
                                                             >
                                                                 {n}
@@ -581,7 +581,7 @@ export default function EditRecords({ settings }: EditRecordsProps) {
 
                                             {/* Tag Chips */}
                                             <div className="space-y-3">
-                                                <span className="text-[10px] font-black text-[var(--color-text-secondary)] uppercase tracking-widest pl-1">태그</span>
+                                                <span className="text-[13px] font-medium text-[var(--color-text-secondary)] pl-1">태그</span>
                                                 <div className="flex flex-wrap gap-2">
                                                     {topTags.map(tag => (
                                                         <Chip
@@ -595,7 +595,7 @@ export default function EditRecords({ settings }: EditRecordsProps) {
                                                     <button
                                                         type="button"
                                                         onClick={() => setShowAllTags(v => !v)}
-                                                        className="px-3 py-1.5 rounded-full text-xs font-bold bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-indigo-500/10 transition-all"
+                                                        className="px-3 py-1.5 rounded-full text-xs font-bold bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--surface-raised)] transition-[color,background-color,border-color,opacity,transform]"
                                                     >
                                                         {showAllTags ? '접기' : '더보기'}
                                                     </button>
@@ -611,7 +611,7 @@ export default function EditRecords({ settings }: EditRecordsProps) {
                                                         >
                                                             {allTagsByCategory.map(([cat, tags]) => (
                                                                 <div key={cat} className="space-y-1.5">
-                                                                    <p className="text-[10px] font-black uppercase tracking-widest text-[var(--color-text-secondary)]">{TAG_CATEGORY_LABELS[cat]}</p>
+                                                                    <p className="text-[13px] font-medium text-[var(--color-text-secondary)]">{TAG_CATEGORY_LABELS[cat]}</p>
                                                                     {/* 여기 칩은 선택 시 그림자가 없다 — ui/Chip 의 indigo 활성 톤과 다르므로 그대로 둔다. */}
                                                                     <div className="flex flex-wrap gap-2">
                                                                         {tags.map(tag => (
@@ -619,9 +619,9 @@ export default function EditRecords({ settings }: EditRecordsProps) {
                                                                                 key={tag.name}
                                                                                 type="button"
                                                                                 onClick={() => toggleTag(tag.name)}
-                                                                                className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95 ${selectedTags.includes(tag.name)
-                                                                                    ? 'bg-indigo-500 text-white'
-                                                                                    : 'bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-indigo-500/10'
+                                                                                className={`px-3 py-1.5 rounded-full text-xs font-bold transition-[color,background-color,border-color,opacity,transform] active:scale-[0.97] ${selectedTags.includes(tag.name)
+                                                                                    ? 'fill-accent'
+                                                                                    : 'bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--surface-raised)]'
                                                                                     }`}
                                                                             >
                                                                                 {tag.name}
@@ -657,13 +657,13 @@ export default function EditRecords({ settings }: EditRecordsProps) {
 
                                             {/* Memo */}
                                             <div className="space-y-2">
-                                                <label className="text-[10px] font-black text-[var(--color-text-secondary)] uppercase tracking-widest pl-1">메모</label>
+                                                <label className="text-[13px] font-medium text-[var(--color-text-secondary)] pl-1">메모</label>
                                                 <textarea
                                                     value={memo}
                                                     onChange={(e) => setMemo(e.target.value)}
                                                     placeholder="간단한 소감..."
                                                     rows={2}
-                                                    className="w-full px-4 py-3 rounded-2xl bg-[var(--color-surface)] border border-[var(--color-border)] text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-secondary)]/30 resize-none outline-none focus:border-[var(--color-primary)] transition-all"
+                                                    className="w-full px-4 py-3 rounded-2xl bg-[var(--color-surface)] border border-[var(--color-border)] text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-secondary)]/30 resize-none outline-none focus:border-[var(--color-primary)] transition-[color,background-color,border-color,opacity,transform]"
                                                 />
                                             </div>
                                         </motion.div>
@@ -672,7 +672,7 @@ export default function EditRecords({ settings }: EditRecordsProps) {
                             </div>
 
 
-                            <Pressable type="submit" pressScale={0.98} className={`w-full py-3.5 rounded-xl text-white font-bold text-sm transition-colors shadow-lg shadow-indigo-500/25 ${editingSessionId ? 'bg-indigo-600 hover:bg-indigo-500' : 'bg-indigo-500 hover:bg-indigo-400'}`}>
+                            <Pressable type="submit" pressScale={0.98} className="btn btn-primary w-full h-12 text-[15px]">
                                 {editingSessionId ? '기록 수정 완료' : '기록 추가하기'}
                             </Pressable>
                         </form>
@@ -683,28 +683,28 @@ export default function EditRecords({ settings }: EditRecordsProps) {
                 <div className="flex flex-col gap-6">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                            <Icon icon="mdi:script-text-outline" className="text-xl text-indigo-400" />
+                            <Icon icon="mdi:script-text-outline" className="text-xl text-[var(--color-text-muted)]" />
                             <h2 className="text-lg font-bold">{koDate(selectedDate, 'paren')} 세션</h2>
                         </div>
-                        <span className="text-[10px] font-bold opacity-40 uppercase tracking-widest">{recentSessions.length} sessions</span>
+                        <span className="text-[11px] font-bold opacity-40 tracking-widest">{recentSessions.length} sessions</span>
                     </div>
 
                     <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2 no-scrollbar">
-                        <p className="text-[10px] text-indigo-500 font-bold opacity-60 text-center tracking-tight flex items-center justify-center gap-1"><Icon icon="mdi:lightbulb-on-outline" className="text-lg" /> 내역을 클릭하면 수정, 왼쪽으로 밀면 삭제할 수 있습니다.</p>
+                        <p className="text-[12px] text-[var(--color-text-muted)] text-center flex items-center justify-center gap-1"><Icon icon="mdi:information-outline" className="text-[14px]" /> 내역을 클릭하면 수정, 왼쪽으로 밀면 삭제할 수 있습니다.</p>
                         <AnimatePresence mode="popLayout">
                             {recentSessions.map((session, i) => (
-                                <div key={session.id} className="relative overflow-hidden rounded-[2rem]">
+                                <div key={session.id} className="relative overflow-hidden rounded-[20px]">
                                     {/* Delete Button */}
                                     <div
-                                        className="absolute inset-y-2 right-2 w-[80px] bg-red-500 flex items-center justify-center rounded-2xl shadow-inner"
+                                        className="absolute inset-y-2 right-2 w-[80px] bg-red-500 flex items-center justify-center rounded-2xl"
                                         onPointerDown={(e) => e.stopPropagation()}
                                     >
                                         <button
                                             onClick={(e) => handleDelete(e, session.id!)}
-                                            className="text-white font-black flex flex-col items-center gap-1 active:scale-90 transition-transform w-full h-full justify-center"
+                                            className="text-white font-black flex flex-col items-center gap-1 active:scale-[0.97] transition-transform w-full h-full justify-center"
                                         >
                                             <Icon icon="mdi:trash-can-outline" className="text-2xl" />
-                                            <span className="text-[10px] uppercase tracking-tighter">Delete</span>
+                                            <span className="text-[11px] tracking-tighter">Delete</span>
                                         </button>
                                     </div>
 
@@ -726,25 +726,25 @@ export default function EditRecords({ settings }: EditRecordsProps) {
                                             layout: spring.snappy,
                                         }}
                                         onClick={() => handleSelectSession(session)}
-                                        className={`relative glass-card-solid p-4 flex items-center justify-between group cursor-pointer transition-colors hover:border-indigo-500/50 ${editingSessionId === session.id ? 'ring-2 ring-indigo-500 border-transparent shadow-xl' : ''}`}
+                                        className={`relative glass-card-solid p-4 flex items-center justify-between group cursor-pointer transition-colors hover:border-[var(--hairline-strong)] ${editingSessionId === session.id ? 'ring-2 ring-[var(--color-primary)] border-transparent' : ''}`}
                                     >
                                         <div className="flex flex-col gap-1">
                                             <div className="flex items-center gap-2">
                                                 <span className="text-sm font-bold">{session.subject}</span>
-                                                {session.subItem && <span className="text-[10px] text-indigo-400 font-medium">› {session.subItem}</span>}
-                                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/10 opacity-60 font-medium">{session.type}</span>
+                                                {session.subItem && <span className="text-[11px] text-[var(--color-primary)] font-medium">› {session.subItem}</span>}
+                                                <span className="text-[11px] px-2 py-0.5 rounded-full bg-[var(--surface-raised)] opacity-60 font-medium">{session.type}</span>
                                             </div>
                                             <div className="flex items-center gap-2 text-xs opacity-60 tabular-nums">
-                                                <span className="font-medium text-indigo-400">{formatTimeHHMM(session.startTime)}</span>
+                                                <span className="font-mono text-[var(--color-text)]">{formatTimeHHMM(session.startTime)}</span>
                                                 <span>~</span>
-                                                <span className="font-medium text-indigo-400">{formatTimeHHMM(session.endTime)}</span>
+                                                <span className="font-mono text-[var(--color-text)]">{formatTimeHHMM(session.endTime)}</span>
                                                 <span className="opacity-40">|</span>
                                                 <span>{formatDuration(session.duration)}</span>
                                             </div>
                                         </div>
 
                                         <div className="flex items-center gap-3">
-                                            <div className="w-1 h-8 bg-white/5 rounded-full group-hover:bg-indigo-500/20 transition-colors"></div>
+                                            <div className="w-1 h-8 bg-[var(--surface-raised)] rounded-full group-hover:bg-[var(--hairline-strong)] transition-colors"></div>
                                             <span className="text-xl opacity-20 group-hover:opacity-40 transition-opacity">‹</span>
                                         </div>
                                     </motion.div>
@@ -753,8 +753,8 @@ export default function EditRecords({ settings }: EditRecordsProps) {
                         </AnimatePresence>
 
                         {recentSessions.length === 0 && (
-                            <div className="text-center py-20 bg-white/5 rounded-[2rem] border border-dashed border-white/10">
-                                <p className="text-sm opacity-30 italic">{koDate(selectedDate, 'paren')} 기록된 세션이 없습니다.</p>
+                            <div className="text-center py-20 bg-[var(--surface-raised)] rounded-[20px] border border-dashed border-[var(--color-border)]">
+                                <p className="text-sm opacity-30 not-italic">{koDate(selectedDate, 'paren')} 기록된 세션이 없습니다.</p>
                             </div>
                         )}
                     </div>
@@ -772,18 +772,18 @@ export default function EditRecords({ settings }: EditRecordsProps) {
             >
                 {overlappingSession && (<>
                     <div className="flex items-center gap-3">
-                        <Icon icon="mdi:alert" className="text-3xl text-amber-500" />
+                        <Icon icon="mdi:alert-outline" className="text-[24px] text-[var(--color-primary)]" />
                         <h3 className="text-xl font-bold">세션 시간 중복</h3>
                     </div>
 
-                    <div className="bg-white/5 rounded-xl p-4 space-y-2">
+                    <div className="bg-[var(--surface-raised)] rounded-xl p-4 space-y-2">
                         <p className="text-sm text-[var(--color-text-secondary)]">
                             선택한 시간에 이미 다음 세션이 존재합니다:
                         </p>
                         <div className="flex items-center gap-2">
                             <span className="font-bold">{overlappingSession.subject}</span>
                             {overlappingSession.subItem && (
-                                <span className="text-indigo-400 text-sm">› {overlappingSession.subItem}</span>
+                                <span className="text-[var(--color-primary)] text-sm">› {overlappingSession.subItem}</span>
                             )}
                         </div>
                         <div className="text-sm text-[var(--color-text-secondary)]">
@@ -800,14 +800,14 @@ export default function EditRecords({ settings }: EditRecordsProps) {
                     <div className="flex gap-3 mt-4">
                         <button
                             onClick={handleOverlapCancel}
-                            className="flex-1 py-4 rounded-2xl bg-white/5 hover:bg-white/10 text-[var(--color-text-secondary)] font-bold transition-all active:scale-95"
+                            className="btn btn-glass flex-1 h-12 text-[15px] text-[var(--color-text-secondary)]"
                         >
                             {canTrimOverlap ? '취소' : '닫기'}
                         </button>
                         {canTrimOverlap && (
                             <button
                                 onClick={handleOverlapConfirm}
-                                className="flex-1 py-4 rounded-2xl bg-indigo-500 hover:bg-indigo-400 text-white font-black shadow-xl active:scale-95 transition-all"
+                                className="btn btn-primary flex-1 h-12 text-[15px]"
                             >
                                 조정하고 추가
                             </button>

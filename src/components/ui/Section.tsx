@@ -11,7 +11,7 @@ import { spring } from '../../lib/motion';
 /** 카드 위 작은 대문자 라벨 */
 export function SectionLabel({ children }: { children: React.ReactNode }) {
     return (
-        <p className="px-1.5 mb-2 text-[11px] font-bold uppercase tracking-wider text-[var(--color-text-secondary)] opacity-60">
+        <p className="px-1.5 mb-2 text-[13px] font-medium text-[var(--color-text-secondary)] opacity-60">
             {children}
         </p>
     );
@@ -27,7 +27,7 @@ export function SectionHeader({ label, help, action }: {
     return (
         <div className="flex items-center justify-between px-1.5 mb-2">
             <div className="flex items-center gap-2">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--color-text-secondary)] opacity-60">
+                <span className="text-[13px] font-medium text-[var(--color-text-secondary)] opacity-60">
                     {label}
                 </span>
                 {help}
@@ -61,13 +61,13 @@ export function Toggle({ enabled, onChange, label }: {
             aria-checked={enabled}
             aria-label={label}
             onClick={onChange}
-            whileTap={{ scale: 0.92 }}
+            whileTap={{ scale: 0.97 }}
             transition={spring.snappy}
             className="relative flex-shrink-0 w-12 h-7 rounded-full transition-colors duration-300"
             style={{ background: enabled ? 'var(--color-primary)' : 'rgba(120,120,128,0.24)' }}
         >
             <motion.div
-                className="absolute top-1 left-1 w-5 h-5 rounded-full bg-white shadow-md"
+                className="absolute top-1 left-1 w-5 h-5 rounded-full bg-white"
                 animate={{ x: enabled ? 20 : 0 }}
                 transition={spring.snappy}
             />

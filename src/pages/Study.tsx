@@ -6,6 +6,8 @@ import Pressable from '../components/ui/Pressable'
 import SlidingSelector from '../components/ui/SlidingSelector'
 import Chip from '../components/ui/Chip'
 import { Stat } from '../components/ui/Stat'
+import MeterScale from '../components/ui/MeterScale'
+import { meterSpan } from '../lib/meter'
 import { spring, fadeRise, materialize } from '../lib/motion'
 import { hm, hms, hmsDecimal, ymd, toDate, addDays } from '../lib/format'
 import { groupTotals, sumDuration, sumTotals, isSelfStudy } from '../lib/sessions'
@@ -353,14 +355,15 @@ export default function Study({ settings }: StudyProps) {
     useEffect(() => () => NativeBridge.setImmersive(false), [])
 
     return (
-        <div className="sm-study true-black h-[100dvh] min-h-[100dvh] bg-black text-white flex flex-col justify-between safe-area-bottom p-6 md:p-12 overflow-y-auto">
+        <div className="sm-study true-black h-[100dvh] min-h-[100dvh] bg-black text-white flex flex-col justify-between safe-area-bottom px-4 py-4 md:px-12 md:py-8 overflow-y-auto pt-[calc(1rem+env(safe-area-inset-top))]">
             {/* 아이패드 가로모드(4:3 ≈ 1.33)에서도 스톱워치·재생/일시정지 버튼이 절대 잘리지 않도록
                 하는 컴팩트 레이아웃. 갤럭시탭 16:10(1.6)은 대상에서 확실히 제외해 기존(넓은) 모습을
                 유지한다 — 임계값을 11/8(1.375)로 두어, 브라우저 크롬으로 가로폭이 줄어 비율이 다소
                 낮아지는 갤럭시탭(≈1.475)까지도 제외되게 한다. overflow-y-auto는 어떤 경우에도(고급
-                모드 등으로 콘텐츠가 늘어나도) 콘텐츠가 화면 밖으로 사라지지 않게 하는 안전망이다. */}
+                모드 등으로 콘텐츠가 늘어나도) 콘텐츠가 화면 밖으로 사라지지 않게 하는 안전망이다.
+                폭 1024px 이상은 2열(타이머 | 조작·패널) 레이아웃이라 세로 여유가 생겨 컴팩트 규칙을 적용하지 않는다. */}
             <style>{`
-                @media (orientation: landscape) and (max-height: 900px) and (max-aspect-ratio: 11/8) {
+                @media (orientation: landscape) and (max-height: 900px) and (max-aspect-ratio: 11/8) and (max-width: 1023px) {
                     .sm-study { padding: 0.75rem 1.25rem !important; }
                     .sm-header { gap: 0.5rem !important; }
                     .sm-selectors { padding-bottom: 0.5rem !important; }
@@ -370,7 +373,7 @@ export default function Study({ settings }: StudyProps) {
                     .sm-subject-label { font-size: 0.7rem !important; }
                     .sm-timer-num { font-size: clamp(2.5rem, 11vh, 6rem) !important; }
                     .sm-metric-grid { margin-top: 0.5rem !important; gap: 0.375rem !important; }
-                    .sm-metric-card { padding: 0.375rem !important; }
+                    .sm-metric-card { padding: 0.5rem 0.75rem !important; border-radius: 14px !important; }
                     .sm-metric-value { font-size: 0.95rem !important; }
                     .sm-goal { margin-top: 0.375rem !important; }
                     .sm-focus-wrap { margin-top: 0.5rem !important; }
@@ -378,26 +381,35 @@ export default function Study({ settings }: StudyProps) {
                     .sm-play-btn { width: 4.5rem !important; height: 4.5rem !important; }
                     .sm-parking-btn { width: 2.75rem !important; height: 2.75rem !important; }
                     .sm-spacer { width: 2.75rem !important; height: 2.75rem !important; }
-                    .sm-footer { height: 3rem !important; padding: 0 1rem !important; gap: 0.75rem !important; border-radius: 1.25rem !important; }
+                    .sm-footer { padding-top: 0.5rem !important; gap: 0.75rem !important; }
                     .sm-footer-chips { display: none !important; }
                 }
             `}</style>
 
-            <header className="sm-header flex flex-col gap-6 animate-fade-in">
-                <div className="flex justify-between items-center">
-                    <div className="flex items-center gap-3">
-                        <div className="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_10px_2px_rgba(239,68,68,0.6)]"></div>
-                        <span className="text-sm font-black uppercase tracking-widest opacity-60">Focusing Now</span>
+            <header className="sm-header w-full max-w-3xl lg:max-w-[1440px] mx-auto flex flex-col gap-4 animate-fade-in">
+                <div className="flex justify-between items-center h-10">
+                    <div className="flex items-center gap-2.5">
+                        <span
+                            className="w-2 h-2 rounded-full transition-colors duration-200"
+                            style={{ background: timer.isRunning ? '#5b94ff' : 'rgba(237,237,237,0.3)' }}
+                        />
+                        <span className="text-[14px] text-white/60">{timer.isRunning ? '측정 중' : '일시정지'}</span>
                     </div>
-                    <Pressable onClick={handleEnd} pressScale={0.95} className="px-5 py-2 rounded-full bg-white/10 font-bold text-sm">Exit Session</Pressable>
+                    <Pressable
+                        onClick={handleEnd}
+                        pressScale={0.97}
+                        className="h-10 px-5 rounded-full bg-white/[0.08] border border-white/10 text-[15px] font-medium text-white/90 hover:bg-white/[0.12] transition-colors"
+                    >
+                        세션 종료
+                    </Pressable>
                 </div>
 
-                <div className="sm-selectors flex gap-4 overflow-x-auto pb-6 no-scrollbar">
+                <div className="sm-selectors flex gap-2 overflow-x-auto pb-2 no-scrollbar -mx-1 px-1">
                     <SlidingSelector
                         items={settings.subjects.map((s) => s.name)}
                         currentValue={subject}
                         onChange={(next) => switchTo({ subject: next, subItem: undefined })}
-                        activeColor="bg-white/40"
+                        activeColor="bg-[#2f6fed]"
                         activeTextColor="text-white"
                         layoutId="subject-pill"
                     />
@@ -408,16 +420,16 @@ export default function Study({ settings }: StudyProps) {
                             // 테스트는 시간을 먼저 정해야 하므로 모달을 거친다.
                             next === '테스트' ? setShowTestTimer(true) : switchTo({ type: next, countdownMs: undefined })
                         }
-                        activeColor="bg-indigo-500/50"
+                        activeColor="bg-white/[0.14]"
                         activeTextColor="text-white"
                         layoutId="type-pill"
                     />
                 </div>
 
                 {children.length > 0 && (
-                    <div className="sm-subitem flex flex-col gap-2 p-4 bg-white/5 rounded-2xl border border-white/5 animate-fade-in shadow-inner">
-                        <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-30">Select Sub-Item</p>
-                        <div className="flex gap-2 overflow-x-auto no-scrollbar">
+                    <div className="sm-subitem flex items-center gap-3 animate-fade-in">
+                        <p className="text-[13px] text-white/40 shrink-0">세부 항목</p>
+                        <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
                             {[undefined, ...children].map((child) => (
                                 <Chip
                                     key={child ?? '전체'}
@@ -433,12 +445,12 @@ export default function Study({ settings }: StudyProps) {
                 )}
             </header>
 
-            <main className="sm-main flex-1 flex flex-col items-center justify-center relative z-0">
-                <div className="absolute inset-0 bg-gradient-to-b from-indigo-500/10 via-transparent to-transparent blur-[120px] pointer-events-none -z-10"></div>
+            {/* 태블릿 가로·데스크톱: 왼쪽은 타이머·눈금·지표, 오른쪽은 조작 버튼과 방·집중도 패널 */}
+            <main className="sm-main flex-1 flex flex-col justify-center relative z-0 w-full max-w-3xl lg:max-w-[1440px] mx-auto py-4 lg:grid lg:grid-cols-[minmax(0,1.5fr)_minmax(340px,1fr)] lg:gap-x-14 lg:content-center">
 
-                <motion.div className="sm-timer-block relative text-center flex flex-col gap-4" variants={fadeRise} initial="initial" animate="animate">
-                    <div className="flex items-center justify-center gap-2">
-                        <h2 className="sm-subject-label text-xl font-bold opacity-40 uppercase tracking-[0.3em]">
+                <motion.div className="sm-timer-block relative flex flex-col @container min-w-0" variants={fadeRise} initial="initial" animate="animate">
+                    <div className="flex items-center gap-1.5">
+                        <h2 className="sm-subject-label text-[15px] text-white/55">
                             {subject}{subItem ? ` › ${subItem}` : ''} · {type}
                         </h2>
                         <HelpButton dark title="타이머 표시 안내" items={[
@@ -450,21 +462,21 @@ export default function Study({ settings }: StudyProps) {
                     </div>
 
                     {countdownMs ? (
-                        <div className="flex flex-col items-center gap-2">
-                            <span className="sm-timer-num text-display text-8xl md:text-[10rem] font-black tabular-nums text-red-500 drop-shadow-[0_0_50px_rgba(239,68,68,0.3)]">
+                        <div className="flex flex-col gap-2 mt-2">
+                            <span className="sm-timer-num figure text-[min(23cqw,240px)] text-[#ff6b6f] -ml-1">
                                 {hms(Math.max(0, countdownMs - elapsed))}
                             </span>
-                            <div className="flex items-center gap-2 opacity-40">
-                                <span className="text-xs font-bold uppercase tracking-widest">Total: {hmsDecimal(totals.all + elapsed)}</span>
-                            </div>
+                            <span className="font-mono text-[13px] tabular-nums text-white/45">오늘 합계 {hmsDecimal(totals.all + elapsed)}</span>
                         </div>
                     ) : (
-                        <span className="sm-timer-num text-display text-8xl md:text-[10rem] font-black tabular-nums gradient-text drop-shadow-2xl">
+                        <span className="sm-timer-num figure text-[min(19.5cqw,220px)] text-[#eef2f8] mt-2 -ml-1">
                             {hmsDecimal(totals.all + elapsed)}
                         </span>
                     )}
 
-                    <div className="sm-metric-grid grid grid-cols-2 md:grid-cols-4 gap-4 mt-8 w-full max-w-3xl mx-auto">
+                    <DailyGoalBar done={totals.all + elapsed} goal={settings.dailyGoalMs ?? 0} />
+
+                    <div className="sm-metric-grid grid grid-cols-2 @2xl:grid-cols-4 gap-3 mt-6 w-full">
                         <Stat
                             label={`${subject} 누적`}
                             value={hms(totals.subject + elapsed)}
@@ -473,19 +485,17 @@ export default function Study({ settings }: StudyProps) {
                         <Stat
                             label={`${subject}+${type}`}
                             value={hms(totals.subjectType + elapsed)}
-                            color="text-indigo-300"
                             help={<HelpButton dark title="과목+타입 누적" items={`오늘 "${subject}" 과목에서 "${type}" 타입으로만 공부한 시간입니다. 예: 수학 강의만, 영어 자습만 따로 보고 싶을 때 유용합니다.`} />}
                         />
                         <Stat
                             label="현재 세션"
                             value={hms(elapsed)}
-                            color="text-cyan-400"
+                            color="text-[#6ea0ff]"
                             help={<HelpButton dark title="현재 세션 시간" items="이번 공부 시작 버튼을 누른 순간부터 지금까지의 경과 시간입니다. 타입이나 과목을 전환하면 세션이 분리되어 다시 0부터 시작합니다." />}
                         />
                         <Stat
                             label="순공 (자습)"
                             value={hms(totals.selfStudy + (isSelfStudy(type) ? elapsed : 0))}
-                            color="text-purple-400"
                             help={<HelpButton dark title="순공 시간이란?" items={[
                                 { description: '자습·테스트 타입 세션만 합산한 시간입니다. 강의 수강 시간은 포함되지 않습니다.' },
                                 { title: '왜 따로 보나요?', description: '수동적인 강의 시청과 능동적인 자습·문제풀이를 구분하여, 실제 스스로 공부한 시간을 파악하기 위함입니다.' },
@@ -494,10 +504,7 @@ export default function Study({ settings }: StudyProps) {
                     </div>
                 </motion.div>
 
-                {settings.dailyGoalMs != null && settings.dailyGoalMs > 0 && (
-                    <DailyGoalBar done={totals.all + elapsed} goal={settings.dailyGoalMs} />
-                )}
-
+                <div className="sm-side flex flex-col min-w-0 lg:justify-center">
                 {/* 집(로컬 HA 도달)일 때만 마운트된다 */}
                 <RoomPanel
                     config={settings.haConfig}
@@ -514,37 +521,37 @@ export default function Study({ settings }: StudyProps) {
                     <button
                         onClick={() => setFocusOpen((v) => !v)}
                         aria-expanded={focusOpen}
-                        className="mt-6 w-full max-w-3xl mx-auto flex items-center justify-between px-5 py-3 rounded-2xl border border-white/10 bg-white/[0.04]"
+                        className="mt-4 w-full flex items-center justify-between px-5 h-14 rounded-[20px] border border-white/10 bg-white/[0.04] hover:bg-white/[0.07] transition-colors"
                     >
-                        <span className="flex items-center gap-2">
-                            <Icon icon="mdi:eye-outline" className="text-[16px] opacity-40" />
-                            <span className="text-[12px] font-bold opacity-50">집중력 모니터</span>
+                        <span className="flex items-center gap-2.5">
+                            <Icon icon="mdi:eye-outline" className="text-[18px] text-white/40" />
+                            <span className="text-[14px] text-white/70">집중력 모니터</span>
                         </span>
-                        <span className="flex items-center gap-1 text-[12px] font-bold opacity-40">
+                        <span className="flex items-center gap-1 text-[13px] text-white/40">
                             {focusOpen ? '접기' : '펼치기'}
                             <motion.span animate={{ rotate: focusOpen ? 180 : 0 }} transition={spring.snappy} className="flex">
-                                <Icon icon="mdi:chevron-down" className="text-[15px]" />
+                                <Icon icon="mdi:chevron-down" className="text-[16px]" />
                             </motion.span>
                         </span>
                     </button>
                 )}
 
                 {focusOpen && (
-                    <div className="sm-focus-wrap">
+                    <div className="sm-focus-wrap w-full">
                         <FocusPanel drowsinessThresholdSec={settings.drowsinessThresholdSec ?? 15} />
                     </div>
                 )}
 
-                <div className="sm-controls mt-16 flex items-center justify-center gap-10">
+                <div className="sm-controls mt-8 flex items-center justify-center gap-10 lg:order-first lg:mt-0 lg:mb-2 lg:py-6">
                     <div className="sm-parking flex flex-col items-center gap-1">
-                        <Pressable onClick={() => setShowParking(true)} pressScale={0.9} className="flex flex-col items-center gap-0.5 group">
-                            <div className="sm-parking-btn w-16 h-16 rounded-2xl bg-white/[0.08] hover:bg-blue-500/20 border border-white/10 hover:border-blue-400/40 flex flex-col items-center justify-center gap-0.5 transition-colors">
-                                <span className="text-xl font-black text-blue-400 leading-none">P</span>
+                        <Pressable onClick={() => setShowParking(true)} pressScale={0.96} className="flex flex-col items-center gap-1.5">
+                            <div className="sm-parking-btn w-14 h-14 lg:w-16 lg:h-16 rounded-[20px] bg-white/[0.06] hover:bg-white/[0.1] border border-white/10 flex flex-col items-center justify-center gap-0.5 transition-colors">
+                                <span className="text-[20px] font-medium text-white/85 leading-none">P</span>
                                 {parkedNotes.length > 0 && (
-                                    <span className="text-[10px] font-black text-blue-300 leading-none">{parkedNotes.length}</span>
+                                    <span className="font-mono text-[11px] text-[#6ea0ff] leading-none">{parkedNotes.length}</span>
                                 )}
                             </div>
-                            <span className="text-[9px] font-black uppercase tracking-wider opacity-30 group-hover:opacity-50">주차장</span>
+                            <span className="text-[12px] text-white/40">주차장</span>
                         </Pressable>
                         <HelpButton dark title="생각 주차장 (P)" items={[
                             { description: '공부 중 갑자기 떠오른 관련 없는 생각(할 일, 아이디어 등)을 빠르게 기록해 두는 공간입니다.' },
@@ -558,41 +565,42 @@ export default function Study({ settings }: StudyProps) {
                             NativeBridge.haptic('press')
                             timer.toggle()
                         }}
-                        pressScale={0.9}
-                        hoverLift
+                        pressScale={0.96}
                         aria-label={timer.isRunning ? '일시정지' : '재개'}
-                        className={`sm-play-btn w-28 h-28 rounded-full flex items-center justify-center shadow-2xl cursor-pointer transition-colors ${timer.isRunning ? 'bg-yellow-400' : 'bg-green-500'}`}
+                        className="sm-play-btn w-24 h-24 md:w-28 md:h-28 lg:w-32 lg:h-32 rounded-full flex items-center justify-center cursor-pointer transition-colors duration-200"
+                        style={{ background: timer.isRunning ? '#eef2f8' : '#2f6fed' }}
                     >
                         {timer.isRunning ? (
                             <div className="flex gap-2 pointer-events-none">
-                                <div className="w-3 h-10 bg-black rounded-sm"></div>
-                                <div className="w-3 h-10 bg-black rounded-sm"></div>
+                                <div className="w-2.5 h-9 bg-[#141415] rounded-[2px]"></div>
+                                <div className="w-2.5 h-9 bg-[#141415] rounded-[2px]"></div>
                             </div>
                         ) : (
-                            <div className="w-0 h-0 border-l-[24px] border-l-white border-t-[16px] border-t-transparent border-b-[16px] border-b-transparent ml-2 pointer-events-none"></div>
+                            <div className="w-0 h-0 border-l-[22px] border-l-white border-t-[14px] border-t-transparent border-b-[14px] border-b-transparent ml-1.5 pointer-events-none"></div>
                         )}
                     </Pressable>
 
                     {/* 재생 버튼을 가운데 두기 위한 균형추 */}
-                    <div className="sm-spacer w-16 h-16" />
+                    <div className="sm-spacer w-14 h-14 lg:w-16 lg:h-16" />
+                </div>
                 </div>
             </main>
 
-            <footer className="sm-footer h-24 bg-white/[0.06] rounded-[2.5rem] border border-white/10 flex items-center px-10 gap-8 animate-slide-up">
-                <div className="flex-1 flex flex-col">
-                    <span className="text-[10px] font-black uppercase tracking-widest opacity-40 mb-1">Weekly progress</span>
+            <footer className="sm-footer w-full max-w-3xl lg:max-w-[1440px] mx-auto border-t border-white/10 pt-4 flex items-end gap-6 animate-fade-in">
+                <div className="flex-1 flex flex-col gap-1">
+                    <span className="text-[12px] text-white/45">이번 주</span>
                     <div className="flex items-baseline gap-2">
-                        <span className="text-xl font-black">{hm(weekly.total + elapsed, { always: true })}</span>
-                        <span className={`text-xs font-bold ${weekly.change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                            {hm(weekly.change, { always: true, sign: true })}
+                        <span className="text-[22px] font-light tabular-nums text-white/90">{hm(weekly.total + elapsed, { always: true })}</span>
+                        <span className={`font-mono text-[12px] tabular-nums ${weekly.change >= 0 ? 'text-[#4cc38a]' : 'text-[#ec6a6e]'}`}>
+                            {hm(weekly.change, { always: true, sign: true })} vs 지난주
                         </span>
                     </div>
                 </div>
-                <div className="sm-footer-chips flex gap-4">
+                <div className="sm-footer-chips hidden sm:flex gap-6">
                     {weekly.bySubject.slice(0, 3).map((stat) => (
-                        <div key={stat.subject} className="px-4 py-2 bg-white/5 rounded-xl border border-white/5 flex flex-col items-center">
-                            <span className="text-[8px] font-black uppercase opacity-40">{stat.subject}</span>
-                            <span className="text-xs font-bold">{hm(stat.total, { always: true })}</span>
+                        <div key={stat.subject} className="flex flex-col items-end gap-1">
+                            <span className="text-[12px] text-white/45">{stat.subject}</span>
+                            <span className="font-mono text-[13px] tabular-nums text-white/80">{hm(stat.total, { always: true })}</span>
                         </div>
                     ))}
                 </div>
@@ -618,7 +626,7 @@ export default function Study({ settings }: StudyProps) {
                         />
                         <motion.div
                             variants={materialize} initial="initial" animate="animate" exit="exit"
-                            className="relative liquid-modal p-8 flex flex-col gap-4 max-w-sm w-full shadow-2xl"
+                            className="relative liquid-modal p-8 flex flex-col gap-4 max-w-sm w-full"
                         >
                             <Icon icon="mdi:timer-alert-outline" className="text-5xl text-amber-400" />
                             <h3 className="text-2xl font-black tracking-tight text-display">타이머를 멈춰 두었어요</h3>
@@ -633,7 +641,7 @@ export default function Study({ settings }: StudyProps) {
                                 <Pressable
                                     onClick={timer.dismissRecovery}
                                     pressScale={0.97}
-                                    className="w-full py-4 bg-indigo-500 text-white rounded-2xl font-black text-base shadow-xl"
+                                    className="btn btn-primary w-full h-12 text-[15px]"
                                 >
                                     확인 (멈춘 채로 두기)
                                 </Pressable>
@@ -662,14 +670,14 @@ export default function Study({ settings }: StudyProps) {
                         />
                         <motion.div
                             variants={materialize} initial="initial" animate="animate" exit="exit"
-                            className="relative liquid-modal p-10 flex flex-col items-center gap-6 max-w-sm w-full text-center shadow-2xl"
+                            className="relative liquid-modal p-10 flex flex-col items-center gap-6 max-w-sm w-full text-center"
                         >
                             <Icon icon="mdi:alarm" className="text-6xl mb-2 text-indigo-400" />
-                            <h3 className="text-3xl font-black tracking-tight text-display">테스트 종료!</h3>
-                            <p className="font-bold opacity-60">지정한 시간이 모두 지났습니다.<br />수고하셨습니다!</p>
+                            <h3 className="text-3xl font-black tracking-tight text-display">테스트 종료</h3>
+                            <p className="font-bold opacity-60">지정한 시간이 모두 지났습니다.<br />수고하셨습니다.</p>
                             <div className="flex flex-col gap-3 w-full mt-4">
                                 <Pressable onClick={() => setShowCountdownDone(false)} pressScale={0.97}
-                                    className="w-full py-4 bg-indigo-500 text-white rounded-2xl font-black text-lg shadow-xl">
+                                    className="btn btn-primary w-full h-12 text-[15px]">
                                     확인
                                 </Pressable>
                                 <Pressable
@@ -730,33 +738,20 @@ export default function Study({ settings }: StudyProps) {
     )
 }
 
-/** 일일 목표 진행 바 — 100% 를 넘기면 초록으로 바뀐다. */
+/** 일일 목표 계측 눈금 — 목표가 있으면 목표까지, 없으면 다음 정시까지 잰다. 달성하면 채움이 초록. */
 function DailyGoalBar({ done, goal }: { done: number; goal: number }) {
-    const pct = Math.min(100, Math.round((done / goal) * 100))
-    const reached = pct >= 100
-    const h = Math.floor(goal / 3_600_000)
-    const m = Math.floor((goal % 3_600_000) / 60_000)
+    const hasGoal = goal > 0
+    const pct = hasGoal ? Math.min(100, Math.round((done / goal) * 100)) : 0
+    const reached = hasGoal && pct >= 100
     return (
-        <div className="sm-goal w-full max-w-3xl mx-auto mt-4 px-1">
-            <div className="flex justify-between text-[10px] font-black uppercase tracking-widest opacity-40 mb-1.5">
-                <span>일일 목표 {h > 0 ? `${h}h` : ''}{m > 0 ? ` ${m}m` : ''}</span>
-                <span style={{ color: reached ? '#22c55e' : 'inherit' }}>{pct}%{reached ? ' ✓' : ''}</span>
-            </div>
-            <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
-                <motion.div
-                    className="h-full w-full rounded-full"
-                    style={{
-                        transformOrigin: 'left',
-                        background: reached
-                            ? 'linear-gradient(90deg, #22c55e, #4ade80)'
-                            : 'linear-gradient(90deg, #6366f1, #a855f7)',
-                        boxShadow: reached ? '0 0 8px rgba(34,197,94,0.5)' : '0 0 8px rgba(168,85,247,0.3)',
-                    }}
-                    initial={false}
-                    animate={{ scaleX: pct / 100 }}
-                    transition={spring.default}
-                />
-            </div>
+        <div className="sm-goal w-full mt-4">
+            <MeterScale value={done} span={meterSpan(done, hasGoal ? goal : undefined)} goal={hasGoal ? goal : undefined} reached={reached} tone="dark" />
+            {hasGoal && (
+                <div className="flex justify-between font-mono text-[12px] tabular-nums text-white/45 mt-1">
+                    <span>목표 {hm(goal, { always: true })}</span>
+                    <span className={reached ? 'text-[#3ccf91]' : 'text-[#6ea0ff]'}>{pct}%</span>
+                </div>
+            )}
         </div>
     )
 }

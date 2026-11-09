@@ -58,13 +58,13 @@ function StorageUsageBar({ stats }: { stats: DatabaseStats }) {
             </div>
             <div className="h-2.5 rounded-full bg-[var(--color-surface)] border border-[var(--color-border)] overflow-hidden">
                 <motion.div
-                    className="h-full rounded-full bg-gradient-to-r from-indigo-400 to-purple-400"
+                    className="h-full rounded-full fill-ink"
                     initial={{ width: 0 }}
                     animate={{ width: `${pct}%` }}
                     transition={spring.default}
                 />
             </div>
-            <p className="text-[10px] text-[var(--color-text-secondary)] opacity-60">
+            <p className="text-[11px] text-[var(--color-text-secondary)] opacity-60">
                 브라우저가 이 기기에 이 앱을 위해 할당한 전체 저장 공간 중 사용된 비율입니다 (사진·백업 등 다른 앱 데이터는 포함되지 않습니다).
             </p>
         </div>
@@ -209,14 +209,14 @@ export default function DataManagement() {
             <motion.div variants={staggerItem} className="flex items-center gap-3 mb-8">
                 <Pressable
                     onClick={() => navigate('/settings')}
-                    pressScale={0.9}
+                    pressScale={0.97}
                     className="p-2 rounded-xl glass-card-elevated flex items-center justify-center flex-shrink-0"
                     aria-label="설정으로 돌아가기"
                 >
                     <Icon icon="mdi:chevron-left" className="text-xl" />
                 </Pressable>
                 <div>
-                    <h1 className="text-3xl font-bold gradient-text text-display">데이터 관리</h1>
+                    <h1 className="text-[28px] md:text-[34px] leading-tight font-medium text-[var(--color-text)]">데이터 관리</h1>
                     <p className="text-xs text-[var(--color-text-secondary)] mt-1">저장소 사용량을 확인하고 필요 없는 데이터를 정리하세요.</p>
                 </div>
             </motion.div>
@@ -257,7 +257,7 @@ export default function DataManagement() {
                                         type="button"
                                         onClick={() => setMonths(m)}
                                         className={`py-2.5 rounded-xl text-sm font-bold transition-colors border ${months === m
-                                            ? 'bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-secondary)] text-white border-transparent'
+                                            ? 'fill-accent text-white border-transparent'
                                             : 'bg-[var(--color-surface)] text-[var(--color-text-secondary)] border-[var(--color-border)]'
                                             }`}
                                     >
@@ -270,7 +270,7 @@ export default function DataManagement() {
                                 onClick={handlePrune}
                                 disabled={pending !== null}
                                 pressScale={0.98}
-                                className="w-full px-4 py-3 rounded-xl bg-indigo-500/10 text-indigo-400 font-medium text-sm disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                className="w-full px-4 py-3 rounded-xl bg-[var(--surface-raised)] text-[var(--color-primary)] font-medium text-sm disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                             >
                                 {pending === 'prune' ? (
                                     <Icon icon="mdi:loading" className="text-base animate-spin" />
@@ -303,7 +303,7 @@ export default function DataManagement() {
                     <motion.div variants={staggerItem}>
                         <div className="flex items-center gap-2 px-1.5 mb-2">
                             <Icon icon="mdi:alert-outline" className="text-sm text-red-400" />
-                            <p className="text-[11px] font-bold uppercase tracking-wider text-red-400/80">위험 구역 — 전체 삭제</p>
+                            <p className="text-[13px] font-medium text-red-400/80">위험 구역 — 전체 삭제</p>
                         </div>
                         <div className="glass-card p-6 space-y-3 border border-red-500/15">
                             {CLEAR_ACTIONS.map((action, i) => (
@@ -381,7 +381,7 @@ export default function DataManagement() {
                             animate={{ opacity: 1, y: 0, scale: 1 }}
                             exit={{ opacity: 0, y: 8, scale: 0.95 }}
                             transition={spring.snappy}
-                            className="material-chrome px-4 py-2.5 rounded-full text-xs font-bold text-[var(--color-text)] shadow-lg flex items-center gap-2"
+                            className="material-chrome px-4 py-2.5 rounded-full text-xs font-bold text-[var(--color-text)] flex items-center gap-2"
                         >
                             <Icon icon="mdi:check-circle-outline" className="text-sm text-green-400" />
                             {t.text}
@@ -418,13 +418,13 @@ function DangerRow({
                 <div className="min-w-0">
                     <p className="text-sm font-medium text-[var(--color-text)]">{action.title}</p>
                     <p className="text-xs text-[var(--color-text-secondary)] mt-0.5">{action.desc}</p>
-                    <p className="text-[10px] text-[var(--color-text-secondary)] opacity-60 mt-0.5">현재 {count.toLocaleString()}개</p>
+                    <p className="text-[11px] text-[var(--color-text-secondary)] opacity-60 mt-0.5">현재 {count.toLocaleString()}개</p>
                 </div>
             </div>
             <Pressable
                 onClick={() => onSelect(action)}
                 disabled={disabled || count === 0}
-                pressScale={0.94}
+                pressScale={0.97}
                 className="flex-shrink-0 px-3 py-2 rounded-lg bg-red-500/10 text-red-400 font-bold text-xs disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-1.5 whitespace-nowrap"
             >
                 {busy ? <Icon icon="mdi:loading" className="text-sm animate-spin" /> : <Icon icon="mdi:trash-can-outline" className="text-sm" />}

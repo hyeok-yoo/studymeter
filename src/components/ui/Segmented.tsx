@@ -9,31 +9,31 @@ import { spring } from '../../lib/motion';
 
 /**
  * 선택 배경의 시각 톤.
- *  brand  — 밝은 화면 기본 (그라데이션 알약)
- *  glass  — 공부 화면의 어두운 유리
- *  accent — 개발자 도구의 인디고 알약
+ *  brand  — 앱 화면 기본 (한 단계 올라온 표면)
+ *  glass  — 공부 화면의 검은 배경 위
+ *  accent — 개발자 도구 (brand 와 같은 표면 단계)
  */
 export type SegmentedTone = keyof typeof TONE;
 
 const TONE = {
     brand: {
-        track: 'bg-[var(--color-surface)] border border-[var(--color-border)]',
-        fill: 'bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-secondary)]',
-        on: 'text-white',
+        track: 'bg-[var(--surface-raised)] border border-[var(--color-border)]',
+        fill: 'seg-active',
+        on: 'text-[var(--color-text)]',
         off: 'text-[var(--color-text-secondary)]',
     },
     // 공부 화면의 어두운 유리 위. 값은 이전 인라인 스타일과 정확히 같게 유지한다.
     glass: {
         track: 'bg-[rgba(255,255,255,0.04)] border border-transparent',
-        fill: 'bg-[rgba(129,140,248,0.25)] border border-[rgba(129,140,248,0.35)]',
-        on: 'text-[#a5b4fc]',
-        off: 'text-[rgba(255,255,255,0.35)]',
+        fill: 'bg-[rgba(255,255,255,0.12)] border border-[rgba(255,255,255,0.1)]',
+        on: 'text-white',
+        off: 'text-[rgba(255,255,255,0.45)]',
     },
     accent: {
-        track: 'bg-white/5 border border-white/10',
-        fill: 'bg-indigo-500/25 border border-indigo-400/40',
-        on: 'text-indigo-300',
-        off: 'text-[var(--color-text-secondary)] opacity-60',
+        track: 'bg-[var(--surface-raised)] border border-[var(--color-border)]',
+        fill: 'seg-active',
+        on: 'text-[var(--color-text)]',
+        off: 'text-[var(--color-text-secondary)]',
     },
 } as const;
 
@@ -41,7 +41,7 @@ const TONE = {
 // 이기므로, 변형마다 달라지는 값(gap·radius·굵기)은 전부 토큰이 직접 들고 있어야 한다.
 const SIZE = {
     md: { track: 'gap-1 rounded-xl p-1', button: 'py-2.5 px-3 text-sm font-medium', pill: 'rounded-lg', label: 'gap-1.5' },
-    sm: { track: 'gap-1 rounded-xl p-0.5', button: 'py-1 px-2 text-[10px] font-medium', pill: 'rounded-lg', label: 'gap-1.5' },
+    sm: { track: 'gap-1 rounded-xl p-0.5', button: 'py-1 px-2 text-[11px] font-medium', pill: 'rounded-lg', label: 'gap-1.5' },
     /** 집중도 탭 바 */
     tab: { track: 'gap-1 rounded-xl p-1', button: 'py-1.5 text-[11px] font-bold', pill: 'rounded-lg', label: 'gap-1.5' },
     /** 측정 모드 선택 — 두 줄짜리 라벨이 들어가 조금 더 높다 */

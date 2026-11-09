@@ -9,14 +9,14 @@ import Pressable from './Pressable';
 export type ChipTone = 'indigo' | 'purple';
 
 const ACTIVE = {
-    indigo: 'bg-indigo-500 text-white shadow-md shadow-indigo-500/20',
-    purple: 'bg-purple-600 text-white shadow-[0_0_20px_rgba(147,51,234,0.3)]',
+    indigo: 'fill-ink',
+    purple: 'bg-white/[0.14] text-white border border-white/10',
 } as const;
 
 const IDLE = {
     indigo:
-        'bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-indigo-500/10',
-    purple: 'bg-white/5 text-white/40 hover:bg-white/10 hover:text-white/80 border border-white/5',
+        'bg-[var(--surface-raised)] border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:text-[var(--color-text)]',
+    purple: 'text-white/45 hover:text-white/80 border border-white/[0.08]',
 } as const;
 
 interface ChipProps {
@@ -32,9 +32,9 @@ export default function Chip({ children, active, onClick, tone = 'indigo', class
         <Pressable
             type="button"
             onClick={onClick}
-            pressScale={0.95}
+            pressScale={0.97}
             aria-pressed={active}
-            className={`px-3 py-1.5 rounded-full text-xs font-bold transition-colors whitespace-nowrap ${active ? ACTIVE[tone] : IDLE[tone]} ${className}`}
+            className={`h-9 px-4 rounded-full text-[14px] font-medium transition-colors whitespace-nowrap ${active ? ACTIVE[tone] : IDLE[tone]} ${className}`}
         >
             {children}
         </Pressable>

@@ -66,20 +66,16 @@ export default function DiaryCard({ settings }: DiaryCardProps) {
     }
 
     return (
-        <section className="glass-card p-6 md:p-8">
-            <div className="flex items-center gap-2 mb-6">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20 flex-shrink-0">
-                    <Icon icon="mdi:notebook-heart-outline" className="text-lg text-white" />
-                </div>
-                <h2 className="text-lg font-black text-[var(--color-text)]">오늘의 일기</h2>
+        <section className="glass-card p-5 md:p-6">
+            <div className="flex items-center gap-2 mb-5 h-6">
+                <Icon icon="mdi:notebook-heart-outline" className="text-[18px] text-[var(--color-text-muted)] flex-shrink-0" />
+                <h2 className="text-[16px] font-medium text-[var(--color-text)]">오늘의 일기</h2>
                 {streak > 0 && (
-                    <span className="text-[11px] font-black px-2 py-0.5 rounded-full bg-orange-500/15 text-orange-400 border border-orange-400/20 flex items-center gap-0.5">
-                        <Icon icon="mdi:fire" className="text-xs" /> <span className="text-display">{streak}</span>일 연속
-                    </span>
+                    <span className="meta">{streak}일 연속</span>
                 )}
                 {entry && !editing && (
-                    <span className="ml-auto text-[11px] font-bold text-emerald-400 flex items-center gap-1">
-                        <Icon icon="mdi:check-circle" className="text-sm" /> 확정됨
+                    <span className="ml-auto text-[12px] text-[var(--color-text-muted)] flex items-center gap-1">
+                        <Icon icon="mdi:check" className="text-[14px]" /> 확정됨
                     </span>
                 )}
             </div>
@@ -88,10 +84,10 @@ export default function DiaryCard({ settings }: DiaryCardProps) {
                 {loading || !stats ? (
                     <motion.div key="skeleton" variants={fadeRise} initial="initial" animate="animate" exit="exit" className="space-y-3 animate-pulse">
                         <div className="grid grid-cols-4 gap-2">
-                            {[0, 1, 2, 3].map(i => <div key={i} className="h-16 rounded-xl bg-black/[0.04] dark:bg-white/5" />)}
+                            {[0, 1, 2, 3].map(i => <div key={i} className="h-16 rounded-xl bg-[var(--surface-raised)]" />)}
                         </div>
-                        <div className="h-11 rounded-lg bg-black/[0.04] dark:bg-white/5" />
-                        <div className="h-12 rounded-2xl bg-black/[0.04] dark:bg-white/5" />
+                        <div className="h-11 rounded-lg bg-[var(--surface-raised)]" />
+                        <div className="h-12 rounded-2xl bg-[var(--surface-raised)]" />
                     </motion.div>
                 ) : entry && !editing ? (
                     <motion.div key="entry" variants={fadeRise} initial="initial" animate="animate" exit="exit">

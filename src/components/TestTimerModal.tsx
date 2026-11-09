@@ -92,7 +92,7 @@ export default function TestTimerModal({ onClose, onConfirm, settings, onSetting
                 >
                     <div className="overflow-y-auto overscroll-contain p-6">
                         <header className="mb-5">
-                            <h2 className="text-xl font-black flex items-center gap-2 text-display text-[var(--color-text)]">
+                            <h2 className="text-[20px] font-medium flex items-center gap-2 text-display text-[var(--color-text)]">
                                 <Icon icon="mdi:timer-outline" className="text-[var(--color-primary)]" />
                                 테스트 타이머
                             </h2>
@@ -111,21 +111,21 @@ export default function TestTimerModal({ onClose, onConfirm, settings, onSetting
                                 <motion.div key={preset.id} variants={staggerItem} className="relative">
                                     <Pressable
                                         onClick={() => !editing && onConfirm(preset.minutes)}
-                                        pressScale={0.95}
+                                        pressScale={0.97}
                                         className="w-full flex flex-col items-center justify-center p-3 rounded-2xl glass-card-elevated"
                                     >
-                                        <span className="text-[10px] font-black opacity-50 uppercase mb-0.5 text-[var(--color-text-secondary)]">
+                                        <span className="text-[11px] font-black opacity-50 mb-0.5 text-[var(--color-text-secondary)]">
                                             {preset.kind === 'subject' ? '과목' : '시간'}
                                         </span>
                                         <span className="text-sm font-bold text-[var(--color-text)]">{preset.label}</span>
-                                        <span className="text-[10px] font-medium text-[var(--color-text-secondary)] mt-1">
+                                        <span className="text-[11px] font-medium text-[var(--color-text-secondary)] mt-1">
                                             {preset.minutes}분
                                         </span>
                                     </Pressable>
                                     {editing && (
                                         <Pressable
                                             onClick={() => void handleRemovePreset(preset.id)}
-                                            pressScale={0.9}
+                                            pressScale={0.97}
                                             aria-label={`${preset.label} 프리셋 삭제`}
                                             className="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full flex items-center justify-center text-white"
                                             style={{ background: '#ef4444' }}
@@ -171,10 +171,9 @@ export default function TestTimerModal({ onClose, onConfirm, settings, onSetting
                                     <Pressable
                                         onClick={() => void handleAddPreset()}
                                         disabled={!newLabel.trim() || !newMinutes || parseInt(newMinutes) <= 0}
-                                        pressScale={0.95}
+                                        pressScale={0.97}
                                         aria-label="프리셋 추가"
-                                        className="px-4 rounded-xl font-black text-white disabled:opacity-30"
-                                        style={{ background: 'var(--color-primary)' }}
+                                        className="px-4 rounded-xl font-black fill-accent disabled:opacity-30"
                                     >
                                         <Icon icon="mdi:plus" />
                                     </Pressable>
@@ -183,7 +182,7 @@ export default function TestTimerModal({ onClose, onConfirm, settings, onSetting
                         )}
 
                         <div className="flex flex-col gap-2.5 mt-5">
-                            <p className="text-xs font-black uppercase tracking-widest text-[var(--color-text-secondary)] opacity-60">
+                            <p className="text-[13px] font-medium text-[var(--color-text-secondary)] opacity-60">
                                 직접 입력 (분)
                             </p>
                             <div className="flex gap-2">
@@ -199,7 +198,7 @@ export default function TestTimerModal({ onClose, onConfirm, settings, onSetting
                                 <Pressable
                                     onClick={handleConfirm}
                                     disabled={!customMinutes || parseInt(customMinutes) <= 0}
-                                    pressScale={0.95}
+                                    pressScale={0.97}
                                     className="btn btn-primary px-6 py-3 disabled:opacity-30"
                                 >
                                     설정

@@ -52,26 +52,23 @@ export default function SlidingSelector({
                     ?.getAttribute('data-value');
                 if (value && value !== currentValue) setPending(value);
             }}
-            className="flex gap-1 p-1.5 rounded-2xl bg-white/[0.06] border border-white/10 relative touch-none"
+            className="flex gap-0.5 p-1 rounded-full bg-white/[0.06] border border-white/[0.08] relative touch-none shrink-0"
         >
             {items.map((item) => (
                 <button
                     key={item}
                     data-value={item}
                     onClick={() => onChange(item)}
-                    className={`relative px-6 py-2.5 rounded-xl text-sm font-bold transition-colors duration-300 z-10 ${shown === item ? activeTextColor : 'text-white/40 hover:text-white/70'}`}
+                    className={`relative px-4 h-10 rounded-full text-[15px] font-medium whitespace-nowrap transition-colors duration-150 z-10 ${shown === item ? activeTextColor : 'text-white/45 hover:text-white/75'}`}
                 >
                     {shown === item && (
                         <div className="absolute inset-0 flex items-center justify-center">
                             <motion.div
                                 layoutId={layoutId}
-                                className={`absolute inset-0 ${activeColor} rounded-xl shadow-[0_8px_32px_0_rgba(31,38,135,0.37)] border border-white/20 overflow-hidden`}
-                                transition={spring.momentum}
-                            >
-                                {/* 유리 반사 */}
-                                <div className="absolute inset-0 bg-gradient-to-br from-white/30 to-transparent pointer-events-none"></div>
-                                <div className="absolute top-0 left-0 right-0 h-1/2 bg-gradient-to-b from-white/20 to-transparent pointer-events-none"></div>
-                            </motion.div>
+                                className={`absolute inset-0 ${activeColor} rounded-full`}
+                                style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08)' }}
+                                transition={spring.default}
+                            />
                         </div>
                     )}
                     <span className="relative z-20">{item}</span>

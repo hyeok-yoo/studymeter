@@ -84,7 +84,7 @@ export default function FounderInbox() {
       {/* 플로팅 버튼 (모바일 탭바 위) */}
       <Pressable
         onClick={() => setPanelOpen(true)}
-        className="fixed bottom-24 sm:bottom-6 right-4 z-[8000] w-14 h-14 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 shadow-xl shadow-indigo-500/30 flex items-center justify-center text-white"
+        className="fixed bottom-24 sm:bottom-6 right-4 z-[8000] w-14 h-14 rounded-full fill-ink flex items-center justify-center text-white"
         aria-label="파운더 인박스"
       >
         <Icon icon="mdi:message-text" className="text-2xl" />
@@ -110,22 +110,20 @@ export default function FounderInbox() {
               initial={{ opacity: 0, y: 40 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 40 }}
-              className="relative w-full max-w-md glass-card rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden max-h-[85vh] flex flex-col"
+              className="relative w-full max-w-md glass-card rounded-t-3xl sm:rounded-3xl overflow-hidden max-h-[85vh] flex flex-col"
               onClick={(e) => e.stopPropagation()}
             >
-              <header className="p-5 border-b border-white/10 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/25">
-                  <Icon icon="mdi:inbox-full" className="text-lg text-white" />
-                </div>
+              <header className="p-5 border-b border-[var(--color-border)] flex items-center gap-3">
+                <Icon icon="mdi:inbox-full" className="text-[18px] text-[var(--color-text-muted)] flex-shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <h2 className="text-lg font-black gradient-text leading-tight">받은 메시지</h2>
+                  <h2 className="text-[16px] font-medium leading-tight">받은 메시지</h2>
                   <p className="text-[11px] font-bold text-[var(--color-text-secondary)] opacity-60">
                     안 읽음 {unreadCount}개 · 최근 {recent.length}개
                   </p>
                 </div>
                 <button
                   onClick={() => setPanelOpen(false)}
-                  className="w-9 h-9 rounded-xl flex items-center justify-center hover:bg-white/10 transition-all"
+                  className="w-9 h-9 rounded-xl flex items-center justify-center hover:bg-[var(--surface-raised)] transition-[color,background-color,border-color,opacity,transform]"
                 >
                   <Icon icon="mdi:close" className="text-xl" />
                 </button>
@@ -143,18 +141,18 @@ export default function FounderInbox() {
                       <button
                         key={m.id}
                         onClick={() => setActive({ deviceId: m.deviceId, name: m.name || '사용자' })}
-                        className={`text-left p-3.5 rounded-2xl transition-all flex items-start gap-3 ${
-                          m.readByAdmin ? 'bg-white/5 hover:bg-white/10' : 'bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-400/20'
+                        className={`text-left p-3.5 rounded-2xl transition-[color,background-color,border-color,opacity,transform] flex items-start gap-3 ${
+                          m.readByAdmin ? 'bg-[var(--surface-raised)] hover:bg-[var(--surface-raised)]' : 'bg-[var(--surface-raised)] hover:bg-[var(--surface-raised)] border border-[var(--hairline-strong)]'
                         }`}
                       >
-                        <div className="w-9 h-9 rounded-full flex items-center justify-center text-white font-black text-sm flex-shrink-0 bg-gradient-to-br from-indigo-500 to-purple-600">
+                        <div className="w-9 h-9 rounded-full flex items-center justify-center text-white font-black text-sm flex-shrink-0 fill-ink">
                           {(m.name || '?').charAt(0)}
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
                             <span className="font-bold text-sm truncate">{m.name || '사용자'}</span>
                             {!m.readByAdmin && <span className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0" />}
-                            <span className="text-[10px] text-[var(--color-text-secondary)] opacity-50 ml-auto flex-shrink-0">{timeLabel(m)}</span>
+                            <span className="text-[11px] text-[var(--color-text-secondary)] opacity-50 ml-auto flex-shrink-0">{timeLabel(m)}</span>
                           </div>
                           <p className="text-xs text-[var(--color-text-secondary)] opacity-80 mt-0.5 truncate">{m.text}</p>
                         </div>
@@ -245,18 +243,18 @@ function ThreadModal({
         initial={{ opacity: 0, y: 40 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 40 }}
-        className="relative w-full max-w-md glass-card rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden max-h-[85vh] flex flex-col"
+        className="relative w-full max-w-md glass-card rounded-t-3xl sm:rounded-3xl overflow-hidden max-h-[85vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <header className="p-5 border-b border-white/10 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-black flex-shrink-0 bg-gradient-to-br from-indigo-500 to-purple-600">
+        <header className="p-5 border-b border-[var(--color-border)] flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-black flex-shrink-0 fill-ink">
             {name.charAt(0)}
           </div>
           <div className="flex-1 min-w-0">
-            <h2 className="text-lg font-black truncate">{name}</h2>
-            <p className="text-[10px] text-[var(--color-text-secondary)] opacity-50 font-mono truncate">{deviceId}</p>
+            <h2 className="text-[16px] font-medium truncate">{name}</h2>
+            <p className="text-[11px] text-[var(--color-text-secondary)] opacity-50 font-mono truncate">{deviceId}</p>
           </div>
-          <button onClick={onClose} className="w-9 h-9 rounded-xl flex items-center justify-center hover:bg-white/10 transition-all">
+          <button onClick={onClose} className="w-9 h-9 rounded-xl flex items-center justify-center hover:bg-[var(--surface-raised)] transition-[color,background-color,border-color,opacity,transform]">
             <Icon icon="mdi:close" className="text-xl" />
           </button>
         </header>
@@ -278,31 +276,31 @@ function ThreadModal({
                 <div key={m.id} className={`flex flex-col gap-1 ${mine ? 'items-end' : 'items-start'}`}>
                   <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 ${
                     mine
-                      ? 'rounded-tr-sm bg-gradient-to-br from-indigo-500 to-purple-600 text-white'
-                      : 'rounded-tl-sm bg-white/8 border border-white/10 text-[var(--color-text)]'
+                      ? 'rounded-tr-sm fill-ink text-white'
+                      : 'rounded-tl-sm bg-[var(--surface-raised)] border border-[var(--color-border)] text-[var(--color-text)]'
                   }`}>
                     <p className="text-sm whitespace-pre-wrap break-words">{m.text}</p>
                   </div>
-                  <span className="text-[10px] text-[var(--color-text-secondary)] opacity-50 px-1">{timeLabel(m)}</span>
+                  <span className="text-[11px] text-[var(--color-text-secondary)] opacity-50 px-1">{timeLabel(m)}</span>
                 </div>
               )
             })
           )}
         </div>
 
-        <div className="p-4 border-t border-white/10 flex items-end gap-2">
+        <div className="p-4 border-t border-[var(--color-border)] flex items-end gap-2">
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
             placeholder="메시지를 입력하세요…"
             rows={1}
             maxLength={2000}
-            className="flex-1 px-4 py-3 rounded-2xl bg-white/10 border border-white/20 text-sm text-[var(--color-text)] placeholder-[var(--color-text-secondary)]/50 focus:outline-none focus:border-[var(--color-primary)] resize-none max-h-32"
+            className="flex-1 px-4 py-3 rounded-2xl bg-[var(--surface-raised)] border border-[var(--hairline-strong)] text-sm text-[var(--color-text)] placeholder-[var(--color-text-secondary)]/50 focus:outline-none focus:border-[var(--color-primary)] resize-none max-h-32"
           />
           <Pressable
             onClick={handleSend}
             disabled={sending || !text.trim()}
-            className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center text-white shadow-lg shadow-indigo-500/25 disabled:opacity-40 flex-shrink-0"
+            className="w-12 h-12 rounded-2xl fill-ink flex items-center justify-center text-white disabled:opacity-40 flex-shrink-0"
             aria-label="보내기"
           >
             <Icon icon={sending ? 'mdi:loading' : 'mdi:send'} className={`text-xl ${sending ? 'animate-spin' : ''}`} />

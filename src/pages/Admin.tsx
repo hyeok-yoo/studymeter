@@ -31,7 +31,7 @@ type Screen = 'loading' | 'login' | 'dashboard'
  * 테두리 색만 화면마다(에러 여부) 달라 여기서는 뺀다.
  */
 const ADMIN_INPUT =
-  'w-full px-4 py-3 rounded-xl bg-white/10 text-[var(--color-text)] placeholder-[var(--color-text-secondary)]/50 focus:outline-none focus:border-[var(--color-primary)]'
+  'w-full px-4 py-3 rounded-xl bg-[var(--surface-raised)] text-[var(--color-text)] placeholder-[var(--color-text-secondary)]/50 focus:outline-none focus:border-[var(--color-primary)]'
 
 /** 로딩·빈 상태 자리비움의 공통 골격. 세로 여백(py-*)만 자리마다 다르다. */
 const PLACEHOLDER = 'text-center text-[var(--color-text-secondary)] opacity-50'
@@ -205,7 +205,7 @@ export default function Admin() {
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-3xl font-black gradient-text">사용자 관리</h1>
+            <h1 className="text-[28px] md:text-[34px] leading-tight font-medium">사용자 관리</h1>
             <p className="text-sm text-[var(--color-text-secondary)] opacity-60 mt-1">
               전체 {users.length}명 · 활성 {active}명 · 차단 {blocked}명
             </p>
@@ -255,8 +255,8 @@ export default function Admin() {
         </div>
 
         {historyMsg && (
-          <div className="glass-card px-4 py-2.5 mb-4 text-sm flex items-center gap-2 border border-indigo-400/20">
-            <Icon icon="mdi:information-outline" className="text-indigo-400 text-base flex-shrink-0" />
+          <div className="glass-card px-4 py-2.5 mb-4 text-sm flex items-center gap-2 border border-[var(--hairline-strong)]">
+            <Icon icon="mdi:information-outline" className="text-[var(--color-text-muted)] text-base flex-shrink-0" />
             <span className="flex-1">{historyMsg}</span>
             <button onClick={() => setHistoryMsg(null)} className="opacity-50 hover:opacity-100">
               <Icon icon="mdi:close" className="text-base" />
@@ -267,7 +267,7 @@ export default function Admin() {
         {/* Stats */}
         <div className="grid grid-cols-3 gap-4 mb-6">
           {[
-            { label: '전체 사용자', value: users.length, icon: 'mdi:account-group', color: 'text-indigo-400' },
+            { label: '전체 사용자', value: users.length, icon: 'mdi:account-group', color: 'text-[var(--color-primary)]' },
             { label: '활성', value: active, icon: 'mdi:account-check', color: 'text-green-400' },
             { label: '차단됨', value: blocked, icon: 'mdi:account-cancel', color: 'text-red-400' },
           ].map(({ label, value, icon, color }) => (
@@ -286,10 +286,10 @@ export default function Admin() {
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              className="glass-card p-3 mb-4 flex items-center justify-between gap-3 border border-indigo-400/30"
+              className="glass-card p-3 mb-4 flex items-center justify-between gap-3 border border-[var(--hairline-strong)]"
             >
               <span className="text-sm font-bold flex items-center gap-2">
-                <Icon icon="mdi:checkbox-multiple-marked" className="text-indigo-400 text-lg" />
+                <Icon icon="mdi:checkbox-multiple-marked" className="text-[var(--color-text-muted)] text-lg" />
                 {selectedIds.size}명 선택됨
               </span>
               <div className="flex gap-2">
@@ -298,7 +298,7 @@ export default function Admin() {
                 </button>
                 <button
                   onClick={() => setConfirmDelete(selectedUsers)}
-                  className="px-3 py-1.5 rounded-xl text-sm font-bold bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-all flex items-center gap-1"
+                  className="px-3 py-1.5 rounded-xl text-sm font-bold bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-[color,background-color,border-color,opacity,transform] flex items-center gap-1"
                 >
                   <Icon icon="mdi:trash-can-outline" className="text-base" />
                   선택 삭제
@@ -329,13 +329,13 @@ export default function Admin() {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.03 }}
-                  className={`glass-card p-4 flex items-center gap-3 ${user.blocked ? 'border border-red-500/30 bg-red-500/5' : ''} ${selected ? 'ring-2 ring-indigo-400/60' : ''}`}
+                  className={`glass-card p-4 flex items-center gap-3 ${user.blocked ? 'border border-red-500/30 bg-red-500/5' : ''} ${selected ? 'ring-2 ring-[var(--color-primary)]' : ''}`}
                 >
                   {/* 선택 체크박스 */}
                   <button
                     onClick={() => toggleSelect(user.id)}
-                    className={`flex-shrink-0 w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all ${
-                      selected ? 'bg-indigo-500 border-indigo-500' : 'border-white/30 hover:border-white/60'
+                    className={`flex-shrink-0 w-6 h-6 rounded-md border-2 flex items-center justify-center transition-[color,background-color,border-color,opacity,transform] ${
+                      selected ? 'bg-indigo-500 border-[var(--color-primary)]' : 'border-white/30 hover:border-white/60'
                     }`}
                     aria-label="선택"
                   >
@@ -347,19 +347,19 @@ export default function Admin() {
                     onClick={() => setDetailUser(user)}
                     className="flex-1 min-w-0 flex items-center gap-3 text-left group"
                   >
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-black flex-shrink-0 ${user.blocked ? 'bg-red-500/40' : 'bg-gradient-to-br from-indigo-500 to-purple-600'}`}>
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-black flex-shrink-0 ${user.blocked ? 'bg-red-500/40' : 'fill-ink'}`}>
                       {user.name.charAt(0)}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-bold text-base group-hover:text-indigo-400 transition-colors">{user.name}</span>
                         {user.isAdmin && (
-                          <span className="text-[10px] bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full font-bold flex items-center gap-0.5">
+                          <span className="text-[11px] bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full font-bold flex items-center gap-0.5">
                             <Icon icon="mdi:shield-crown" className="text-xs" />관리자
                           </span>
                         )}
                         {user.blocked && (
-                          <span className="text-[10px] bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full font-bold">차단됨</span>
+                          <span className="text-[11px] bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full font-bold">차단됨</span>
                         )}
                         <Icon icon="mdi:chevron-right" className="text-base opacity-30 group-hover:opacity-70 transition-opacity" />
                       </div>
@@ -374,7 +374,7 @@ export default function Admin() {
                   <button
                     onClick={() => toggleBlock(user)}
                     disabled={togglingId === user.id}
-                    className={`flex-shrink-0 px-4 py-2 rounded-xl font-bold text-sm transition-all disabled:opacity-50 ${
+                    className={`flex-shrink-0 px-4 py-2 rounded-xl font-bold text-sm transition-[color,background-color,border-color,opacity,transform] disabled:opacity-50 ${
                       user.blocked
                         ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30'
                         : 'bg-red-500/20 text-red-400 hover:bg-red-500/30'
@@ -384,7 +384,7 @@ export default function Admin() {
                   </button>
                   <button
                     onClick={() => setConfirmDelete([user])}
-                    className="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center bg-white/5 text-red-400 hover:bg-red-500/20 transition-all"
+                    className="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center bg-[var(--surface-raised)] text-red-400 hover:bg-red-500/20 transition-[color,background-color,border-color,opacity,transform]"
                     aria-label="삭제"
                     title="사용자 삭제"
                   >
@@ -447,7 +447,7 @@ function DeleteConfirmModal({
       >
         <div className="text-center mb-5">
           <Icon icon="mdi:alert-circle-outline" className="text-5xl text-red-400 mb-3" />
-          <h2 className="text-xl font-black">사용자 삭제</h2>
+          <h2 className="text-[20px] font-medium">사용자 삭제</h2>
           <p className="text-sm text-[var(--color-text-secondary)] opacity-70 mt-2">
             {multiple
               ? `선택한 ${users.length}명의 사용자와 모든 공부 기록을 삭제합니다.`
@@ -458,7 +458,7 @@ function DeleteConfirmModal({
         {multiple && (
           <div className="max-h-32 overflow-y-auto mb-4 flex flex-wrap gap-1.5">
             {users.map((u) => (
-              <span key={u.id} className="text-xs bg-white/5 px-2 py-1 rounded-full">{u.name}</span>
+              <span key={u.id} className="text-xs bg-[var(--surface-raised)] px-2 py-1 rounded-full">{u.name}</span>
             ))}
           </div>
         )}
@@ -469,7 +469,7 @@ function DeleteConfirmModal({
           <button
             onClick={onConfirm}
             disabled={deleting}
-            className="flex-1 py-3 rounded-xl font-bold bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-all disabled:opacity-40"
+            className="flex-1 py-3 rounded-xl font-bold bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-[color,background-color,border-color,opacity,transform] disabled:opacity-40"
           >
             {deleting ? '삭제 중...' : '삭제'}
           </button>
@@ -481,7 +481,7 @@ function DeleteConfirmModal({
 
 // ── 사용자 상세 기록 모달 (앱의 기록 챕터처럼) ──────────────────────────────
 
-const SUBJECT_COLORS = ['#6366f1', '#a855f7', '#06b6d4', '#10b981', '#f59e0b', '#ef4444']
+const SUBJECT_COLORS = ['#2f6fed', '#5b94ff', '#06b6d4', '#10b981', '#f59e0b', '#ef4444']
 
 function UserDetailModal({ user, onClose }: { user: TelemetryUser; onClose: () => void }) {
   const [tab, setTab] = useState<'records' | 'messages'>('records')
@@ -534,15 +534,15 @@ function UserDetailModal({ user, onClose }: { user: TelemetryUser; onClose: () =
         className="glass-card w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden"
       >
         {/* 헤더 */}
-        <div className="p-5 border-b border-white/10 flex items-center gap-3">
-          <div className="w-11 h-11 rounded-full flex items-center justify-center text-white font-black flex-shrink-0 bg-gradient-to-br from-indigo-500 to-purple-600">
+        <div className="p-5 border-b border-[var(--color-border)] flex items-center gap-3">
+          <div className="w-11 h-11 rounded-full flex items-center justify-center text-white font-black flex-shrink-0 fill-ink">
             {user.name.charAt(0)}
           </div>
           <div className="flex-1 min-w-0">
-            <h2 className="text-lg font-black truncate">{user.name}</h2>
+            <h2 className="text-[16px] font-medium truncate">{user.name}</h2>
             <p className="text-xs text-[var(--color-text-secondary)] opacity-60 font-mono">IP: {user.ip}</p>
           </div>
-          <button onClick={onClose} className="w-9 h-9 rounded-xl flex items-center justify-center hover:bg-white/10 transition-all">
+          <button onClick={onClose} className="w-9 h-9 rounded-xl flex items-center justify-center hover:bg-[var(--surface-raised)] transition-[color,background-color,border-color,opacity,transform]">
             <Icon icon="mdi:close" className="text-xl" />
           </button>
         </div>
@@ -553,8 +553,8 @@ function UserDetailModal({ user, onClose }: { user: TelemetryUser; onClose: () =
             <button
               key={key}
               onClick={() => setTab(key)}
-              className={`flex-1 py-2 rounded-xl text-sm font-bold flex items-center justify-center gap-1.5 transition-all ${
-                tab === key ? 'bg-[var(--color-primary)] text-white' : 'bg-white/5 text-[var(--color-text-secondary)] hover:bg-white/10'
+              className={`flex-1 py-2 rounded-xl text-sm font-bold flex items-center justify-center gap-1.5 transition-[color,background-color,border-color,opacity,transform] ${
+                tab === key ? 'fill-accent' : 'bg-[var(--surface-raised)] text-[var(--color-text-secondary)] hover:bg-[var(--surface-raised)]'
               }`}
             >
               <Icon icon={icon} className="text-base" />
@@ -568,21 +568,21 @@ function UserDetailModal({ user, onClose }: { user: TelemetryUser; onClose: () =
         ) : (
         <>
         {/* 날짜 네비게이션 */}
-        <div className="px-5 py-3 border-b border-white/10 flex items-center justify-center gap-2">
-          <button onClick={() => setSelectedDate(addDays(selectedDate, -1))} className="p-1.5 rounded-lg hover:bg-white/10 transition-all">
+        <div className="px-5 py-3 border-b border-[var(--color-border)] flex items-center justify-center gap-2">
+          <button onClick={() => setSelectedDate(addDays(selectedDate, -1))} className="p-1.5 rounded-lg hover:bg-[var(--surface-raised)] transition-[color,background-color,border-color,opacity,transform]">
             <Icon icon="mdi:chevron-left" className="text-xl" />
           </button>
           <span className="text-sm font-bold min-w-[140px] text-center flex items-center justify-center gap-1.5">
             <Icon icon="mdi:calendar" className="text-base opacity-60" />
             {koDate(selectedDate, 'paren')}
           </span>
-          <button onClick={() => setSelectedDate(addDays(selectedDate, 1))} className="p-1.5 rounded-lg hover:bg-white/10 transition-all">
+          <button onClick={() => setSelectedDate(addDays(selectedDate, 1))} className="p-1.5 rounded-lg hover:bg-[var(--surface-raised)] transition-[color,background-color,border-color,opacity,transform]">
             <Icon icon="mdi:chevron-right" className="text-xl" />
           </button>
           {!isToday && (
             <button
               onClick={() => setSelectedDate(getTodayDate())}
-              className="px-2.5 py-1 rounded-lg bg-[var(--color-primary)] text-white text-xs font-bold"
+              className="px-2.5 py-1 rounded-lg fill-accent text-xs font-bold"
             >
               오늘
             </button>
@@ -601,11 +601,11 @@ function UserDetailModal({ user, onClose }: { user: TelemetryUser; onClose: () =
               {/* 요약 카드 — 총 공부만 그라디언트 강조 */}
               <div className="grid grid-cols-3 gap-3 mb-5">
                 {([
-                  ['총 공부', hms(totalTime), ' gradient-text'],
+                  ['총 공부', hms(totalTime), ''],
                   ['순공', hms(selfStudyTime), ''],
                   ['세션', `${daySessions.length}회`, ''],
                 ] as const).map(([label, value, accent]) => (
-                  <div key={label} className="bg-white/5 rounded-xl p-3 text-center">
+                  <div key={label} className="bg-[var(--surface-raised)] rounded-xl p-3 text-center">
                     <p className="text-[11px] text-[var(--color-text-secondary)] opacity-60 mb-1">{label}</p>
                     <p className={`text-base font-black${accent}`}>{value}</p>
                   </div>
@@ -615,12 +615,12 @@ function UserDetailModal({ user, onClose }: { user: TelemetryUser; onClose: () =
               {/* 과목별 집계 */}
               {bySubject.length > 0 && (
                 <div className="mb-5">
-                  <h3 className="text-xs font-bold text-[var(--color-text-secondary)] opacity-70 mb-2 uppercase tracking-wider">과목별 공부 시간</h3>
+                  <h3 className="text-xs font-bold text-[var(--color-text-secondary)] opacity-70 mb-2 tracking-wider">과목별 공부 시간</h3>
                   <div className="flex flex-col gap-2">
                     {bySubject.map(([subject, ms], idx) => (
                       <div key={subject} className="flex items-center gap-2">
                         <span className="text-xs font-medium w-14 truncate flex-shrink-0">{subject}</span>
-                        <div className="flex-1 h-5 rounded-full bg-white/5 overflow-hidden">
+                        <div className="flex-1 h-5 rounded-full bg-[var(--surface-raised)] overflow-hidden">
                           <div
                             className="h-full rounded-full"
                             style={{
@@ -637,7 +637,7 @@ function UserDetailModal({ user, onClose }: { user: TelemetryUser; onClose: () =
               )}
 
               {/* 세션 목록 */}
-              <h3 className="text-xs font-bold text-[var(--color-text-secondary)] opacity-70 mb-2 uppercase tracking-wider">공부 기록</h3>
+              <h3 className="text-xs font-bold text-[var(--color-text-secondary)] opacity-70 mb-2 tracking-wider">공부 기록</h3>
               {daySessions.length === 0 ? (
                 <div className={`${PLACEHOLDER} py-10`}>
                   <Icon icon="mdi:bookshelf" className="text-4xl mb-2" />
@@ -652,23 +652,23 @@ function UserDetailModal({ user, onClose }: { user: TelemetryUser; onClose: () =
               ) : (
                 <div className="flex flex-col gap-2">
                   {daySessions.map((s) => (
-                    <div key={s.id} className="p-3 bg-white/5 rounded-xl">
+                    <div key={s.id} className="p-3 bg-[var(--surface-raised)] rounded-xl">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2 flex-wrap min-w-0">
                           <span className="font-bold text-sm">{s.subject}</span>
                           {s.subItem && <span className="text-[var(--color-primary)] text-xs">› {s.subItem}</span>}
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/10 text-[var(--color-text-secondary)]">{s.type}</span>
+                          <span className="text-[11px] px-2 py-0.5 rounded-full bg-[var(--surface-raised)] text-[var(--color-text-secondary)]">{s.type}</span>
                         </div>
                         <div className="text-right flex-shrink-0 ml-2">
                           <p className="font-bold text-sm">{hms(s.duration)}</p>
-                          <p className="text-[10px] text-[var(--color-text-secondary)] opacity-60">
+                          <p className="text-[11px] text-[var(--color-text-secondary)] opacity-60">
                             {hhmm(s.startTime)} ~ {hhmm(s.endTime)}
                           </p>
                         </div>
                       </div>
                       {s.evaluation && (
-                        <div className="flex items-center gap-3 pt-2 mt-2 border-t border-white/5 flex-wrap">
-                          <EvalStat icon="mdi:fire" iconColor="text-orange-400" label="집중" valueColor="text-indigo-400" value={`${s.evaluation.focus}/10`} />
+                        <div className="flex items-center gap-3 pt-2 mt-2 border-t border-[var(--color-border)] flex-wrap">
+                          <EvalStat icon="mdi:fire" iconColor="text-orange-400" label="집중" valueColor="text-[var(--color-primary)]" value={`${s.evaluation.focus}/10`} />
                           <EvalStat icon="mdi:diamond-stone" iconColor="text-cyan-400" label="만족" valueColor="text-emerald-400" value={`${s.evaluation.satisfaction}/10`} />
                           {s.evaluation.problemSolving && (
                             <EvalStat
@@ -680,7 +680,7 @@ function UserDetailModal({ user, onClose }: { user: TelemetryUser; onClose: () =
                             />
                           )}
                           {s.evaluation.memo && (
-                            <span className="text-xs text-[var(--color-text-secondary)] italic truncate flex-1 min-w-0">"{s.evaluation.memo}"</span>
+                            <span className="text-xs text-[var(--color-text-secondary)] not-italic truncate flex-1 min-w-0">"{s.evaluation.memo}"</span>
                           )}
                         </div>
                       )}
@@ -709,7 +709,7 @@ function EvalStat({ icon, iconColor, label, value, valueColor }: {
   return (
     <div className="flex items-center gap-1">
       <Icon icon={icon} className={`text-sm ${iconColor}`} />
-      <span className="text-[10px] text-[var(--color-text-secondary)]">{label}</span>
+      <span className="text-[11px] text-[var(--color-text-secondary)]">{label}</span>
       <span className={`text-xs font-bold ${valueColor}`}>{value}</span>
     </div>
   )
@@ -776,30 +776,30 @@ function AdminMessageThread({ deviceId, name }: { deviceId: string; name: string
               <div key={m.id} className={`flex flex-col gap-1 ${mine ? 'items-end' : 'items-start'}`}>
                 <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 ${
                   mine
-                    ? 'rounded-tr-sm bg-gradient-to-br from-indigo-500 to-purple-600 text-white'
-                    : 'rounded-tl-sm bg-white/8 border border-white/10 text-[var(--color-text)]'
+                    ? 'rounded-tr-sm fill-ink text-white'
+                    : 'rounded-tl-sm bg-[var(--surface-raised)] border border-[var(--color-border)] text-[var(--color-text)]'
                 }`}>
                   <p className="text-sm whitespace-pre-wrap break-words">{m.text}</p>
                 </div>
-                <span className="text-[10px] text-[var(--color-text-secondary)] opacity-50 px-1">{timeLabel(m)}</span>
+                <span className="text-[11px] text-[var(--color-text-secondary)] opacity-50 px-1">{timeLabel(m)}</span>
               </div>
             )
           })
         )}
       </div>
-      <div className="p-4 border-t border-white/10 flex items-end gap-2">
+      <div className="p-4 border-t border-[var(--color-border)] flex items-end gap-2">
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder={`${name}님에게 메시지…`}
           rows={1}
           maxLength={2000}
-          className="flex-1 px-4 py-3 rounded-2xl bg-white/10 border border-white/20 text-sm text-[var(--color-text)] placeholder-[var(--color-text-secondary)]/50 focus:outline-none focus:border-[var(--color-primary)] resize-none max-h-32"
+          className="flex-1 px-4 py-3 rounded-2xl bg-[var(--surface-raised)] border border-[var(--hairline-strong)] text-sm text-[var(--color-text)] placeholder-[var(--color-text-secondary)]/50 focus:outline-none focus:border-[var(--color-primary)] resize-none max-h-32"
         />
         <button
           onClick={handleSend}
           disabled={sending || !text.trim()}
-          className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center text-white shadow-lg shadow-indigo-500/25 disabled:opacity-40 flex-shrink-0"
+          className="w-12 h-12 rounded-2xl fill-ink flex items-center justify-center text-white disabled:opacity-40 flex-shrink-0"
           aria-label="보내기"
         >
           <Icon icon={sending ? 'mdi:loading' : 'mdi:send'} className={`text-xl ${sending ? 'animate-spin' : ''}`} />
@@ -848,11 +848,9 @@ function LoginScreen({ onSuccess }: { onSuccess: () => void }) {
         className="glass-card p-8 max-w-sm w-full mx-4"
       >
         <div className="flex items-center gap-3 mb-8">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
-            <Icon icon="mdi:shield-lock" className="text-white text-xl" />
-          </div>
+          <Icon icon="mdi:shield-lock" className="text-[18px] text-[var(--color-text-muted)] flex-shrink-0" />
           <div>
-            <h1 className="text-xl font-black gradient-text">관리자 페이지</h1>
+            <h1 className="text-xl font-semibold">관리자 페이지</h1>
             <p className="text-xs text-[var(--color-text-secondary)] opacity-60">StudyMeter Admin</p>
           </div>
         </div>
@@ -864,7 +862,7 @@ function LoginScreen({ onSuccess }: { onSuccess: () => void }) {
             placeholder="관리자 이메일"
             autoComplete="username"
             autoFocus
-            className={`${ADMIN_INPUT} border border-white/20`}
+            className={`${ADMIN_INPUT} border border-[var(--hairline-strong)]`}
           />
           <PasswordInput
             value={pw}
@@ -927,7 +925,7 @@ function ChangePasswordModal({ onClose }: { onClose: () => void }) {
           </div>
         ) : (
           <>
-            <h2 className="text-xl font-black mb-6 gradient-text">비밀번호 변경</h2>
+            <h2 className="text-[20px] font-medium mb-6">비밀번호 변경</h2>
             <form onSubmit={handleChange} className="flex flex-col gap-3">
               <PasswordInput value={next} onChange={setNext} placeholder="새 비밀번호 (6자 이상)" />
               <PasswordInput value={next2} onChange={setNext2} placeholder="새 비밀번호 확인" />
@@ -966,7 +964,7 @@ function PasswordInput({
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         autoFocus={autoFocus}
-        className={`${ADMIN_INPUT} pr-11 border ${error ? 'border-red-500/50' : 'border-white/20'}`}
+        className={`${ADMIN_INPUT} pr-11 border ${error ? 'border-red-500/50' : 'border-[var(--hairline-strong)]'}`}
       />
       <button
         type="button"

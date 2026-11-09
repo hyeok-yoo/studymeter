@@ -49,14 +49,12 @@ export default function DevAccessModal({ onClose, onAuthed }: DevAccessModalProp
         className="glass-card p-7 max-w-sm w-full"
       >
         <div className="flex items-center gap-3 mb-5">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center flex-shrink-0">
-            <Icon icon="mdi:shield-key" className="text-white text-xl" />
-          </div>
+          <Icon icon="mdi:shield-key" className="text-[18px] text-[var(--color-text-muted)] flex-shrink-0" />
           <div className="flex-1 min-w-0">
-            <h1 className="text-lg font-black gradient-text">관리자 인증</h1>
+            <h1 className="text-[16px] font-medium">관리자 인증</h1>
             <p className="text-xs text-[var(--color-text-secondary)] opacity-60">소유자 전용 · 이메일/비밀번호 로그인</p>
           </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-white/10 transition-all flex-shrink-0">
+          <button onClick={onClose} className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-[var(--surface-raised)] transition-[color,background-color,border-color,opacity,transform] flex-shrink-0">
             <Icon icon="mdi:close" className="text-lg" />
           </button>
         </div>
@@ -72,7 +70,7 @@ export default function DevAccessModal({ onClose, onAuthed }: DevAccessModalProp
               placeholder="관리자 이메일"
               autoComplete="username"
               autoFocus
-              className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-[var(--color-text)] placeholder-[var(--color-text-secondary)]/50 focus:outline-none focus:border-[var(--color-primary)]"
+              className="w-full px-4 py-3 rounded-xl bg-[var(--surface-raised)] border border-[var(--hairline-strong)] text-[var(--color-text)] placeholder-[var(--color-text-secondary)]/50 focus:outline-none focus:border-[var(--color-primary)]"
             />
             <PwInput value={pw} onChange={(v) => { setPw(v); setError('') }} placeholder="비밀번호" />
             {error && <p className="text-red-400 text-sm text-center">{error}</p>}
@@ -104,7 +102,7 @@ function PwInput({
         placeholder={placeholder}
         autoFocus={autoFocus}
         autoComplete="current-password"
-        className="w-full px-4 py-3 pr-11 rounded-xl bg-white/10 border border-white/20 text-[var(--color-text)] placeholder-[var(--color-text-secondary)]/50 focus:outline-none focus:border-[var(--color-primary)]"
+        className="w-full px-4 py-3 pr-11 rounded-xl bg-[var(--surface-raised)] border border-[var(--hairline-strong)] text-[var(--color-text)] placeholder-[var(--color-text-secondary)]/50 focus:outline-none focus:border-[var(--color-primary)]"
       />
       <button
         type="button"

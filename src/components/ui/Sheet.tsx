@@ -74,9 +74,9 @@ export default function Sheet({
                         role="dialog"
                         aria-modal="true"
                         aria-label={ariaLabel}
-                        className="relative w-full max-w-2xl material-chrome overflow-hidden"
+                        className="relative w-full max-w-2xl bg-[var(--surface)] border border-b-0 border-[var(--hairline-strong)] text-[var(--color-text)] overflow-hidden"
                         style={{
-                            borderRadius: '28px 28px 0 0',
+                            borderRadius: '20px 20px 0 0',
                             maxHeight,
                             paddingBottom: 'env(safe-area-inset-bottom)',
                             touchAction: 'none',
@@ -96,7 +96,7 @@ export default function Sheet({
                     >
                         {handle && (
                             <div className="flex justify-center pt-3 pb-1">
-                                <div className="w-10 h-1.5 rounded-full bg-[var(--color-text-secondary)] opacity-30" />
+                                <div className="w-9 h-1 rounded-full bg-[var(--hairline-strong)]" />
                             </div>
                         )}
                         <div

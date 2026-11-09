@@ -3,6 +3,7 @@ import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { initializeSettings, type Settings, db, purgeImplausibleSessionsOnce } from './lib/db'
 import { MAX_PLAUSIBLE_SESSION_MS } from './lib/useStudyTimer'
 import Layout from './components/Layout'
+import { Icon } from '@iconify/react'
 import { NativeBridge } from './lib/NativeBridge'
 import { App as CapApp } from '@capacitor/app'
 import { readActiveSession } from './lib/useStudyTimer'
@@ -177,7 +178,7 @@ function App() {
       document.documentElement.classList.toggle('dark', isDark);
 
       // 네이티브 성태바 색상 동기화
-      const bgColor = isDark ? '#000000' : '#f8fafc';
+      const bgColor = isDark ? '#000000' : '#f6f6f7';
       NativeBridge.setStatusBarColor(bgColor, !isDark);
     };
 
@@ -198,9 +199,7 @@ function App() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[var(--color-bg)] text-[var(--color-text)]">
-        <div className="animate-pulse">
-          <span className="gradient-text text-2xl font-bold">StudyMeter</span>
-        </div>
+        <span className="text-[17px] font-semibold text-[var(--color-text-secondary)]">StudyMeter</span>
       </div>
     )
   }
@@ -208,10 +207,10 @@ function App() {
   if (isBlocked) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[var(--color-bg)] text-[var(--color-text)]">
-        <div className="text-center p-8">
-          <div className="text-6xl mb-6">🚫</div>
-          <h1 className="text-3xl font-black text-red-400 mb-3">접근이 차단되었습니다</h1>
-          <p className="text-[var(--color-text-secondary)] opacity-70">관리자에게 문의해주세요.</p>
+        <div className="text-center p-8 flex flex-col items-center">
+          <Icon icon="mdi:block-helper" className="text-[32px] text-[var(--color-text-muted)] mb-5" />
+          <h1 className="text-[24px] font-medium text-[var(--color-text)] mb-2">접근이 차단되었습니다</h1>
+          <p className="text-[15px] text-[var(--color-text-secondary)]">관리자에게 문의해주세요.</p>
         </div>
       </div>
     )

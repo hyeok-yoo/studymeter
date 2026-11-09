@@ -45,18 +45,15 @@ function ChangelogPanel({ entries, newVersions, expandedVersions, onClose, title
 
     return (
         <>
-            <div className="absolute inset-0 pointer-events-none bg-gradient-to-br from-indigo-500/12 via-transparent to-purple-500/10" />
             <div className="relative p-6 sm:p-8 flex flex-col gap-5 max-h-[82vh]">
                 <header className="flex items-center gap-3">
-                    <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/25 flex-shrink-0">
-                        <Icon icon={icon} className="text-xl text-white" />
-                    </div>
+                    <Icon icon={icon} className="text-[18px] text-[var(--color-text-muted)] flex-shrink-0" />
                     <div className="min-w-0">
-                        <h2 className="text-lg font-black text-[var(--color-text)] leading-tight">
+                        <h2 className="text-[16px] font-medium text-[var(--color-text)] leading-tight">
                             {title}
                         </h2>
-                        <p className="text-[11px] font-bold text-[var(--color-text-secondary)] flex items-center gap-1.5">
-                            <span className="px-1.5 py-0.5 rounded-md bg-indigo-500/15 text-indigo-400 text-display">v{latest.version}</span>
+                        <p className="text-[12px] text-[var(--color-text-muted)] flex items-center gap-1.5 mt-0.5">
+                            <span className="font-mono">v{latest.version}</span>
                             {latest.title && <span className="opacity-80 truncate">{latest.title}</span>}
                         </p>
                     </div>
@@ -74,11 +71,11 @@ function ChangelogPanel({ entries, newVersions, expandedVersions, onClose, title
                                     aria-expanded={isOpen}
                                     aria-label={`v${entry.version} 변경사항 ${isOpen ? '접기' : '펼치기'}`}
                                 >
-                                    <span className="text-xs font-black text-[var(--color-text)] text-display">v{entry.version}</span>
+                                    <span className="font-mono text-[13px] text-[var(--color-text)]">v{entry.version}</span>
                                     {newVersions.includes(entry.version) && (
-                                        <span className="px-1.5 py-0.5 rounded-md bg-indigo-500 text-white text-[9px] font-black tracking-wide">NEW</span>
+                                        <span className="text-[12px] font-medium text-[var(--color-primary)]">새 버전</span>
                                     )}
-                                    <span className="text-[10px] font-bold text-[var(--color-text-secondary)] opacity-60">{entry.date}</span>
+                                    <span className="font-mono text-[12px] text-[var(--color-text-muted)]">{entry.date}</span>
                                     <div className="flex-1 h-px bg-[var(--color-border)]" />
                                     <Icon
                                         icon="mdi:chevron-down"
@@ -99,15 +96,13 @@ function ChangelogPanel({ entries, newVersions, expandedVersions, onClose, title
                                                 variants={staggerItem}
                                                 className="flex items-start gap-3"
                                             >
-                                                <span className="w-7 h-7 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] flex items-center justify-center flex-shrink-0 mt-0.5">
-                                                    <Icon icon={item.icon ?? 'mdi:circle-medium'} className="text-base text-indigo-400" />
-                                                </span>
-                                                <p className="text-sm text-[var(--color-text)]/90 leading-relaxed">{item.text}</p>
+                                                <Icon icon={item.icon ?? 'mdi:circle-medium'} className="text-[16px] text-[var(--color-text-muted)] flex-shrink-0 mt-0.5" />
+                                                <p className="text-[14px] text-[var(--color-text)] leading-relaxed">{item.text}</p>
                                             </motion.li>
                                         ))}
                                     </motion.ul>
                                 ) : (
-                                    <p className="text-xs text-[var(--color-text-secondary)] opacity-70 pl-0.5 truncate">
+                                    <p className="text-[13px] text-[var(--color-text-muted)] pl-0.5 truncate">
                                         {entry.title ?? `변경사항 ${entry.items.length}건`}
                                     </p>
                                 )}
@@ -118,7 +113,7 @@ function ChangelogPanel({ entries, newVersions, expandedVersions, onClose, title
 
                 <Pressable
                     onClick={onClose}
-                    className="w-full py-4 rounded-2xl bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-400 hover:to-purple-500 text-white font-black text-sm uppercase tracking-widest shadow-xl shadow-indigo-500/25"
+                    className="btn btn-primary w-full h-12 text-[15px]"
                 >
                     {closeLabel}
                 </Pressable>

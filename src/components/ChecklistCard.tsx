@@ -54,21 +54,19 @@ export default function ChecklistCard() {
     }
 
     return (
-        <motion.section variants={staggerItem} className="glass-card p-6 md:p-8">
-            <div className="flex items-center gap-2 mb-5">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-600 flex items-center justify-center shadow-lg shadow-emerald-500/20 flex-shrink-0">
-                    <Icon icon="mdi:checkbox-marked-circle-outline" className="text-lg text-white" />
-                </div>
-                <h2 className="text-lg font-black text-[var(--color-text)]">체크리스트</h2>
+        <motion.section variants={staggerItem} className="glass-card p-5 md:p-6">
+            <div className="flex items-center gap-2 mb-4 h-6">
+                <Icon icon="mdi:checkbox-marked-circle-outline" className="text-[18px] text-[var(--color-text-muted)] flex-shrink-0" />
+                <h2 className="text-[16px] font-medium text-[var(--color-text)]">체크리스트</h2>
                 {totalCount > 0 && (
-                    <span className="ml-auto text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-400/20 tabular-nums">
+                    <span className="ml-auto meta">
                         {doneCount}/{totalCount} 완료
                     </span>
                 )}
             </div>
 
             {/* 범위 탭 */}
-            <div className="relative flex gap-1 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] p-1 mb-4">
+            <div className="relative flex gap-0.5 rounded-xl bg-[var(--surface-raised)] border border-[var(--color-border)] p-1 mb-4">
                 {SCOPE_TABS.map((tab) => {
                     const active = tab.scope === scope
                     return (
@@ -81,11 +79,11 @@ export default function ChecklistCard() {
                             {active && (
                                 <motion.div
                                     layoutId="checklist-scope-picker"
-                                    className="absolute inset-0 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-600"
+                                    className="absolute inset-0 rounded-lg seg-active"
                                     transition={spring.default}
                                 />
                             )}
-                            <span className={`relative z-10 ${active ? 'text-white' : 'text-[var(--color-text-secondary)]'}`}>
+                            <span className={`relative z-10 ${active ? 'text-[var(--color-text)]' : 'text-[var(--color-text-secondary)]'}`}>
                                 {tab.label}
                             </span>
                         </button>
@@ -101,13 +99,13 @@ export default function ChecklistCard() {
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter') handleAdd() }}
                     placeholder={SCOPE_PLACEHOLDER[scope]}
-                    className="flex-1 px-4 py-3 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-emerald-400/60 text-[var(--color-text)] text-sm"
+                    className="flex-1 min-w-0 px-4 py-3 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text)] text-[15px]"
                 />
                 <Pressable
                     onClick={handleAdd}
                     disabled={!input.trim() || adding}
-                    pressScale={0.94}
-                    className="px-4 py-3 rounded-xl bg-emerald-500 text-white font-bold text-sm disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5"
+                    pressScale={0.97}
+                    className="self-stretch px-4 rounded-xl fill-ink font-medium text-[14px] whitespace-nowrap shrink-0 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5"
                 >
                     <Icon icon="mdi:plus" className="text-base" /> 추가
                 </Pressable>
@@ -124,24 +122,24 @@ export default function ChecklistCard() {
                             animate="animate"
                             exit="exit"
                             layout
-                            className={`flex items-center gap-3 px-3.5 py-3 rounded-xl border transition-colors ${todo.done
-                                ? 'bg-black/[0.02] dark:bg-white/[0.02] border-transparent'
-                                : 'bg-black/[0.03] dark:bg-white/5 border-white/10'
+                            className={`flex items-center gap-3 px-3 min-h-12 py-2 rounded-xl border transition-colors ${todo.done
+                                ? 'border-transparent'
+                                : 'bg-[var(--surface-raised)] border-[var(--color-border)]'
                                 }`}
                         >
                             <Pressable
                                 type="button"
                                 onClick={() => toggleTodo(todo.id!)}
-                                pressScale={0.85}
+                                pressScale={0.97}
                                 className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 border-2 transition-colors ${todo.done
-                                    ? 'bg-emerald-500 border-emerald-500'
-                                    : 'border-[var(--color-border)] hover:border-emerald-400'
+                                    ? 'bg-[var(--color-text)] border-[var(--color-text)]'
+                                    : 'border-[var(--hairline-strong)] hover:border-[var(--color-text-secondary)]'
                                     }`}
                             >
-                                {todo.done && <Icon icon="mdi:check-bold" className="text-xs text-white" />}
+                                {todo.done && <Icon icon="mdi:check-bold" className="text-xs text-[var(--color-bg)]" />}
                             </Pressable>
                             <span
-                                className={`flex-1 text-sm font-medium ${todo.done
+                                className={`flex-1 text-[15px] ${todo.done
                                     ? 'line-through text-[var(--color-text-secondary)] opacity-50'
                                     : 'text-[var(--color-text)]'
                                     }`}
@@ -151,7 +149,7 @@ export default function ChecklistCard() {
                             <Pressable
                                 type="button"
                                 onClick={() => deleteTodo(todo.id!)}
-                                pressScale={0.85}
+                                pressScale={0.97}
                                 className="opacity-40 hover:opacity-100 flex items-center justify-center p-1 flex-shrink-0"
                                 aria-label="삭제"
                             >
@@ -162,7 +160,7 @@ export default function ChecklistCard() {
                 </AnimatePresence>
 
                 {todos && todos.length === 0 && (
-                    <p className="text-center text-xs text-[var(--color-text-secondary)] opacity-50 py-6 italic">
+                    <p className="text-center text-[14px] text-[var(--color-text-muted)] py-6">
                         아직 할 일이 없습니다. 위에서 추가해 보세요.
                     </p>
                 )}
@@ -172,8 +170,8 @@ export default function ChecklistCard() {
                 <div className="flex justify-end mt-3">
                     <Pressable
                         onClick={handleClearCompleted}
-                        pressScale={0.94}
-                        className="text-[11px] px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-[var(--color-text-secondary)] font-bold flex items-center gap-1.5"
+                        pressScale={0.97}
+                        className="text-[11px] px-3 py-1.5 rounded-lg bg-[var(--surface-raised)] hover:bg-[var(--surface-raised)] text-[var(--color-text-secondary)] font-bold flex items-center gap-1.5"
                     >
                         <Icon icon="mdi:broom" className="text-sm" /> 완료 항목 정리
                     </Pressable>

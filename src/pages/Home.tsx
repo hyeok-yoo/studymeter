@@ -10,7 +10,7 @@ import {
     autoFinalizeMissedDiaries
 } from '../lib/db'
 import type { Totals } from '../lib/sessions'
-import { hms } from '../lib/format'
+import { hm, hms } from '../lib/format'
 import StartStudyModal from '../components/StartStudyModal'
 import MorningReportCard from '../components/MorningReportCard'
 import DiaryCard from '../components/DiaryCard'
@@ -30,8 +30,10 @@ import PWAInstallPrompt, {
 import { HelpButton } from '../components/HelpButton'
 import { HOME_PHRASES, getRandomPhrase } from '../lib/phrases'
 import { NativeBridge } from '../lib/NativeBridge'
-import { spring, materialize, staggerContainer, staggerItem } from '../lib/motion'
+import { spring, staggerContainer, staggerItem } from '../lib/motion'
 import Pressable from '../components/ui/Pressable'
+import MeterScale from '../components/ui/MeterScale'
+import { meterSpan, SEGMENT_TONE_PCT } from '../lib/meter'
 
 interface HomeProps {
     settings: Settings
@@ -101,187 +103,200 @@ export default function Home({ settings }: HomeProps) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
+    const goalMs = settings.dailyGoalMs && settings.dailyGoalMs > 0 ? settings.dailyGoalMs : undefined
+    const goalPct = goalMs ? Math.round((todayTotal / goalMs) * 100) : null
+    const ranked = Array.from(subjectTimes, ([subject, times]) => ({ subject, ms: times.total }))
+        .sort((a, b) => b.ms - a.ms)
+    const dateTitle = new Date().toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'long' })
+
     return (
         <motion.div
-            className="flex flex-col gap-10"
+            className="flex flex-col gap-8 xl:grid xl:grid-cols-[minmax(0,1fr)_320px] 2xl:grid-cols-[minmax(0,1fr)_380px] xl:items-start"
             variants={staggerContainer}
             initial="initial"
             animate="animate"
         >
-            {/* Header with High Contrast */}
-            <motion.header variants={staggerItem} className="flex flex-col gap-2">
-                <h1 className="text-display text-4xl md:text-5xl font-black text-[var(--color-text)]">
-                    안녕하세요, <span className="gradient-text">{settings.userName}</span>님
-                </h1>
-                <p className="text-xl md:text-2xl font-semibold text-[var(--color-text-secondary)] opacity-80">
-                    {randomPhrase}
-                </p>
-            </motion.header>
-
-            {/* PWA 설치 권유 배너 */}
-            <PWAInstallPrompt />
-
-            {/* 아침 브리핑 / 주간 리뷰 */}
-            <MorningReportCard settings={settings} />
-
-            {/* D-day */}
-            <DdayWidget settings={settings} />
-
-            {/* Hero Stats Card */}
-            <motion.section
-                variants={materialize}
-                className="glass-card p-8 md:p-14 flex flex-col items-center justify-center text-center relative overflow-hidden"
-            >
-                {/* 은은한 그라디언트 어시스트 — 히어로 숫자 뒤 소프트 글로우 하나만 */}
-                <div
-                    aria-hidden
-                    className="pointer-events-none absolute -top-20 left-1/2 -translate-x-1/2 w-80 h-80 rounded-full"
-                    style={{ background: 'radial-gradient(closest-side, rgba(99,102,241,0.18), transparent)' }}
-                />
-
-                <div className="relative z-10 w-full">
-                    <div className="flex items-center justify-center gap-2 mb-8">
-                        <h2 className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--color-text-secondary)]">Today's Focus Time</h2>
-                        <HelpButton
-                            title="오늘의 집중 시간"
-                            items={[
-                                { description: '오늘 완료하거나 진행 중인 모든 공부 세션의 합산 시간입니다.' },
-                                { title: '자정 초기화', description: '매일 자정을 기준으로 새로운 날의 집계가 시작됩니다.' },
-                                { title: '과목별 분류', description: '아래 태그에서 각 과목별 공부 시간을 한눈에 확인할 수 있습니다.' },
-                            ]}
-                        />
-                    </div>
-
-                    <div className="flex flex-col items-center gap-5">
-                        <span className="text-display text-7xl md:text-[8.5rem] font-black tabular-nums gradient-text leading-none">
-                            {hms(todayTotal)}
-                        </span>
-                        <div className="h-1.5 w-20 bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-secondary)] rounded-full"></div>
-                    </div>
-
-                    <motion.div
-                        variants={staggerContainer}
-                        initial="initial"
-                        animate="animate"
-                        className="flex flex-wrap justify-center gap-2.5 mt-10 items-center"
-                    >
-                        {Array.from(subjectTimes, ([subject, times]) => (
-                            <motion.div
-                                key={subject}
-                                variants={staggerItem}
-                                className="px-4 py-2 rounded-full glass-card-elevated text-xs font-bold text-[var(--color-text)]"
-                            >
-                                {subject} · {hms(times.total)}
-                            </motion.div>
-                        ))}
-                        {subjectTimes.size === 0 && (
-                            <div className="text-[var(--color-text-secondary)] font-medium opacity-60 italic">
-                                {isFirstVisit ? '오늘의 첫 공부를 시작해 보세요!' : '기록을 시작하면 여기에 과목별 통계가 나타납니다.'}
-                            </div>
-                        )}
-                        {subjectTimes.size > 0 && (
+            {/* 넓은 화면: 왼쪽은 오늘의 측정값과 기록, 오른쪽 레일은 D-day·체크리스트·회고.
+                좁은 화면에서는 두 단이 풀려(contents) order 순서대로 한 줄이 된다 — 원래 순서 그대로. */}
+            <div className="contents xl:flex xl:flex-col xl:gap-8 xl:min-w-0">
+                <div className="order-1 xl:order-none empty:hidden">
+                <motion.header variants={staggerItem} className="flex flex-col gap-1.5 pt-1">
+                    <h1 className="text-[28px] md:text-[34px] leading-tight font-medium text-[var(--color-text)]">
+                        {dateTitle}
+                    </h1>
+                    <p className="text-[15px] md:text-[16px] text-[var(--color-text-secondary)]">
+                        {randomPhrase}
+                    </p>
+                </motion.header>
+                </div>
+                <div className="order-2 xl:order-none empty:hidden">
+                {/* PWA 설치 권유 배너 */}
+                <PWAInstallPrompt />
+                </div>
+                <div className="order-3 xl:order-none empty:hidden">
+                {/* 아침 브리핑 / 주간 리뷰 */}
+                <MorningReportCard settings={settings} />
+                </div>
+                <div className="order-5 xl:order-none empty:hidden">
+                {/* 오늘 측정값 — 이 화면의 모먼트: 큰 수치 + 과목별로 쌓인 계측 눈금 */}
+                <motion.section variants={staggerItem} className="glass-card p-6 md:p-8 @container">
+                    <div className="flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-1.5">
+                            <h2 className="text-[14px] font-medium text-[var(--color-text-secondary)]">오늘 공부 시간</h2>
                             <HelpButton
-                                title="과목별 공부 시간"
+                                title="오늘의 집중 시간"
                                 items={[
-                                    { description: '오늘 공부한 과목별 누적 시간입니다.' },
+                                    { description: '오늘 완료하거나 진행 중인 모든 공부 세션의 합산 시간입니다.' },
+                                    { title: '자정 초기화', description: '매일 자정을 기준으로 새로운 날의 집계가 시작됩니다.' },
+                                    { title: '과목별 분류', description: '눈금과 아래 목록에서 오늘 공부한 과목별 누적 시간을 확인할 수 있습니다.' },
                                     { title: '총합 vs 순공', description: '총합은 강의·자습·테스트 등 모든 세션을 포함하고, 순공(자습)은 자습·테스트 타입 세션만 집계합니다.' },
                                     { title: '세부 항목', description: '공부 타이머 화면에서 세부 항목을 선택하면 더 세밀하게 분류됩니다.' },
                                 ]}
                             />
-                        )}
-                    </motion.div>
-                </div>
-            </motion.section>
-
-            {/* Main Actions — 공부 시작하기가 주된 CTA, 필요 시 설치 버튼이 옆에 붙는다 */}
-            <motion.div
-                variants={staggerItem}
-                className={`grid gap-4 ${showAddBtn ? 'grid-cols-1 sm:grid-cols-[2fr_1fr]' : 'grid-cols-1'}`}
-            >
-                <Pressable
-                    pressScale={0.98}
-                    hoverLift
-                    onClick={() => setShowModal(true)}
-                    className="btn btn-primary text-xl font-black py-8 flex flex-col gap-2 group overflow-hidden relative"
-                >
-                    <Icon icon="mdi:play-circle-outline" className="text-4xl group-hover:scale-110 transition-transform duration-500" />
-                    <span>공부 시작하기</span>
-                </Pressable>
-
-                {/* 홈 화면 추가 버튼 — 웹 브라우저에서만 표시 */}
-                <AnimatePresence>
-                    {showAddBtn && (
-                        <motion.button
-                            initial={{ opacity: 0, scale: 0.9 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            exit={{ opacity: 0, scale: 0.9 }}
-                            whileTap={{ scale: 0.98 }}
-                            whileHover={{ y: -2 }}
-                            transition={spring.snappy}
-                            onClick={handleAddToHome}
-                            className="btn btn-glass text-lg font-bold py-8 flex flex-col items-center justify-center gap-2 border border-indigo-400/30 bg-indigo-500/10 hover:bg-indigo-500/20 relative overflow-hidden"
-                        >
-                            <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-purple-500/5 pointer-events-none" />
-                            <Icon
-                                icon={addBtnIOS ? 'mdi:export-variant' : 'mdi:cellphone-arrow-down'}
-                                className="text-3xl text-indigo-400 relative z-10"
-                            />
-                            <span className="relative z-10 text-indigo-300">홈 화면에 추가</span>
-                            <span className="text-[10px] font-medium text-indigo-400/60 relative z-10 -mt-1 text-center">
-                                {addBtnIOS ? 'Safari → 공유 → 홈 화면에 추가' : '앱처럼 설치하기'}
+                        </div>
+                        {goalMs && (
+                            <span className="meta">
+                                목표 {hm(goalMs, { always: true })} · {goalPct}%
                             </span>
-                        </motion.button>
+                        )}
+                    </div>
+
+                    <div className="figure text-[min(19cqw,136px)] text-[var(--color-text)] mt-4 md:mt-6 -ml-1">
+                        {hms(todayTotal)}
+                    </div>
+
+                    <MeterScale
+                        className="mt-6 md:mt-8"
+                        value={todayTotal}
+                        span={meterSpan(todayTotal, goalMs)}
+                        goal={goalMs}
+                        segments={ranked.map((r) => ({ key: r.subject, ms: r.ms }))}
+                    />
+
+                    {ranked.length > 0 ? (
+                        <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-x-8">
+                            {ranked.map((r, i) => (
+                                <div key={r.subject} className="flex items-center gap-2.5 h-9 border-t border-[var(--color-border)]">
+                                    <span
+                                        className="w-2.5 h-2.5 rounded-full shrink-0"
+                                        style={{ background: `color-mix(in srgb, var(--lamp) ${SEGMENT_TONE_PCT[Math.min(i, SEGMENT_TONE_PCT.length - 1)]}%, transparent)` }}
+                                    />
+                                    <span className="text-[14px] text-[var(--color-text)] truncate">{r.subject}</span>
+                                    <span className="ml-auto font-mono text-[13px] tabular-nums text-[var(--color-text-secondary)]">{hms(r.ms)}</span>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <p className="mt-5 text-[14px] text-[var(--color-text-muted)]">
+                            {isFirstVisit ? '오늘의 첫 공부를 시작해 보세요' : '기록을 시작하면 여기에 과목별 시간이 쌓입니다'}
+                        </p>
                     )}
-                </AnimatePresence>
-            </motion.div>
+                </motion.section>
+                </div>
+                <div className="order-6 xl:order-none empty:hidden">
+                {/* Main Actions — 공부 시작하기가 주된 CTA, 필요 시 설치 버튼이 옆에 붙는다 */}
+                <motion.div
+                    variants={staggerItem}
+                    className={`grid gap-3 ${showAddBtn ? 'grid-cols-1 sm:grid-cols-[2fr_1fr]' : 'grid-cols-1'}`}
+                >
+                    <Pressable
+                        pressScale={0.98}
+                        onClick={() => setShowModal(true)}
+                        className="btn btn-primary h-16 text-[17px] justify-between px-7"
+                    >
+                        <span className="flex items-center gap-2.5">
+                            <Icon icon="mdi:play" className="text-[20px]" />
+                            공부 시작하기
+                        </span>
+                        <Icon icon="mdi:arrow-right" className="text-[18px] opacity-60" />
+                    </Pressable>
 
-            {/* 체크리스트 (오늘/이번 주/이번 달) */}
-            <ChecklistCard />
+                    {/* 홈 화면 추가 버튼 — 웹 브라우저에서만 표시 */}
+                    <AnimatePresence>
+                        {showAddBtn && (
+                            <motion.button
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                whileTap={{ scale: 0.98 }}
+                                transition={spring.snappy}
+                                onClick={handleAddToHome}
+                                className="btn btn-glass h-16 text-[15px] justify-start px-6"
+                            >
+                                <Icon
+                                    icon={addBtnIOS ? 'mdi:export-variant' : 'mdi:cellphone-arrow-down'}
+                                    className="text-[18px] text-[var(--color-text-muted)]"
+                                />
+                                <span className="flex flex-col items-start leading-tight">
+                                    <span>홈 화면에 추가</span>
+                                    <span className="text-[12px] text-[var(--color-text-muted)] font-normal">
+                                        {addBtnIOS ? 'Safari → 공유 → 홈 화면에 추가' : '앱처럼 설치하기'}
+                                    </span>
+                                </span>
+                            </motion.button>
+                        )}
+                    </AnimatePresence>
+                </motion.div>
+                </div>
+                <div className="order-8 xl:order-none empty:hidden">
+                {/* 오늘의 일기 (3초 일기) */}
+                <DiaryCard settings={settings} />
+                </div>
+            </div>
 
-            {/* 오늘의 일기 (3초 일기) */}
-            <DiaryCard settings={settings} />
-
-            {/* 매일 필수는 아니지만 항상 접근 가능한 기능들 — 접힌 상태로 시작 */}
-            <HomeSection
-                title="이번 주 회고"
-                icon="mdi:notebook-heart"
-                storageKey="home_section_weekly"
-                accent="from-sky-500 to-blue-600"
-            >
-                <WeeklyDiaryCard settings={settings} bare />
-            </HomeSection>
-
-            <HomeSection
-                title="학습 복기"
-                icon="mdi:brain"
-                storageKey="home_section_notes"
-                accent="from-amber-500 to-orange-600"
-            >
-                <LearningNotesCard settings={settings} bare />
-            </HomeSection>
+            <div className="contents xl:flex xl:flex-col xl:gap-8 xl:sticky xl:top-10">
+                <div className="order-4 xl:order-none empty:hidden">
+                {/* D-day */}
+                <DdayWidget settings={settings} />
+                </div>
+                <div className="order-7 xl:order-none empty:hidden">
+                {/* 체크리스트 (오늘/이번 주/이번 달) */}
+                <ChecklistCard />
+                </div>
+                <div className="order-9 xl:order-none empty:hidden">
+                {/* 매일 필수는 아니지만 항상 접근 가능한 기능들 — 접힌 상태로 시작 */}
+                <HomeSection
+                    title="이번 주 회고"
+                    icon="mdi:notebook-outline"
+                    storageKey="home_section_weekly"
+                >
+                    <WeeklyDiaryCard settings={settings} bare />
+                </HomeSection>
+                </div>
+                <div className="order-10 xl:order-none empty:hidden">
+                <HomeSection
+                    title="학습 복기"
+                    icon="mdi:head-lightbulb-outline"
+                    storageKey="home_section_notes"
+                >
+                    <LearningNotesCard settings={settings} bare />
+                </HomeSection>
+                </div>
+                <div className="order-11 xl:order-none empty:hidden">
+                {/* 개발자 크레딧 */}
+                <motion.div variants={staggerItem}>
+                    <Pressable
+                        pressScale={0.98}
+                        onClick={() => navigate('/developer')}
+                        className="w-full flex items-center justify-between px-4 h-14 rounded-xl border border-[var(--color-border)] hover:bg-[var(--surface-raised)] transition-colors"
+                    >
+                        <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-[var(--surface-raised)] border border-[var(--color-border)] flex items-center justify-center text-[13px] font-medium text-[var(--color-text-secondary)] flex-shrink-0">
+                                Y
+                            </div>
+                            <div className="text-left">
+                                <p className="text-[12px] text-[var(--color-text-muted)] leading-tight">개발자</p>
+                                <p className="text-[14px] font-medium text-[var(--color-text)] leading-tight">Yoo Seung Hyeok</p>
+                            </div>
+                        </div>
+                        <Icon icon="mdi:chevron-right" className="text-[18px] text-[var(--color-text-muted)]" />
+                    </Pressable>
+                </motion.div>
+                </div>
+            </div>
 
             {/* iOS 설치 가이드 모달 */}
             <IOSInstallGuide isOpen={showIOSGuide} onClose={() => setShowIOSGuide(false)} />
-
-            {/* 개발자 크레딧 */}
-            <motion.div variants={staggerItem}>
-                <Pressable
-                    pressScale={0.98}
-                    onClick={() => navigate('/developer')}
-                    className="w-full flex items-center justify-between px-5 py-3.5 rounded-2xl glass-card-elevated hover:border-[var(--color-primary)]/30 transition-colors group"
-                >
-                    <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-xs font-black flex-shrink-0">
-                            Y
-                        </div>
-                        <div className="text-left">
-                            <p className="text-xs font-black text-[var(--color-text-secondary)] leading-tight">개발자</p>
-                            <p className="text-sm font-bold text-[var(--color-text)] leading-tight">Yoo Seung Hyeok</p>
-                        </div>
-                    </div>
-                    <Icon icon="mdi:chevron-right" className="text-lg text-[var(--color-text-secondary)] opacity-40 group-hover:opacity-70 group-hover:translate-x-0.5 transition-all" />
-                </Pressable>
-            </motion.div>
 
             {showModal && (
                 <StartStudyModal

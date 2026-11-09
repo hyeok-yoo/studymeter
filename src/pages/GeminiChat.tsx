@@ -56,7 +56,7 @@ const PILL_IDLE = 'bg-[var(--color-surface)] text-[var(--color-text-secondary)] 
 
 /** 헤더의 모델 능력 배지 — 지원하는 것만 순서대로 보여준다. */
 const CAPABILITY_BADGES = [
-    { key: 'supportsThinking', icon: 'mdi:brain', label: '추론', tone: 'bg-purple-500/15 text-purple-400 border border-purple-400/20' },
+    { key: 'supportsThinking', icon: 'mdi:brain', label: '추론', tone: 'bg-[var(--surface-raised)] text-[var(--color-primary)] border border-[var(--hairline-strong)]' },
     { key: 'supportsGrounding', icon: 'mdi:google', label: '검색 가능', tone: 'bg-cyan-500/15 text-cyan-400 border border-cyan-400/20' },
 ] as const
 
@@ -475,7 +475,7 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
             let content = reply.text
             if (!content && functionActivity.length) content = '(요청하신 작업을 완료했습니다.)'
             if (reply.fellBack) {
-                content += '\n\n> 💡 선택한 모델의 할당량이 초과되어 더 가벼운 모델로 자동 전환해 답변했습니다.'
+                content += '\n\n> 참고: 선택한 모델의 할당량이 초과되어 더 가벼운 모델로 자동 전환해 답변했습니다.'
             }
 
             const assistantMsg: Message = {
@@ -490,7 +490,7 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
             await persistConversation(finalMessages, finalHistory)
         } catch (err) {
             const msg = err instanceof Error ? err.message : '오류가 발생했습니다. API 키를 확인해주세요.'
-            const finalMessages = [...messagesWithUser, { role: 'assistant' as const, content: `❌ ${msg}` }]
+            const finalMessages = [...messagesWithUser, { role: 'assistant' as const, content: `오류: ${msg}` }]
             setMessages(finalMessages)
             // 에러가 나도 지금까지의 대화(사용자 메시지 포함)는 잃지 않도록 저장한다.
             await persistConversation(finalMessages, history)
@@ -503,7 +503,7 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
         <div className="animate-fade-in max-w-4xl mx-auto h-[calc(100vh-8rem)] flex flex-col">
             <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
                 <div className="flex items-center gap-2">
-                    <h1 className="text-3xl font-bold gradient-text">Gemini</h1>
+                    <h1 className="text-[28px] md:text-[34px] leading-tight font-medium text-[var(--color-text)]">Gemini</h1>
                     {settings.geminiApiKey && (
                         <div className="flex items-center gap-1">
                             <Pressable
@@ -525,16 +525,16 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
                 </div>
                 {settings.geminiApiKey && activeModel.name && (
                     <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                        <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-[var(--color-text-secondary)]">
+                        <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-[var(--surface-raised)] border border-[var(--color-border)] text-[var(--color-text-secondary)]">
                             {activeModel.displayName}
                         </span>
                         {CAPABILITY_BADGES.filter((b) => activeModel[b.key]).map((b) => (
-                            <span key={b.key} className={`text-[10px] font-bold px-2 py-1 rounded-full ${b.tone} flex items-center gap-1`}>
+                            <span key={b.key} className={`text-[11px] font-bold px-2 py-1 rounded-full ${b.tone} flex items-center gap-1`}>
                                 <Icon icon={b.icon} className="text-xs" /> {b.label}
                             </span>
                         ))}
                         {activeModel.outputTokenLimit && (
-                            <span className="text-[10px] font-medium px-2 py-1 rounded-full bg-white/5 text-[var(--color-text-secondary)] opacity-70">
+                            <span className="text-[11px] font-medium px-2 py-1 rounded-full bg-[var(--surface-raised)] text-[var(--color-text-secondary)] opacity-70">
                                 출력 {Math.round(activeModel.outputTokenLimit / 1000)}K
                             </span>
                         )}
@@ -545,9 +545,9 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
             {!settings.geminiApiKey ? (
                 <div className="flex-1 flex items-center justify-center">
                     <div className="glass-card p-8 text-center max-w-md">
-                        <span className="text-5xl mb-4 block">🔑</span>
-                        <h2 className="text-xl font-semibold mb-2">API 키가 필요합니다</h2>
-                        <p className="text-[var(--color-text-secondary)]">
+                        <Icon icon="mdi:key-outline" className="text-[28px] text-[var(--color-text-muted)] mx-auto mb-4" />
+                        <h2 className="text-[18px] font-medium mb-2">API 키가 필요합니다</h2>
+                        <p className="text-[15px] text-[var(--color-text-secondary)]">
                             설정 페이지에서 Gemini API 키를 입력해주세요.
                         </p>
                     </div>
@@ -561,14 +561,14 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
                                 variants={fadeRise}
                                 initial="initial"
                                 animate="animate"
-                                className="text-center text-[var(--color-text-secondary)] py-12"
+                                className="text-left text-[var(--color-text-secondary)] py-10 max-w-md"
                             >
-                                <span className="text-5xl block mb-4">✨</span>
-                                <p className="font-bold text-[var(--color-text)]">오늘 공부한 걸 그냥 말해보세요</p>
-                                <p className="text-sm mt-2 opacity-90">"학원에서 수학 2시간 듣고 좀 졸았어, 영어 단어도 1시간 했고"</p>
-                                <p className="text-sm mt-1 opacity-70">→ 세션 기록과 오늘 일기까지 알아서 정리해드려요.</p>
-                                <p className="text-sm mt-3 opacity-80">📎 모르는 문제 사진을 보내면 풀어드리고, 손글씨 일기·할 일 목록 사진은 앱에 옮겨 저장해드려요.</p>
-                                <p className="text-xs mt-2 opacity-60">질문·개념 설명도 물어보세요. 📊 버튼으로 기록을 함께 공유할 수 있어요.</p>
+                                <Icon icon="mdi:message-text-outline" className="text-[24px] text-[var(--color-text-muted)] mb-4" />
+                                <p className="text-[18px] font-medium text-[var(--color-text)]">오늘 공부한 걸 그냥 말해보세요</p>
+                                <p className="text-[14px] mt-3 font-mono text-[var(--color-text)]">"학원에서 수학 2시간 듣고 좀 졸았어, 영어 단어도 1시간 했고"</p>
+                                <p className="text-[14px] mt-1">→ 세션 기록과 오늘 일기까지 알아서 정리해드려요.</p>
+                                <p className="text-[14px] mt-4">모르는 문제 사진을 보내면 풀어드리고, 손글씨 일기·할 일 목록 사진은 앱에 옮겨 저장해드려요.</p>
+                                <p className="text-[13px] mt-2 text-[var(--color-text-muted)]">질문·개념 설명도 물어보세요. 기록 공유 버튼으로 기록을 함께 공유할 수 있어요.</p>
                             </motion.div>
                         )}
 
@@ -582,20 +582,20 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
                             >
                                 <div
                                     className={`max-w-[85%] p-4 rounded-2xl ${msg.role === 'user'
-                                        ? 'bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-secondary)] text-white'
+                                        ? 'fill-accent text-white'
                                         : 'glass-card'
                                         }`}
                                 >
                                     {msg.role === 'assistant' ? (
                                         <>
                                             {msg.reasoning && (
-                                                <details className="mb-3 rounded-xl bg-white/5 border border-white/10 overflow-hidden group">
+                                                <details className="mb-3 rounded-xl bg-[var(--surface-raised)] border border-[var(--color-border)] overflow-hidden group">
                                                     <summary className="cursor-pointer select-none px-3 py-2 text-xs font-bold text-[var(--color-text-secondary)] flex items-center gap-1.5 list-none">
                                                         <Icon icon="mdi:chevron-right" className="text-base transition-transform group-open:rotate-90" />
-                                                        <Icon icon="mdi:brain" className="text-sm text-purple-400" />
+                                                        <Icon icon="mdi:brain" className="text-sm text-[var(--color-text-muted)]" />
                                                         추론 과정 보기
                                                     </summary>
-                                                    <AiMarkdown className="text-xs opacity-80 px-3 pb-3 pt-1 border-t border-white/5">
+                                                    <AiMarkdown className="text-xs opacity-80 px-3 pb-3 pt-1 border-t border-[var(--color-border)]">
                                                         {msg.reasoning}
                                                     </AiMarkdown>
                                                 </details>
@@ -611,12 +611,12 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
                                                         <motion.span
                                                             key={fi}
                                                             variants={staggerItem}
-                                                            className={`text-[10px] font-medium px-2 py-1 rounded-full border flex items-center gap-1 ${fa.error
+                                                            className={`text-[11px] font-medium px-2 py-1 rounded-full border flex items-center gap-1 ${fa.error
                                                                 ? 'bg-red-500/15 text-red-400 border-red-400/30'
-                                                                : 'bg-white/5 text-[var(--color-text-secondary)] border-white/10'
+                                                                : 'bg-[var(--surface-raised)] text-[var(--color-text-secondary)] border-[var(--color-border)]'
                                                                 }`}
                                                         >
-                                                            <span>{fa.error ? '⚠️' : WRITE_FUNCTIONS.has(fa.name) ? '🔧' : '📂'}</span>
+                                                            <Icon icon={fa.error ? 'mdi:alert-outline' : WRITE_FUNCTIONS.has(fa.name) ? 'mdi:wrench-outline' : 'mdi:folder-outline'} className="text-[13px]" />
                                                             <span>{fa.name}</span>
                                                             <span className="opacity-70">— {fa.label}</span>
                                                         </motion.span>
@@ -625,8 +625,8 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
                                             )}
                                             <AiMarkdown>{msg.content}</AiMarkdown>
                                             {msg.grounding && msg.grounding.length > 0 && (
-                                                <div className="mt-3 pt-2 border-t border-white/10">
-                                                    <p className="text-[10px] font-bold text-[var(--color-text-secondary)] opacity-60 mb-1.5 flex items-center gap-1">
+                                                <div className="mt-3 pt-2 border-t border-[var(--color-border)]">
+                                                    <p className="text-[11px] font-bold text-[var(--color-text-secondary)] opacity-60 mb-1.5 flex items-center gap-1">
                                                         <Icon icon="mdi:google" className="text-xs" /> 검색 출처
                                                     </p>
                                                     <div className="flex flex-col gap-1">
@@ -656,12 +656,12 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
                                                                 key={ai}
                                                                 src={att.previewUrl}
                                                                 alt={att.name}
-                                                                className="w-20 h-20 object-cover rounded-lg border border-white/20"
+                                                                className="w-20 h-20 object-cover rounded-lg border border-[var(--hairline-strong)]"
                                                             />
                                                         ) : (
                                                             <span
                                                                 key={ai}
-                                                                className="text-xs font-medium px-2 py-1 rounded-lg bg-white/15 border border-white/20 flex items-center gap-1 max-w-[10rem]"
+                                                                className="text-xs font-medium px-2 py-1 rounded-lg bg-white/15 border border-[var(--hairline-strong)] flex items-center gap-1 max-w-[10rem]"
                                                             >
                                                                 <Icon icon="mdi:file-pdf-box" className="text-sm flex-shrink-0" />
                                                                 <span className="truncate">{att.name}</span>
@@ -698,12 +698,12 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
                     <div className="material-chrome rounded-2xl p-3 flex flex-col gap-2">
                         {/* Options row */}
                         <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-xs text-[var(--color-text-secondary)]">📊 기록 공유:</span>
+                            <span className="text-[13px] text-[var(--color-text-secondary)]">기록 공유</span>
                             {([['day', '오늘'], ['week', '이번 주']] as const).map(([key, label]) => (
                                 <Pressable
                                     key={key}
                                     onClick={() => setShareData(shareData === key ? 'none' : key)}
-                                    className={`${PILL} ${shareData === key ? 'bg-[var(--color-primary)] text-white' : PILL_IDLE}`}
+                                    className={`${PILL} ${shareData === key ? 'fill-accent' : PILL_IDLE}`}
                                 >
                                     {label}
                                 </Pressable>
@@ -712,7 +712,7 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
                             {activeModel.supportsGrounding && (
                                 <Pressable
                                     onClick={() => setUseGrounding((v) => !v)}
-                                    className={`ml-auto ${PILL} flex items-center gap-1 ${useGrounding ? 'bg-cyan-500/80 text-white' : PILL_IDLE}`}
+                                    className={`ml-auto ${PILL} flex items-center gap-1 ${useGrounding ? 'fill-ink' : PILL_IDLE}`}
                                     title="Google 검색으로 최신 정보를 근거 삼아 답합니다 (기록 저장/조회와 함께 사용 가능)"
                                 >
                                     <Icon icon="mdi:google" className="text-xs" /> 검색
@@ -721,7 +721,7 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
                             {activeModel.supportsThinking && (
                                 <Pressable
                                     onClick={() => setUseThinking((v) => !v)}
-                                    className={`${PILL} flex items-center gap-1 ${useThinking ? 'bg-purple-500/80 text-white' : PILL_IDLE} ${activeModel.supportsGrounding ? '' : 'ml-auto'}`}
+                                    className={`${PILL} flex items-center gap-1 ${useThinking ? 'fill-accent' : PILL_IDLE} ${activeModel.supportsGrounding ? '' : 'ml-auto'}`}
                                     title="모델의 추론 과정을 함께 받아 펼쳐 볼 수 있습니다"
                                 >
                                     <Icon icon="mdi:brain" className="text-xs" /> 추론
@@ -729,7 +729,7 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
                             )}
                         </div>
                         {shareData !== 'none' && (
-                            <span className="text-[10px] text-green-500 font-medium">
+                            <span className="text-[11px] text-green-500 font-medium">
                                 ✓ {shareData === 'day' ? '오늘' : '이번 주'} 기록이 다음 메시지에 포함됩니다
                             </span>
                         )}
@@ -827,12 +827,12 @@ export default function GeminiChat({ settings }: GeminiChatProps) {
                                     onClick={() => conv.id != null && loadConversation(conv.id)}
                                     className={`flex items-center gap-2 p-3 rounded-xl border cursor-pointer transition-colors ${conv.id === conversationId
                                         ? 'bg-[var(--color-primary)]/15 border-[var(--color-primary)]/40'
-                                        : 'bg-white/5 border-white/10 hover:bg-white/10'
+                                        : 'bg-[var(--surface-raised)] border-[var(--color-border)] hover:bg-[var(--surface-raised)]'
                                         }`}
                                 >
                                     <div className="flex-1 min-w-0">
                                         <p className="text-sm font-medium truncate text-[var(--color-text)]">{conv.title}</p>
-                                        <p className="text-[10px] text-[var(--color-text-secondary)] opacity-70 mt-0.5">{dateTimeShort(conv.updatedAt)}</p>
+                                        <p className="text-[11px] text-[var(--color-text-secondary)] opacity-70 mt-0.5">{dateTimeShort(conv.updatedAt)}</p>
                                     </div>
                                     <button
                                         type="button"

@@ -76,20 +76,17 @@ export default function MorningReportCard({ settings }: MorningReportCardProps) 
     if (hidden) return null
 
     return (
-        <section className="glass-card p-6 relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-40 h-40 bg-amber-500/10 blur-[80px] rounded-full -mr-10 -mt-10" />
+        <section className="glass-card p-5 md:p-6 relative overflow-hidden">
             <div className="flex items-center gap-2.5 relative z-10">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-400 to-orange-500 flex items-center justify-center shadow-lg shadow-amber-500/20 flex-shrink-0">
-                    <Icon icon={kind === 'weekly-report' ? 'mdi:chart-timeline-variant' : 'mdi:weather-sunset-up'} className="text-lg text-white" />
-                </div>
+                <Icon icon={kind === 'weekly-report' ? 'mdi:chart-timeline-variant' : 'mdi:weather-sunset-up'} className="text-[18px] text-[var(--color-text-muted)] flex-shrink-0" />
                 <h2 className="text-base font-black text-[var(--color-text)]">{title}</h2>
                 {!loading && content && (
                     <Pressable
                         type="button"
                         onClick={handleRegenerate}
                         disabled={regenerating}
-                        pressScale={0.92}
-                        className="ml-auto flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-black/[0.04] dark:bg-white/5 text-[11px] font-bold text-[var(--color-text-secondary)] disabled:opacity-50"
+                        pressScale={0.97}
+                        className="ml-auto flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-[var(--surface-raised)] text-[11px] font-bold text-[var(--color-text-secondary)] disabled:opacity-50"
                         aria-label={`${title} 다시 생성`}
                     >
                         <Icon icon="mdi:refresh" className={`text-sm ${regenerating ? 'animate-spin' : ''}`} />
@@ -101,9 +98,9 @@ export default function MorningReportCard({ settings }: MorningReportCardProps) 
             <AnimatePresence mode="wait">
                 {loading ? (
                     <motion.div key="skeleton" variants={fadeRise} initial="initial" animate="animate" exit="exit" className="space-y-2 animate-pulse mt-4">
-                        <div className="h-3.5 rounded bg-black/[0.04] dark:bg-white/5 w-3/4" />
-                        <div className="h-3.5 rounded bg-black/[0.04] dark:bg-white/5 w-full" />
-                        <div className="h-3.5 rounded bg-black/[0.04] dark:bg-white/5 w-5/6" />
+                        <div className="h-3.5 rounded bg-[var(--surface-raised)] w-3/4" />
+                        <div className="h-3.5 rounded bg-[var(--surface-raised)] w-full" />
+                        <div className="h-3.5 rounded bg-[var(--surface-raised)] w-5/6" />
                     </motion.div>
                 ) : content && (
                     <motion.div key="content" variants={fadeRise} initial="initial" animate="animate" exit="exit" className="pt-4 text-sm text-[var(--color-text)] opacity-90 relative z-10">

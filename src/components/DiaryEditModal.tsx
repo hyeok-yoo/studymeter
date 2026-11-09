@@ -21,9 +21,9 @@ import Pressable from './ui/Pressable'
 import { spring } from '../lib/motion'
 
 // 태그·보조 액션에 쓰이는 알약 버튼 클래스. 같은 조합이 열 번 넘게 복사돼 있었다.
-const PILL = 'px-3.5 py-2 rounded-full text-xs font-bold'
+const PILL = 'h-8 px-3 rounded-lg text-[13px] font-medium inline-flex items-center'
 const PILL_IDLE =
-    'bg-black/[0.04] dark:bg-white/5 text-[var(--color-text-secondary)] hover:bg-black/[0.08] dark:hover:bg-white/10'
+    'bg-[var(--surface-raised)] text-[var(--color-text-secondary)] border border-[var(--color-border)] hover:text-[var(--color-text)] transition-colors'
 
 // ── 사진(종이 일기 스캔) ─────────────────────────────────────────────────────
 
@@ -49,7 +49,7 @@ function PhotoLightbox({ src, onClose }: { src: string | null; onClose: () => vo
                         alt="일기 사진"
                         initial={{ scale: 0.92 }} animate={{ scale: 1 }} exit={{ scale: 0.92 }}
                         transition={spring.snappy}
-                        className="max-w-full max-h-full rounded-xl object-contain shadow-2xl"
+                        className="max-w-full max-h-full rounded-xl object-contain"
                         onClick={(e) => e.stopPropagation()}
                     />
                     <button
@@ -84,7 +84,7 @@ export function DiaryPhotoThumbs({ photos, onRemove, size = 'md' }: {
                         <button
                             type="button"
                             onClick={() => setLightbox(p)}
-                            className={`block ${dim} rounded-xl overflow-hidden border border-black/10 dark:border-white/10 bg-black/[0.03] dark:bg-white/5`}
+                            className={`block ${dim} rounded-xl overflow-hidden border border-black/10 dark:border-white/10 bg-[var(--surface-raised)]`}
                         >
                             <img src={p} alt={`일기 사진 ${i + 1}`} className="w-full h-full object-cover" loading="lazy" />
                         </button>
@@ -93,7 +93,7 @@ export function DiaryPhotoThumbs({ photos, onRemove, size = 'md' }: {
                                 type="button"
                                 onClick={() => onRemove(i)}
                                 aria-label="사진 삭제"
-                                className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center shadow-md"
+                                className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center"
                             >
                                 <Icon icon="mdi:close" className="text-xs" />
                             </button>
@@ -135,18 +135,18 @@ const isVoiceInputSupported = () => getSpeechRecognition() !== null
 
 export function DiaryStatsRow({ stats }: { stats: DiaryStats }) {
     const items = [
-        { label: '순공', value: formatDurationHourMinute(stats.selfStudyMs), icon: 'mdi:timer-outline', color: 'text-indigo-400' },
-        { label: '목표', value: stats.goalPct !== null ? `${stats.goalPct}%` : '—', icon: 'mdi:target', color: 'text-emerald-400' },
-        { label: '세션', value: `${stats.sessionCount}회`, icon: 'mdi:counter', color: 'text-purple-400' },
-        { label: '졸음', value: `${stats.drowsyCount}회`, icon: 'mdi:sleep', color: stats.drowsyCount > 0 ? 'text-amber-400' : 'text-[var(--color-text-secondary)]' },
+        { label: '순공', value: formatDurationHourMinute(stats.selfStudyMs), icon: 'mdi:timer-outline', color: 'text-[var(--color-text)]' },
+        { label: '목표', value: stats.goalPct !== null ? `${stats.goalPct}%` : '—', icon: 'mdi:target', color: 'text-[var(--color-text)]' },
+        { label: '세션', value: `${stats.sessionCount}회`, icon: 'mdi:counter', color: 'text-[var(--color-text)]' },
+        { label: '졸음', value: `${stats.drowsyCount}회`, icon: 'mdi:sleep', color: stats.drowsyCount > 0 ? 'text-[var(--color-primary)]' : 'text-[var(--color-text)]' },
     ]
     return (
         <div className="grid grid-cols-4 gap-2">
             {items.map(it => (
-                <div key={it.label} className="flex flex-col items-center gap-0.5 py-2.5 rounded-xl bg-black/[0.03] dark:bg-white/5">
-                    <Icon icon={it.icon} className={`text-lg ${it.color}`} />
-                    <span className={`text-sm font-black ${it.color}`}>{it.value}</span>
-                    <span className="text-[10px] font-bold text-[var(--color-text-secondary)]/70">{it.label}</span>
+                <div key={it.label} className="flex flex-col items-center gap-1 py-3 rounded-xl bg-[var(--surface-raised)] border border-[var(--color-border)]">
+                    <Icon icon={it.icon} className="text-[16px] text-[var(--color-text-muted)]" />
+                    <span className={`text-[15px] font-medium tabular-nums ${it.color}`}>{it.value}</span>
+                    <span className="text-[12px] text-[var(--color-text-muted)]">{it.label}</span>
                 </div>
             ))}
         </div>
@@ -179,17 +179,17 @@ export function DiaryEntryView({ entry, onEdit, settings, onChanged }: {
         <div className="space-y-4">
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                    <span className="text-display text-3xl font-black gradient-text tabular-nums">{entry.score}</span>
+                    <span className="figure text-[40px]">{entry.score}</span>
                     <span className="text-sm font-bold text-[var(--color-text-secondary)]/70">/ 10</span>
                     {entry.auto && (
-                        <span className="ml-1 px-2 py-0.5 rounded-full bg-black/[0.05] dark:bg-white/10 text-[10px] font-bold text-[var(--color-text-secondary)]">자동 확정</span>
+                        <span className="ml-1 px-2 py-0.5 rounded-full bg-[var(--surface-raised)] text-[11px] font-bold text-[var(--color-text-secondary)]">자동 확정</span>
                     )}
                 </div>
                 {onEdit && (
                     <button
                         type="button"
                         onClick={onEdit}
-                        className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold transition-all ${PILL_IDLE}`}
+                        className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold transition-[color,background-color,border-color,opacity,transform] ${PILL_IDLE}`}
                     >
                         <Icon icon="mdi:pencil-outline" className="text-sm" /> 수정
                     </button>
@@ -199,7 +199,7 @@ export function DiaryEntryView({ entry, onEdit, settings, onChanged }: {
             {entry.dayTags.length > 0 && (
                 <div className="flex flex-wrap gap-1.5">
                     {entry.dayTags.map(t => (
-                        <span key={t} className="px-2.5 py-1 rounded-full bg-indigo-500/15 text-indigo-400 text-[11px] font-bold">{t}</span>
+                        <span key={t} className="px-2.5 py-1 rounded-md bg-[var(--surface-raised)] text-[var(--color-text-secondary)] border border-[var(--color-border)] text-[11px] font-bold">{t}</span>
                     ))}
                 </div>
             )}
@@ -213,16 +213,16 @@ export function DiaryEntryView({ entry, onEdit, settings, onChanged }: {
             )}
 
             {entry.aiReply && (
-                <div className="p-4 rounded-2xl bg-gradient-to-br from-indigo-500/10 to-purple-500/5 border border-indigo-500/15">
+                <div className="p-4 rounded-2xl bg-[var(--surface-raised)] border border-[var(--color-border)]">
                     <div className="flex items-center gap-2 mb-1.5">
-                        <Icon icon="mdi:sparkles" className="text-sm text-amber-400" />
-                        <span className="text-[10px] font-black uppercase tracking-widest text-[var(--color-text-secondary)]">AI 답장</span>
+                        <Icon icon="mdi:message-reply-text-outline" className="text-[14px] text-[var(--color-text-muted)]" />
+                        <span className="text-[13px] font-medium text-[var(--color-text-secondary)]">AI 답장</span>
                         {settings && isAmbientAiEnabled(settings) && (
                             <button
                                 type="button"
                                 onClick={handleRegenerateReply}
                                 disabled={replyLoading}
-                                className="ml-auto flex items-center gap-1 text-[10px] font-bold text-[var(--color-text-secondary)] opacity-70 hover:opacity-100 disabled:opacity-40 transition-opacity"
+                                className="ml-auto flex items-center gap-1 text-[11px] font-bold text-[var(--color-text-secondary)] opacity-70 hover:opacity-100 disabled:opacity-40 transition-opacity"
                                 aria-label="AI 답장 다시 생성"
                             >
                                 <Icon icon="mdi:refresh" className={`text-xs ${replyLoading ? 'animate-spin' : ''}`} />
@@ -411,21 +411,23 @@ export function DiaryEditor({
 
             {/* 점수 */}
             <div className="space-y-2">
-                <p className="text-xs font-black uppercase tracking-widest text-[var(--color-text-secondary)]">오늘 점수</p>
+                <p className="text-[13px] font-medium text-[var(--color-text-secondary)]">오늘 점수</p>
                 <div className="flex gap-1.5 h-11">
                     {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => {
                         const active = n <= score
+                        const chosen = n === score
                         return (
                             <motion.button
                                 key={n}
                                 type="button"
                                 onClick={() => setScore(n)}
-                                whileTap={{ scale: 0.9 }}
-                                animate={{ scale: active ? 1.03 : 1 }}
+                                whileTap={{ scale: 0.97 }}
                                 transition={spring.snappy}
-                                className={`flex-1 rounded-lg text-xs font-black ${active
-                                    ? 'bg-indigo-500 text-white shadow-[0_4px_12px_rgba(99,102,241,0.35)]'
-                                    : 'bg-black/[0.04] dark:bg-white/5 text-[var(--color-text-secondary)]/70 hover:bg-black/[0.08] dark:hover:bg-white/10 hover:text-[var(--color-text-secondary)]'
+                                className={`flex-1 rounded-md text-[13px] font-medium tabular-nums transition-colors ${chosen
+                                    ? 'fill-accent'
+                                    : active
+                                        ? 'bg-[var(--hairline-strong)] text-[var(--color-text)]'
+                                        : 'bg-[var(--surface-raised)] text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'
                                     }`}
                             >
                                 {n}
@@ -437,7 +439,7 @@ export function DiaryEditor({
 
             {/* 하루 태그 */}
             <div className="space-y-2">
-                <p className="text-xs font-black uppercase tracking-widest text-[var(--color-text-secondary)]">하루 태그</p>
+                <p className="text-[13px] font-medium text-[var(--color-text-secondary)]">하루 태그</p>
                 <div className="flex flex-wrap gap-2">
                     {topTags.map(tag => {
                         const selected = selectedTags.includes(tag.name)
@@ -446,11 +448,10 @@ export function DiaryEditor({
                                 key={tag.name}
                                 type="button"
                                 onClick={() => toggleTag(tag.name)}
-                                whileTap={{ scale: 0.9 }}
-                                animate={{ scale: selected ? 1.04 : 1 }}
+                                whileTap={{ scale: 0.97 }}
                                 transition={spring.snappy}
                                 className={`${PILL} ${selected
-                                    ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20'
+                                    ? 'fill-ink'
                                     : PILL_IDLE
                                     }`}
                             >
@@ -476,7 +477,7 @@ export function DiaryEditor({
                         >
                             {allTagsByCategory.map(([cat, tags]) => (
                                 <div key={cat} className="space-y-1.5">
-                                    <p className="text-[10px] font-black uppercase tracking-widest text-[var(--color-text-secondary)]/70">{TAG_CATEGORY_LABELS[cat]}</p>
+                                    <p className="text-[13px] font-medium text-[var(--color-text-secondary)]/70">{TAG_CATEGORY_LABELS[cat]}</p>
                                     <div className="flex flex-wrap gap-2">
                                         {tags.map(tag => {
                                             const selected = selectedTags.includes(tag.name)
@@ -485,11 +486,10 @@ export function DiaryEditor({
                                                     key={tag.name}
                                                     type="button"
                                                     onClick={() => toggleTag(tag.name)}
-                                                    whileTap={{ scale: 0.9 }}
-                                                    animate={{ scale: selected ? 1.04 : 1 }}
+                                                    whileTap={{ scale: 0.97 }}
                                                     transition={spring.snappy}
-                                                    className={`px-3 py-1.5 rounded-full text-xs font-bold ${selected
-                                                        ? 'bg-indigo-500 text-white'
+                                                    className={`${PILL} ${selected
+                                                        ? 'fill-ink'
                                                         : PILL_IDLE
                                                         }`}
                                                 >
@@ -508,9 +508,9 @@ export function DiaryEditor({
             {/* 나의 한마디 */}
             <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                    <p className="text-xs font-black uppercase tracking-widest text-[var(--color-text-secondary)]">나의 한마디</p>
-                    {source === 'ai' && <span className="text-[10px] font-bold text-indigo-400/80">AI 초안</span>}
-                    {source === 'voice' && <span className="text-[10px] font-bold text-emerald-400/80">음성 입력</span>}
+                    <p className="text-[13px] font-medium text-[var(--color-text-secondary)]">나의 한마디</p>
+                    {source === 'ai' && <span className="meta">AI 초안</span>}
+                    {source === 'voice' && <span className="meta">음성 입력</span>}
                 </div>
 
                 {editingText ? (
@@ -520,10 +520,10 @@ export function DiaryEditor({
                         onChange={(e) => handleTextChange(e.target.value)}
                         placeholder="오늘 하루를 한마디로 남겨보세요"
                         rows={2}
-                        className="w-full px-4 py-3 rounded-2xl bg-black/[0.03] dark:bg-white/5 border border-white/10 text-[var(--color-text)] placeholder:text-[var(--color-text-secondary)]/40 resize-none outline-none focus:border-indigo-400/40 transition-all font-medium"
+                        className="w-full px-4 py-3 rounded-2xl bg-[var(--surface-raised)] border border-[var(--color-border)] text-[var(--color-text)] placeholder:text-[var(--color-text-secondary)]/40 resize-none outline-none focus:border-[var(--hairline-strong)] transition-[color,background-color,border-color,opacity,transform] font-medium"
                     />
                 ) : (
-                    <div className="px-4 py-3 rounded-2xl bg-black/[0.03] dark:bg-white/5 border border-white/10 min-h-[3rem] flex items-center">
+                    <div className="px-4 py-3 rounded-2xl bg-[var(--surface-raised)] border border-[var(--color-border)] min-h-[3rem] flex items-center">
                         <p className="text-[var(--color-text)] font-medium leading-relaxed">
                             {oneLiner || <span className="text-[var(--color-text-secondary)]/50">한마디를 남겨보세요</span>}
                         </p>
@@ -535,7 +535,7 @@ export function DiaryEditor({
                         <Pressable
                             type="button"
                             onClick={() => setEditingText(false)}
-                            className={`${PILL} bg-indigo-500 text-white`}
+                            className={`${PILL} fill-ink`}
                         >
                             <Icon icon="mdi:check" className="inline text-sm mr-1" />완료
                         </Pressable>
@@ -574,7 +574,7 @@ export function DiaryEditor({
                                     onClick={startVoice}
                                     disabled={listening}
                                     className={`${PILL} ${listening
-                                        ? 'bg-red-500/80 text-white animate-pulse'
+                                        ? 'bg-red-500/80 text-white'
                                         : PILL_IDLE
                                         }`}
                                 >
@@ -589,9 +589,9 @@ export function DiaryEditor({
             {/* 종이 일기 / 사진 */}
             <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                    <p className="text-xs font-black uppercase tracking-widest text-[var(--color-text-secondary)]">종이 일기 · 사진</p>
+                    <p className="text-[13px] font-medium text-[var(--color-text-secondary)]">종이 일기 · 사진</p>
                     {photos.length > 0 && (
-                        <span className="text-[10px] font-bold text-[var(--color-text-secondary)]/70">{photos.length}장</span>
+                        <span className="text-[11px] font-bold text-[var(--color-text-secondary)]/70">{photos.length}장</span>
                     )}
                 </div>
 
@@ -635,7 +635,7 @@ export function DiaryEditor({
                         {uploading ? '처리 중…' : '불러오기'}
                     </Pressable>
                 </div>
-                <p className="text-[10px] text-[var(--color-text-secondary)]/60 leading-relaxed">
+                <p className="text-[11px] text-[var(--color-text-secondary)]/60 leading-relaxed">
                     손으로 쓴 일기를 찍거나 스캔해 올리면 기록에 사진 그대로 남습니다.
                 </p>
             </div>
@@ -647,7 +647,7 @@ export function DiaryEditor({
                         type="button"
                         onClick={onCancel}
                         disabled={saving}
-                        className="flex-1 py-4 rounded-2xl bg-black/[0.04] dark:bg-white/5 hover:bg-black/[0.08] dark:hover:bg-white/10 text-[var(--color-text-secondary)] font-black text-sm disabled:opacity-40"
+                        className="flex-1 h-12 rounded-xl btn-glass text-[var(--color-text-secondary)] font-medium text-[15px] disabled:opacity-40"
                     >
                         취소
                     </Pressable>
@@ -656,7 +656,7 @@ export function DiaryEditor({
                     type="button"
                     onClick={handleConfirm}
                     disabled={saving}
-                    className="flex-[1.6] py-4 rounded-2xl bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-black text-sm shadow-xl shadow-indigo-500/30 flex items-center justify-center gap-2 disabled:opacity-70"
+                    className="flex-[1.6] h-12 rounded-xl fill-ink font-medium text-[15px] flex items-center justify-center gap-2 disabled:opacity-70"
                 >
                     {saving ? <Icon icon="mdi:loading" className="text-lg animate-spin" /> : <Icon icon="mdi:check-circle-outline" className="text-lg" />}
                     {existing ? '수정 완료' : '오늘 일기 확정'}
@@ -685,7 +685,7 @@ export default function DiaryEditModal({
 }: DiaryEditModalProps) {
     return (
         <Sheet open={isOpen} onClose={onClose} ariaLabel={`${date} 일기`}>
-            <h2 className="text-xl font-black text-[var(--color-text)] mb-5 pt-1">{date} 일기</h2>
+            <h2 className="text-[20px] font-medium text-[var(--color-text)] mb-5 pt-1">{date} 일기</h2>
             <DiaryEditor
                 date={date}
                 settings={settings}

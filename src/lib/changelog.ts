@@ -66,7 +66,7 @@ export const CHANGELOG: ChangelogEntry[] = [
         date: '2026-07-22',
         title: '기록·복기·소통 대규모 업데이트',
         items: [
-            { icon: 'mdi:sparkles', text: 'Gemini가 이제 사진·파일을 이해합니다 — 모르는 문제를 찍어 보내 풀거나, 손으로 쓴 일기·할 일 사진을 앱에 맞게 자동 정리·저장해요.' },
+            { icon: 'mdi:message-text-outline', text: 'Gemini가 이제 사진·파일을 이해합니다 — 모르는 문제를 찍어 보내 풀거나, 손으로 쓴 일기·할 일 사진을 앱에 맞게 자동 정리·저장해요.' },
             { icon: 'mdi:check-decagram', text: 'Gemini 기록 정확도 개선 — 내 과목 목록 안에서만 골라 기록해, 없던 과목이 생겨 데이터가 꼬이지 않아요.' },
             { icon: 'mdi:format-list-checks', text: '체크리스트 추가 — 오늘·이번 주·이번 달 단위로 할 일을 만들고 지워나갈 수 있어요. Gemini로도 추가·완료 가능.' },
             { icon: 'mdi:calendar-star', text: 'D-day 위젯 — 수능처럼 중요한 날을 홈에 상시 표시. 개수·날짜 모두 커스텀할 수 있어요.' },
